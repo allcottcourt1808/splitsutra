@@ -1,0 +1,49 @@
+{
+  // Shared TypeScript settings for every package in the workspace.
+  // Each package has its own tsconfig.json that does `"extends": "../../tsconfig.base.json"`
+  // and adds only what is package-specific (lib, jsx, outDir, include, paths).
+  //
+  // CROSS-PACKAGE CONTRACT — do not change without updating every package:
+  //   * relative imports carry an EXPLICIT .js EXTENSION  (`./allocate.js`), and a
+  //     directory import is spelled out in full  (`./types/index.js`, never `./types`).
+  //
+  //     This looks redundant under "moduleResolution": "bundler", which would happily
+  //     accept extensionless specifiers. It is not optional. `packages/core` publishes
+  //     RAW TypeScript source as its entry points ("main": "./src/index.ts", noEmit) —
+  //     so `firebase/functions` compiles core's own source under "NodeNext", where
+  //     extensionless and directory imports are BOTH hard errors (TS2834). Core's source
+  //     must therefore satisfy the strictest consumer, and .js is the spelling that is
+  //     legal under every resolver we use: bundler, NodeNext, and Vite alike.
+  //
+  //     Functions cannot simply switch to "bundler" to paper over this: it emits real JS
+  //     that Node loads on Cloud Functions Gen 2, and extensionless output fails at
+  //     RUNTIME with ERR_MODULE_NOT_FOUND — a deploy-time break, not a compile-time one.
+  //   * "verbatimModuleSyntax": true   =>  type-only imports MUST be written
+  //                                        `import type { X } from '...'`
+  //
+  // Article I (money is never a float) and Article VII (domain logic is pure) both lean on
+  // `strict` + `noUncheckedIndexedAccess` catching the mistakes that produce wrong balances.
+  //
+  // NOTE: `lib` is deliberately NOT set here. `packages/core` pins `"lib": ["ES2022"]` with
+  // no "DOM" in its own tsconfig — that single line is what makes `window`/`document` a
+  // compile error in core (Article II / phase-01 §3). Apps opt into DOM explicitly.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true,
+  },
+}
