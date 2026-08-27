@@ -1,0 +1,66 @@
+{
+  "name": "splitsutra",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SplitSutra — square up, no awkwardness. Expense-sharing app on Firebase.",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @splitsutra/web dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm test:unit && pnpm test:rules && pnpm test:integration",
+    "test:unit": "vitest run --project unit --project component --passWithNoTests",
+    "test:watch": "vitest --project unit",
+    "test:coverage": "vitest run --project unit --coverage",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-rules \"vitest run --project rules\"",
+    "test:integration": "firebase emulators:exec --only firestore,auth,functions --project demo-integration \"vitest run --project integration\"",
+    "test:e2e": "playwright test --project e2e-mobile --project e2e-desktop",
+    "test:e2e:ui": "playwright test --project e2e-mobile --ui",
+    "test:smoke": "playwright test --project smoke",
+    "depcruise": "node scripts/depcruise.mjs",
+    "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm test:unit",
+    "emulators": "firebase emulators:start --import=./.emulator-data --export-on-exit",
+    "seed": "tsx firebase/seed.ts",
+    "prepare": "husky || exit 0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,cjs,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,jsonc,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.11",
+    "dependency-cruiser": "^18.2.0",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fast-check": "^4.9.0",
+    "firebase-tools": "^15.28.1",
+    "happy-dom": "^20.11.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11"
+  }
+}

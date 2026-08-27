@@ -1,0 +1,153 @@
+# SplitSutra CI — docs/10-deployment.md, docs/20-test-automation-pipeline.md §5/§5a
+#
+# ── STAGE 1: ADVISORY (now → v1.0) ───────────────────────────────────────────────────────
+# This workflow runs on every push and every PR, and **blocks nothing**. Branch protection
+# is deliberately OFF through Phases 01–10: the codebase is churning, tests are written
+# alongside the code they cover, and there is no deployed environment to protect.
+#
+# ⚠️ The failure mode to guard against is advisory mode decaying into permanently-ignored.
+#    Two defences, both cheap:
+#      1. The CI badge at the top of README.md — visible red is harder to skip than a tick
+#         buried in the Actions tab.
+#      2. Treat a red `main` as a same-day fix. Enforcement is social during Stage 1; the
+#         habit is what makes the Stage 2 flip a formality instead of a cleanup project.
+#
+# Stage 2 (branch protection, `verify` as a required status check) is flipped on in
+# checklists/phase-11-deploy.md, immediately before the launch tag.
+#
+# 🔴 DO NOT RENAME THE `verify` JOB. Phase 11 registers it as a required status check *by
+#    name*. A rename after that point makes GitHub wait forever for a check that never
+#    arrives, and PRs hang on "Expected — waiting for status". (docs/20 §5a, gotcha 2)
+
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm must be installed before setup-node, or `cache: pnpm` cannot find the store.
+      # Version comes from `packageManager` in package.json — pinned in one place.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # Active LTS. Node 20 went EOL 2026-04-30.
+          cache: pnpm
+
+      # REQUIRED — the Firestore and Auth emulators are Java processes. Wired up now even
+      # though the emulator-backed suites arrive in Phase 02b/10, so it is one less thing to
+      # debug on the day the rules tests land. (phase-01 §8)
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: pnpm install --frozen-lockfile
+
+      # Cheap → expensive, so a type error fails in under a minute instead of after a
+      # six-minute E2E run.
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm depcruise # NFR-10: core stays platform-agnostic
+      - run: pnpm test:unit # Phase 02b flips this to `pnpm test:unit --coverage`
+      - run: pnpm build
+
+      # ── Enabled in Phase 02b / Phase 10, once the harnesses and suites exist ───────────
+      # Uncomment together with the checklist item that creates them:
+      #   test:rules, test:integration  -> checklists/phase-02b-testing-setup.md §5, §6
+      #   test:e2e                      -> checklists/phase-02b-testing-setup.md §8
+      #
+      # - run: pnpm test:rules          # emulator-backed security rules
+      # - run: pnpm test:integration    # emulator-backed Cloud Functions
+      #
+      # ⚠️ Cache the Playwright browsers or CI re-downloads ~400 MB on every run.
+      # - uses: actions/cache@v4
+      #   with:
+      #     path: ~/.cache/ms-playwright
+      #     key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      # - run: pnpm exec playwright install --with-deps chromium
+      # - run: pnpm test:e2e            # slowest, last
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-artifacts
+          path: |
+            playwright-report/
+            coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# DEPLOY + SMOKE — Phase 11 only. See checklists/phase-11-deploy.md and docs/20 §5.
+#
+# Left commented out on purpose: every job below needs GCP/Firebase credentials that do not
+# exist yet, and both Firebase projects are deliberately on the free Spark plan with no
+# billing linked until Phase 11 (docs/08 §6). A deploy job wired up early is a job that
+# fails on every push and trains you to ignore red.
+#
+# The `needs:` chain is the whole point — two workflows both triggered by `push` race each
+# other, whereas `needs:` makes ordering a guarantee. Keep this shape when enabling:
+#
+#   verify  ──needs──▶  deploy-dev  ──needs──▶  smoke-dev
+#   GATE 1              (main only)             GATE 2: verify the REAL environment
+#
+# ── jobs.deploy-dev ────────────────────────────────────────────────────────────────────────
+#   deploy-dev:
+#     needs: verify                       # ← GATE 1: no green CI, no deploy
+#     if: github.ref == 'refs/heads/main'
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       id-token: write                   # Workload Identity Federation, not a long-lived key
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: google-github-actions/auth@v2
+#         with:
+#           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+#           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+#       # ⚠️ Order matters: indexes build asynchronously, so start them first; rules before
+#       #    the code that depends on them. Hosting last, or live users hit permission-denied
+#       #    and failed-precondition against rules and indexes that do not exist yet.
+#       - run: pnpm exec firebase deploy --only firestore:indexes --project dev
+#       - run: pnpm exec firebase deploy --only firestore:rules   --project dev
+#       - run: pnpm exec firebase deploy --only functions         --project dev
+#       - run: pnpm exec firebase deploy --only hosting           --project dev
+#
+# ── jobs.smoke-dev ─────────────────────────────────────────────────────────────────────────
+#   smoke-dev:
+#     needs: deploy-dev                   # ← GATE 2: verify the deployed environment
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       statuses: write                   # needed to stamp the `dev-smoke` commit status
+#     env:
+#       SMOKE_BASE_URL: https://splitsutra-dev.web.app
+#       SMOKE_EMAIL:    ${{ secrets.SMOKE_EMAIL }}
+#       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+#     steps:
+#       - run: pnpm test:smoke
+#       - name: Mark this commit promotable
+#         if: success()
+#         run: |
+#           gh api repos/${{ github.repository }}/statuses/${{ github.sha }} \
+#             -f state=success -f context=dev-smoke \
+#             -f description="dev smoke passed"
+#       - uses: actions/upload-artifact@v4
+#         if: failure()
+#         with: { name: smoke-dev-report, path: playwright-report/ }
+#
+# Prod promotion (tag `v*` → guard job → environment: production → smoke-prod → rollback)
+# lives in its own workflow, .github/workflows/deploy-prod.yml, also created in Phase 11.
+# ═══════════════════════════════════════════════════════════════════════════════════════════
