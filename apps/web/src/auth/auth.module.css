@@ -1,0 +1,47 @@
+/**
+ * Sign-in panel.
+ *
+ * Flexbox only, tokens only — the sign-in screen is not exempt from Article IX just
+ * because it is the first screen anyone sees.
+ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--splitsutra-space-lg);
+  min-width: 0;
+}
+
+/**
+ * The invisible reCAPTCHA container for phone sign-in.
+ *
+ * Kept in the flow with zero size rather than `display: none`: the widget refuses to
+ * execute if its container is not rendered, and an invisible challenge only paints a
+ * badge or a modal when it actually decides to challenge.
+ */
+.recaptcha {
+  flex: 0 0 auto;
+  block-size: 0;
+  overflow: hidden;
+}
+
+/** "or" rule between the primary method and the alternatives. */
+.divider {
+  gap: var(--splitsutra-space-md);
+}
+
+.dividerLine {
+  flex: 1 1 auto;
+  block-size: 1px;
+  background-color: var(--splitsutra-color-border);
+}
+
+/**
+ * The error region. Reserved by `min-block-size` so an error appearing does not shove the
+ * buttons down under the user's thumb mid-tap (docs/15 rule 8, and the same reserved-height
+ * discipline docs/14 requires of ad slots).
+ */
+.errorSlot {
+  flex: 0 0 auto;
+  min-block-size: var(--splitsutra-space-xl);
+}
