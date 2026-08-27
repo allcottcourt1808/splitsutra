@@ -114,6 +114,26 @@ export default tseslint.config(
     },
   },
 
+  // ── Repo tooling under scripts/ runs in Node, as ESM. ─────────────────────────
+  // Neither block above covers it. The .cjs block pins sourceType: "commonjs", which is
+  // wrong for an .mjs module, and the no-console exemption matches only root-level files
+  // (`*.{js,cjs,mjs,ts}`), not a subdirectory — so a Node script in scripts/ fails both
+  // `no-undef` on process/console and `no-console`, which is how CI broke once already.
+  {
+    files: ['scripts/**/*.{js,mjs}'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+    rules: {
+      // Printing is the entire point of a CLI script.
+      'no-console': 'off',
+    },
+  },
+
   // ── Tests may reach for the things production code may not. ───────────────────
   {
     files: [
