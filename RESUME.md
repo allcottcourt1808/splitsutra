@@ -2,8 +2,9 @@
 
 **Last updated:** 2026-08-27. The project is **SplitSutra** (renamed from "Settl").
 
-**Nothing is pushed.** There is no git remote yet and `gh` is not authenticated, so the
-five pull requests below exist only as local branches.
+**Published:** <https://github.com/allcottcourt1808/splitsutra> — **public**. Five pull
+requests are open. The checkout lives at `C:Users
+eethcodingsplitsutra`.
 
 ## Where the work stands
 
@@ -24,23 +25,26 @@ That is new — it had never run green before this session.
 The zero-tests gap is an Article X violation (tests before UI) and is the single most
 valuable thing to fix next: the money math is fully written and completely unverified.
 
-## Branches — ready to become five PRs
+## The five open PRs — merge in this order
 
-Stacked, because each needs what it sits on. Merge in this order:
+Each is based on what it actually depends on, so a PR shows only its own files once its
+parent has merged.
 
-```
-main
-├── docs/planning-and-constitution     3 commits   (independent)
-└── chore/workspace-toolchain          6 commits
-    └── feat/core-domain               4 commits
-        ├── feat/web-design-system     4 commits
-        └── feat/firebase-backend      4 commits
-```
+| PR                                                          | Branch                           | Base   | Contents                                                            |
+| ----------------------------------------------------------- | -------------------------------- | ------ | ------------------------------------------------------------------- |
+| [#1](https://github.com/allcottcourt1808/splitsutra/pull/1) | `docs/planning-and-constitution` | `main` | constitution, 21 docs, 14 checklists — independent of the rest      |
+| [#2](https://github.com/allcottcourt1808/splitsutra/pull/2) | `chore/workspace-toolchain`      | `main` | pnpm workspace, tsconfig, lint, CI — **everything else needs this** |
+| [#3](https://github.com/allcottcourt1808/splitsutra/pull/3) | `feat/core-domain`               | #2     | schemas, converters, split engine, balances                         |
+| [#4](https://github.com/allcottcourt1808/splitsutra/pull/4) | `feat/web-design-system`         | #3     | Vite app, design system, nav shell, auth client                     |
+| [#5](https://github.com/allcottcourt1808/splitsutra/pull/5) | `feat/firebase-backend`          | #3     | rules, callables, triggers, emulator config                         |
 
-Both leaf branches were confirmed to pass `pnpm verify` on their own.
+`#1` and `#2` can merge in either order. `#4` and `#5` are siblings and can merge in either
+order once `#3` is in. Every branch passes `pnpm verify` on its own.
 
-**To publish:** authenticate with `gh auth login`, create the repo, then push each branch
-and open its PR against its parent.
+⚠️ **CI may fail on an individual PR in isolation.** `pnpm install` prunes lockfile importers
+for workspace packages a given branch does not contain, so the lockfile looks stale to a
+frozen-lockfile check. It resolves once these land on `main` together. If you run
+`pnpm install` while on a partial branch, `git checkout -- pnpm-lock.yaml` afterwards.
 
 ## Decisions settled
 
