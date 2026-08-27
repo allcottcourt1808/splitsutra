@@ -1,117 +1,130 @@
 # Resume here
 
-**Last updated:** 2026-08-27. The project is **SplitSutra** (renamed from "Settl").
+**Last updated:** 2026-08-27, end of session. Project: **SplitSutra**.
+Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
+Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-**Published:** <https://github.com/allcottcourt1808/splitsutra> — **public**. Five pull
-requests are open. The checkout lives at `C:Users
-eethcodingsplitsutra`.
+## State: everything merged, `main` is green
 
-## Where the work stands
+All five pull requests are merged. `main` now passes, verified after the merge:
 
-`pnpm verify` (typecheck → lint → depcruise → unit) **passes end-to-end**, on every branch.
-That is new — it had never run green before this session.
+| Gate                                                | Result |
+| --------------------------------------------------- | ------ |
+| `pnpm verify` (typecheck → lint → depcruise → unit) | ✅     |
+| `pnpm build`                                        | ✅     |
+| `pnpm format:check`                                 | ✅     |
 
-| Area                              | State                                                               |
-| --------------------------------- | ------------------------------------------------------------------- |
-| Environment, toolchain, CI config | ✅ complete                                                         |
-| `packages/core` types + domain    | ✅ complete — 11 schemas, converters, split engine, balances        |
-| `apps/web` design system          | ✅ components, navigation shell, auth client                        |
-| `firebase/` rules + functions     | ✅ rules, helpers, 4 callables, 4 triggers                          |
-| **Domain tests**                  | ❌ **none exist** — `arbitraries.ts` is written, no `*.test.ts` are |
-| `apps/web` entry point            | ❌ no `main.tsx`, no routes, no screens — the app cannot start      |
-| `firebase/functions/src/index.ts` | ❌ missing, so **no function is actually exported**                 |
-| Seed script                       | ❌ `pnpm seed` points at `firebase/seed.ts`, which does not exist   |
+Working tree is clean. Nothing is in flight and no branch is waiting on anything.
 
-The zero-tests gap is an Article X violation (tests before UI) and is the single most
-valuable thing to fix next: the money math is fully written and completely unverified.
+| PR  | Contents                                                                       |
+| --- | ------------------------------------------------------------------------------ |
+| #1  | constitution, 21 docs, 14 checklists                                           |
+| #2  | pnpm workspace, tsconfig, lint, CI                                             |
+| #3  | schemas, converters, split engine, balances                                    |
+| #4  | Vite app, design system, nav shell, auth client, **entry point + route table** |
+| #5  | rules, callables, triggers, emulator config, **functions entry point**         |
 
-## The five open PRs — merge in this order
+## 🔴 The blocker to fix first next session
 
-Each is based on what it actually depends on, so a PR shows only its own files once its
-parent has merged.
+**`packages/core` cannot be loaded by Node at runtime.** This is the most important
+finding of the session and it is not visible to any current gate.
 
-| PR                                                          | Branch                           | Base   | Contents                                                            |
-| ----------------------------------------------------------- | -------------------------------- | ------ | ------------------------------------------------------------------- |
-| [#1](https://github.com/allcottcourt1808/splitsutra/pull/1) | `docs/planning-and-constitution` | `main` | constitution, 21 docs, 14 checklists — independent of the rest      |
-| [#2](https://github.com/allcottcourt1808/splitsutra/pull/2) | `chore/workspace-toolchain`      | `main` | pnpm workspace, tsconfig, lint, CI — **everything else needs this** |
-| [#3](https://github.com/allcottcourt1808/splitsutra/pull/3) | `feat/core-domain`               | #2     | schemas, converters, split engine, balances                         |
-| [#4](https://github.com/allcottcourt1808/splitsutra/pull/4) | `feat/web-design-system`         | #3     | Vite app, design system, nav shell, auth client                     |
-| [#5](https://github.com/allcottcourt1808/splitsutra/pull/5) | `feat/firebase-backend`          | #3     | rules, callables, triggers, emulator config                         |
+Running the emulator produces:
 
-`#1` and `#2` can merge in either order. `#4` and `#5` are siblings and can merge in either
-order once `#3` is in. Every branch passes `pnpm verify` on its own.
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module
+  .../packages/core/src/types/index.js
+  imported from .../packages/core/src/index.ts
+```
 
-⚠️ **CI may fail on an individual PR in isolation.** `pnpm install` prunes lockfile importers
-for workspace packages a given branch does not contain, so the lockfile looks stale to a
-frozen-lockfile check. It resolves once these land on `main` together. If you run
-`pnpm install` while on a partial branch, `git checkout -- pnpm-lock.yaml` afterwards.
+Why: core publishes **raw TypeScript** as its entry points (`"main": "./src/index.ts"`,
+`noEmit: true`, no build step). Vite transpiles core, so the web app never notices. Cloud
+Functions runs real Node, which cannot execute `.ts` — and the `.js` extensions the imports
+carry point at files that are never emitted.
 
-## Decisions settled
+**Typecheck, lint, depcruise, unit tests and `pnpm build` all pass anyway.** Only actually
+starting the emulator catches it. So the functions are exported and compile, and would still
+fail on a real deploy.
 
-| #            | Decision                                                                                                                                                                                            |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Q15 / R5** | **Node 20 → 24.** Node 20 reached EOL 2026-04-30.                                                                                                                                                   |
-| **Q17 / R7** | **FirebaseUI dropped.** Web-only, so it could never serve the mobile port; auth uses the modular SDK.                                                                                               |
-| **Q16 / R6** | **Renamed "Settl" → "SplitSutra"** (2026-08-27). Applied across all branches with `filter-branch`, so no commit ever says "Settl". ⚠️ **SplitSutra is not clearance-checked** — see the risk below. |
+**The fix:** give core a real build — `tsc` emitting `dist/` with `.js` + `.d.ts`, and point
+`exports`/`main`/`types` at `dist`. The web app is unaffected, because `vite.config.ts` and
+`apps/web/tsconfig.json` both alias `@splitsutra/core` to source. This makes `firebase/functions`
+depend on core being built first, which the `predeploy` hook and CI need to reflect.
 
-### Dependencies: latest, with two forced exceptions
+Do this before Phase 02. It is the difference between "functions deploy" and "functions
+deploy and then fail on first invocation".
 
-Everything was moved to its newest release except two, where "newest" would break the build:
+## Also still missing
 
-- **Node stays on 24** though 26 is out. Firebase's tooling enumerates the runtimes Cloud
-  Functions Gen 2 accepts and stops at `nodejs24`; 26 would be rejected at deploy.
-- **TypeScript is 6.0.3, not 7.0.2.** `typescript-eslint@8` declares `typescript <6.1.0`, so
-  the Go-based TS 7 compiler would silently stop linting the repo. TS 6 also reports what
-  TS 7 will break, which is the right place to sit before that migration.
+1. **Zero tests.** `arbitraries.ts` is written; no `*.test.ts` exists anywhere. Article X
+   violation, and the money math is fully written and completely unverified. `e2e/specs/`
+   does not exist either, so `pnpm test:e2e` finds nothing.
+2. **Screens.** Every route renders `PendingScreen`. The shell, tab bar and design system are
+   real; the screens behind them are not. Delete `PendingScreen` when the last one lands.
+3. **Four callables have schemas but no implementation** — `addFriend`, `deleteGroup`,
+   `recomputeGroupBalances`, `deleteAccount`. Deliberately not stubbed: an exported stub is a
+   live endpoint that silently does nothing.
+4. **Seed script.** `pnpm seed` points at `firebase/seed.ts`, which does not exist. When
+   written it must refuse to run against any project ID ending in `-prod`.
+5. **Hosting serves nothing** until a build output exists in CI; `apps/web/dist` is local-only.
 
-Upgraded: vite 6→8, vitest 3→4, eslint 9→10, zod 3→4, firebase 11→12, firebase-admin 13→14,
-firebase-functions 6→7, dependency-cruiser 16→18, react-router 7→8, plus the rest. No unmet
-peer warnings.
-
-## 🔴 The one open risk
+## ⚠️ The name is still unverified
 
 **`SplitSutra` has never been clearance-checked.** The previous name reached the repo, the
-docs and the config before anyone searched for it, and it turned out three live
-expense-splitting apps already used it.
+docs and the config before anyone searched, and three live expense-splitting apps already
+used it.
 
-Renaming is cheap _right now_ — nothing is published, no project ID is reserved, the npm
-scope is private, and `scripts/rename-brand.sh` exists. It stops being cheap the moment
-**Phase 02 reserves a Firebase project ID**, because those are globally unique and permanent.
+Renaming is still cheap: nothing is published to a store, no Firebase project ID is reserved,
+and `scripts/rename-brand.sh <new> --display=NewName --go` does it in one command. It stops
+being cheap at **Phase 02**, because Firebase project IDs are globally unique and permanent.
 
-So: run the sweep in [docs/21-name-clearance.md](docs/21-name-clearance.md) — App Store,
-Play Store, npm scope, domain, USPTO — **before** Phase 02, not after.
+⚠️ `.firebaserc` points at `splitsutra-dev`, which is an **unreserved placeholder**. Always
+pass `--project demo-splitsutra` to emulator commands so nothing resolves to it.
 
-## Fixed this session (was a list of known issues)
+## Environment — ready, nothing to redo
 
-1. ✅ **Module resolution collision.** `packages/core` ships raw TypeScript, so
-   `firebase/functions` compiled core's source under NodeNext, where core's extensionless
-   imports are hard errors. All 61 relative imports now carry explicit `.js` extensions —
-   legal under bundler, NodeNext and Vite alike. This was the root cause of ~20 apparent
-   "no exported member" errors.
-2. ✅ **Article VI violation.** `MAX_AMOUNT_MINOR` and the group cap were re-declared in
-   `firebase/functions/src/common/config.ts`, the cap under a different name. Now re-exported
-   from core.
-3. ✅ **`.gitignore` excluded live source.** `firebase/functions/.gitignore` had an
-   unanchored `lib/`, which matches at any depth and was silently excluding `src/lib/` —
-   including `identity.ts`. A fresh clone would have been missing the identity verification.
-   Anchored to `/lib/`; audited the repo for other instances (none).
-4. ✅ **Three scripts pointed at a non-existent `firebase/firebase.json`.** `test:rules`,
-   `test:integration` and `emulators` could not run. The config is at the repo root.
-5. ✅ **`.prettierrc.json` was not valid JSON** (trailing commas) and listed _itself_ under a
-   jsonc override — which cannot work, since Prettier must parse the config before it can
-   apply anything in it. Tolerated by Prettier 3.6, fatal on 3.9.
-6. ✅ `baseUrl` removed from `apps/web/tsconfig.json` (deprecated in TS 6, gone in TS 7).
-7. ✅ Two real type errors: an unsafe `RawEntry` cast in `integrity.ts`, and `measurementId`
-   typed as `?: string | undefined` where `exactOptionalPropertyTypes` needs `?: string`.
-8. ✅ Two dead `= null` initialisers in `identity.ts` that ESLint 10 correctly flagged.
+Node 24.19.0 · pnpm 9.15.9 · Firebase CLI 15.28.1 · **JDK 21** (sufficient; emulators need
+11+, and the JARs were verified running on it — a JDK 25 upgrade was declined and is not
+needed) · gh authenticated · VS Code configured.
 
-## Next, in order
+- **Playwright browsers installed** — Chromium only, which is all three projects use
+  (`e2e-mobile`, `e2e-desktop`, `smoke` all resolve to chromium; no `channel` pinned).
+  703 MB in `%LOCALAPPDATA%\ms-playwright`, plus ffmpeg, which the config needs for
+  `video: 'retain-on-failure'`.
+- **Emulator JARs cached** in `%USERPROFILE%\.cache\firebase\emulators\` — firestore v1.22.0,
+  storage-rules v1.1.3, UI v1.15.0. All six declared emulators start and shut down cleanly.
+  Both rules files parse with zero warnings.
+- Gotcha: `emulators:exec` does **not** start the UI unless you pass `--ui`. It is a
+  standalone flag, not an `--only` value.
 
-1. **Domain tests** — the money math is unverified. `arbitraries.ts` is already written and
-   deliberately builds ledgers by cut points rather than by calling `allocate()`, so a bug in
-   the allocator cannot hide behind a generator that shares its arithmetic.
-2. **`firebase/functions/src/index.ts`** — nothing is exported today.
-3. **`apps/web/main.tsx`**, routes, screens — the app cannot start.
-4. **Seed script** at `firebase/seed.ts`. It must refuse to run against any project ID
-   ending in `-prod`.
-5. Clearance-check `SplitSutra`, then Phase 02.
+## Dependency policy — latest, with two forced exceptions
+
+- **Node stays 24** though 26 exists: Firebase's tooling caps Cloud Functions Gen 2 at
+  `nodejs24`, so 26 is rejected at deploy.
+- **TypeScript is 6.0.3, not 7.0.2**: `typescript-eslint@8` declares `typescript <6.1.0`, so
+  TS 7 would silently stop linting the whole repo.
+
+Everything else is current: vite 8, vitest 4, eslint 10, zod 4, firebase 12, firebase-admin 14,
+firebase-functions 7, dependency-cruiser 18, react-router 8.
+
+## Traps already hit — do not re-introduce
+
+- **Unanchored ignore patterns.** `lib/` in `.gitignore` silently excluded
+  `firebase/functions/src/lib/` — including `identity.ts`, the identity-verification code.
+  The ESLint ignore hit the same trap. Both are anchored now; keep them that way.
+- **Renaming the brand sweeps too far.** It rewrote the competitor table in `docs/19` into a
+  claim about ourselves. `docs/21-name-clearance.md` and those passages are excluded on
+  purpose — they record which names were _rejected_.
+- **`pnpm install` on a partial branch** prunes lockfile importers for workspace packages that
+  branch lacks. Now that everything is on `main` this should stop happening; if it does,
+  `git checkout -- pnpm-lock.yaml`.
+- **Run the whole gate before pushing.** A push after only `pnpm depcruise` broke CI on four
+  PRs at once.
+
+## Next session, in order
+
+1. Give `packages/core` a build step — the runtime blocker above.
+2. Domain tests. The generators are ready and deliberately avoid sharing arithmetic with the
+   allocator, so a bug in it cannot hide behind them.
+3. Clearance-check `SplitSutra`, then Phase 02.
+4. Screens, replacing `PendingScreen` one route at a time.

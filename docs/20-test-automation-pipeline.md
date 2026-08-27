@@ -38,9 +38,9 @@ what the deployed smoke suite exists to catch.
 `dev` **is** the test/staging environment. Three deployed tiers is right for a solo
 project; a fourth adds ceremony without adding signal.
 
-| Stage                | Runs against        | Suite                                                       | Blocks                     |
-| -------------------- | ------------------- | ----------------------------------------------------------- | -------------------------- |
-| **Pre-merge**        | Emulators           | Full: types, lint, depcruise, unit, rules, integration, E2E | **Merge to `main`**        |
+| Stage                | Runs against             | Suite                                                       | Blocks                     |
+| -------------------- | ------------------------ | ----------------------------------------------------------- | -------------------------- |
+| **Pre-merge**        | Emulators                | Full: types, lint, depcruise, unit, rules, integration, E2E | **Merge to `main`**        |
 | **Post-deploy dev**  | `splitsutra-dev` (real)  | **Smoke** (§4)                                              | **Promotion to prod**      |
 | **Post-deploy prod** | `splitsutra-prod` (real) | Smoke, read-mostly                                          | Triggers **auto-rollback** |
 

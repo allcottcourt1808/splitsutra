@@ -19,8 +19,8 @@
 
 Create **two** projects. Do not develop against production.
 
-| Project ID   | Purpose                                       |
-| ------------ | --------------------------------------------- |
+| Project ID        | Purpose                                       |
+| ----------------- | --------------------------------------------- |
 | `splitsutra-dev`  | Deployed dev/staging, real devices, test data |
 | `splitsutra-prod` | Real users                                    |
 
