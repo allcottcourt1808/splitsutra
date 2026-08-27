@@ -65,14 +65,20 @@ Verified on this machine: only **Git 2.55.0** is installed. Everything else is m
 
 ## Name clearance 🟡 _Ten minutes now beats renaming after publish_
 
-> 🔴 **RESULT: clearance FAILED.** Searched 2026-08-24. **SplitSutra** is already in live use by
-> at least three expense-splitting apps: _Settl: Split_ (SplitSutra Financial Corporation, iOS),
-> _Settl_ (AI splitter, `settl.fyi`, iOS + Android), and _Settl_ (UPI splitter, `settlapp.in`).
-> This is a direct collision in the identical product category, not an adjacent one.
-> Recorded as **Q16 / R6** in [../docs/19-qa-log.md](../docs/19-qa-log.md). **Awaiting a rename decision.**
-> ⚠️ Do not reserve a Firebase project ID until this is settled — project IDs are permanent.
+> 🔴 **RESULT for the original codename: clearance FAILED.** Searched 2026-08-24. **Settl**
+> was already in live use by at least three expense-splitting apps: _Settl: Split_ (Settl
+> Financial Corporation, iOS), _Settl_ (AI splitter, `settl.fyi`, iOS + Android), and _Settl_
+> (UPI splitter, `settlapp.in`) — a direct collision in the identical product category.
+>
+> ✅ **Resolved 2026-08-27: the project was renamed to `SplitSutra`.** Recorded as **Q16 / R6**
+> in [../docs/19-qa-log.md](../docs/19-qa-log.md).
+>
+> ⚠️ `SplitSutra` has **not** been clearance-checked itself. Run the sweep in
+> [../docs/21-name-clearance.md](../docs/21-name-clearance.md) before Phase 02 reserves a
+> Firebase project ID — that is the permanent, globally-unique step, and the point after
+> which a rename stops being cheap.
 
-"SplitSutra" is chosen but not yet cleared:
+`SplitSutra` is chosen. Still to verify before Phase 02:
 
 - [ ] 🟡 **USPTO search** — [tmsearch.uspto.gov](https://tmsearch.uspto.gov), classes 9
       (software) and 36 (financial services). Search "splitsutra", "settle", "settled".

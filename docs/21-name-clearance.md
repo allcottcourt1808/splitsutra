@@ -180,6 +180,23 @@ an App Store listing, run these four, in order. Budget an afternoon.
    ([08-firebase-setup.md](08-firebase-setup.md)). Claim `<name>-dev` and `<name>-prod`
    in the same sitting.
 
+---
+
+## Outcome
+
+The owner selected **SplitSutra** on 2026-08-27, directly rather than through a second
+clearance round. The repository was renamed the same day, across every branch, before
+anything was published and before any Firebase project ID was reserved.
+
+The steps below are therefore **still outstanding for `SplitSutra`** — they have not been
+run. The name is settled; its availability is not yet established.
+
+Every mention of "Settl" in this document refers to the rejected codename and is left
+spelled that way on purpose. An automated rename overwrote these once; if that happens
+again, the document stops being able to explain why the project was renamed.
+
+---
+
 **One caution on process.** Settl failed after the codename was already in the repo, the
 docs and the project ID. Whatever the owner picks, do steps 1–4 **before** the rename lands
 anywhere, and rename once. The cost of this document is a morning; the cost of doing it
