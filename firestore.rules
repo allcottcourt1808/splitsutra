@@ -1,0 +1,558 @@
+rules_version = '2';
+
+// =============================================================================
+// SplitSutra — Firestore Security Rules
+// =============================================================================
+// Spec: docs/05-security-rules.md (threat model, helpers, collection-group trap)
+//       docs/03-data-model.md    (schemas + the 7 expense validation invariants)
+//       docs/12-decisions.md     (ADR-11, Q1 split-sum, Q4 currency)
+//       CONSTITUTION.md          (Article III, IV, V, XI)
+//
+// Article IV: THIS FILE IS THE SECURITY BOUNDARY. The client is hostile: the
+// Firebase web config is public, the Firestore REST API is public, and anyone
+// with a valid ID token can craft arbitrary writes. Client-side validation is a
+// UX nicety and provides zero security value.
+//
+// -----------------------------------------------------------------------------
+// THREAT MAP — every rule below traces to one of these (docs/05 §"Threat model")
+// -----------------------------------------------------------------------------
+// T1  Reads a group they're not in
+//       -> isMember() on every /groups/{gid}/** read; groups list gated on memberIds
+// T2  Writes balanceMinor to zero out their own debt
+//       -> /groups/{gid}/members/{uid}  allow write: if false   (Article III)
+//       -> /users/{uid}/friends/{fid}   allow write: if false   (also holds balanceMinor)
+// T3  Creates an expense whose splits don't sum to the total
+//       -> LAYER 1 (here):  splitsTotalMinor == amountMinor && paidTotalMinor == amountMinor
+//       -> LAYER 2 (real):  onExpenseWritten -> verifyExpenseIntegrity() sums the arrays
+//          Rules have no loops/reduce. See "TWO-LAYER CHECKS" below. Q1 Option A.
+// T4  Adds themselves to someone else's group
+//       -> members subcollection is write:false; group.memberIds is immutable to
+//          clients; joins go exclusively through the redeemInvite callable
+// T5  Enumerates usernames/ to harvest emails and phone numbers
+//       -> /usernames/{key}  allow list: if false   (get-by-hash only)
+// T6  Assigns a split to a non-member
+//       -> LAYER 1 (here):  participantIds.hasOnly(group.memberIds)
+//       -> LAYER 2 (real):  onExpenseWritten checks every splits[].uid AND every
+//          paidBy[].uid (paidBy uids are inside maps and are unreachable from rules)
+// T7  Backdates or forges createdBy / createdAt
+//       -> createdBy == request.auth.uid && createdAt == request.time, everywhere
+// T8  Edits the activity feed to hide what they did
+//       -> /groups/{gid}/activity/{id}  allow write: if false  (Function-written)
+// T9  Reaches nested data via a collection-group query
+//       -> the /{path=**}/... blocks at the BOTTOM of this file. Read the comment
+//          there before touching them — this is the most commonly missed rule in
+//          Firestore apps and getting it wrong is a whole-database data leak.
+// T10 Changes a group's currency after expenses exist
+//       -> currency is in the group-update immutable field list
+// T11 Edits someone else's expense to rewrite what they paid
+//       -> ADR-11: update requires resource.data.createdBy == uid || isAdmin(gid).
+//          Everyone else discusses via the comments subcollection.
+// T12 Edits a comment after the fact to alter a dispute record
+//       -> comments  allow update: if false   (delete-your-own is still allowed)
+//
+// -----------------------------------------------------------------------------
+// TWO-LAYER CHECKS — read this before "tightening" or "simplifying" anything
+// -----------------------------------------------------------------------------
+// Firestore Rules cannot loop, cannot reduce an array, and cannot hold a ~180-entry
+// ISO 4217 table. Three invariants are therefore split across two layers:
+//
+//   invariant              layer 1 (this file, at write time)   layer 2 (AUTHORITATIVE)
+//   ---------------------  -----------------------------------  ---------------------------
+//   splits/paidBy sum      client-supplied checksum fields       onExpenseWritten
+//                          == amountMinor                        -> verifyExpenseIntegrity
+//   currency is real       ^[A-Z]{3}$ shape + == group currency   onExpenseWritten /
+//                                                                 onSettlementWritten
+//   participants are       participantIds.hasOnly(memberIds)      onExpenseWritten
+//   members                (paidBy uids NOT reachable here)       -> verifyExpenseIntegrity
+//   profile email/phone    == the Firebase Auth token claim       onUserProfileWritten
+//   is really yours                                               (checks the Auth record)
+//
+// 🔴 The layer-2 Function check is MANDATORY, NOT OPTIONAL. Without it Option A is
+//    theatre (docs/12 Q1). A shallow check here is NOT the whole check. Each such
+//    rule below carries an inline "// LAYER 1 of 2 -> <function>" marker.
+//
+// -----------------------------------------------------------------------------
+// COST — docs/05 §"Cost note"
+// -----------------------------------------------------------------------------
+// exists() and get() each bill as a document read. Rules allow at most 10 such
+// calls per single-document request and 20 per query. Budget per operation below:
+//   expense create : get(members/uid) + get(groups/gid)              = 2
+//   expense update : get(members/uid) + get(groups/gid)              = 2 (member doc
+//                    is shared by isActiveMember + isAdmin -> cached, counted once)
+//   expense list   : exists(members/uid), same path for every candidate = 1
+//   groups list    : 0 — deliberately, see the note on that rule
+// Do not nest helpers that each perform a get(); the limit arrives fast.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // Helpers (docs/05 §"Helper functions")
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Membership as an authorization primitive: one cheap exists() on a dedicated
+    // member doc rather than a nested chain of gets.
+    function isMember(groupId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    // [HARDENING — beyond docs/05] Write authorization.
+    //
+    // docs/06 §"leaveGroup" keeps the member doc after someone leaves (it only sets
+    // leftAt and drops the uid from memberIds) so historical expenses still render.
+    // That means exists() stays true FOREVER, so isMember() alone would let someone
+    // who left a group keep creating expenses and settlements in it. Writes are
+    // therefore gated on leftAt == null. Costs a get() instead of an exists(); the
+    // budget above accounts for it.
+    //
+    // Reads deliberately still use isMember() — see the OPEN QUESTION note at the
+    // bottom of this file.
+    function isActiveMember(groupId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid))
+          .data.leftAt == null;
+    }
+
+    function isAdmin(groupId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid))
+          .data.role == 'admin';
+    }
+
+    // One get() serving both the currency check and the membership list. Callers
+    // bind this to a `let` so the group doc is fetched once per request.
+    function groupData(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data;
+    }
+
+    function groupCurrency(groupId) {
+      return groupData(groupId).currency;
+    }
+
+    // fields that changed between the existing and incoming doc
+    function changed(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // MAX_AMOUNT_MINOR = 1_000_000_000 (docs/04 §"Safe bound"). The bound is on the
+    // stored integer, not the displayed amount, so it holds for every exponent.
+    function isPositiveInt(v) {
+      return v is int && v > 0 && v <= 1000000000;
+    }
+
+    // LAYER 1 of 2 -> onExpenseWritten / onSettlementWritten / verifyCurrency
+    // Q4: ~180 ISO 4217 codes cannot be enumerated in a rule. Shallow shape check
+    // here; the Cloud Function validates against the real ISO table (CURRENCIES in
+    // @splitsutra/core). Same two-layer shape as the split-sum validation (Q1 Option A).
+    function isCurrencyCode(v) {
+      return v is string && v.size() == 3 && v.matches('^[A-Z]{3}$');
+    }
+
+    // Auth token claims. .get(k, null) rather than .k — a phone-only user has no
+    // email claim and a bare field access on a missing key aborts the evaluation.
+    function tokenEmail() {
+      return request.auth.token.get('email', null);
+    }
+
+    function tokenPhone() {
+      return request.auth.token.get('phone_number', null);
+    }
+
+    // =========================================================================
+    // users/{uid} — the private profile. docs/03 §"users"
+    // =========================================================================
+    match /users/{uid} {
+
+      // [HARDENING — beyond docs/05] Identity spoofing on the friend-lookup index.
+      //
+      // onUserProfileWritten derives usernames/{sha256(email)} and
+      // usernames/{sha256(e164(phone))} FROM THIS DOCUMENT. Without this check a
+      // user could write someone else's email into their own profile, the Function
+      // would index it, and every friend lookup for that person would resolve to
+      // the attacker. Storing the field is optional; claiming one you do not own
+      // is not.
+      //
+      // LAYER 1 of 2 -> onUserProfileWritten (re-checks against the Auth record and
+      // refuses to index an identity the Auth user does not actually hold).
+      function ownsClaimedIdentity() {
+        let d = request.resource.data;
+        return (d.get('email', null) == null || d.get('email', null) == tokenEmail())
+            && (d.get('phoneNumber', null) == null
+                || d.get('phoneNumber', null) == tokenPhone());
+      }
+
+      allow get: if isSelf(uid);
+      allow list: if false;                       // T5 — never enumerate users
+
+      allow create: if isSelf(uid)
+                    && request.resource.data.uid == uid
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() >= 1
+                    && request.resource.data.displayName.size() <= 50
+                    && request.resource.data.createdAt == request.time      // T7
+                    && ownsClaimedIdentity();
+
+      allow update: if isSelf(uid)
+                    && !changed(['uid', 'createdAt'])
+                    && request.resource.data.updatedAt == request.time
+                    && ownsClaimedIdentity();
+
+      allow delete: if false;                     // account deletion is a Function
+                                                  // (deleteAccount — it must first
+                                                  // prove every balance is zero)
+
+      // Friend records are Function-written because they must be created
+      // reciprocally and atomically on two different users' documents, and because
+      // they carry balanceMinor (T2 / Article III).
+      match /friends/{friendUid} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+    }
+
+    // =========================================================================
+    // usernames/{normalizedKey} — friend lookup index. docs/03 §"usernames"
+    // =========================================================================
+    // Doc ID is sha256(lower(email)) or sha256(e164(phone)), hex. A client can only
+    // resolve a contact it already knows the identifier for.
+    match /usernames/{key} {
+      allow get: if isSignedIn();     // resolve a contact you already know
+      allow list: if false;           // T5 — the whole point. A list would let
+                                      // anyone dump every user's email and phone.
+      allow write: if false;          // Function-only (onUserProfileWritten)
+    }
+
+    // =========================================================================
+    // groups/{groupId}
+    // =========================================================================
+    match /groups/{groupId} {
+
+      allow get: if isMember(groupId);
+
+      // [DEVIATION from docs/05] docs/05 writes `allow get, list: if isMember(gid)`.
+      // That is correct for `get` but breaks `list`.
+      //
+      // The primary query in the app is
+      //     groups where memberIds array-contains uid orderBy lastActivityAt desc limit 50
+      // Rules are evaluated once per CANDIDATE DOCUMENT, so isMember() would issue
+      // one exists() per candidate — 50 distinct document paths against a hard limit
+      // of 20 access calls per query. The query fails wholesale with permission-denied.
+      // (Per-document caching does not help: every candidate is a different group,
+      // hence a different member-doc path.)
+      //
+      // memberIds exists precisely to serve this query (docs/03) and is no less
+      // trustworthy than the member doc: it is seeded to exactly [creator] at create
+      // and is in the immutable field list on update, so only Functions can widen it.
+      // Zero document reads.
+      allow list: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+
+      allow create: if isSignedIn()
+                    && request.resource.data.createdBy == request.auth.uid     // T7
+                    && request.resource.data.memberIds == [request.auth.uid]   // T4
+                    && request.resource.data.memberCount == 1                  // [DEVIATION]
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() >= 1
+                    && request.resource.data.name.size() <= 60
+                    && request.resource.data.type in
+                         ['trip', 'home', 'couple', 'other', 'friend']
+                    && request.resource.data.isImplicit is bool
+                    && isCurrencyCode(request.resource.data.currency)   // LAYER 1 of 2
+                    && request.resource.data.createdAt == request.time         // T7
+                    && request.resource.data.deletedAt == null;
+
+      // memberIds/memberCount are excluded from client updates (T4) — membership
+      // changes only through Functions. currency is immutable (T10): changing it
+      // after expenses exist would reinterpret every stored amount.
+      allow update: if isMember(groupId)
+                    && !changed(['currency', 'createdBy', 'createdAt', 'memberIds',
+                                 'memberCount', 'isImplicit'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() >= 1
+                    && request.resource.data.name.size() <= 60;
+
+      allow delete: if false;         // deleteGroup callable — it must first prove
+                                      // every member's balance is zero
+
+      // -----------------------------------------------------------------------
+      // groups/{gid}/members/{uid}
+      // -----------------------------------------------------------------------
+      // Blanket-denying client writes here is what makes T2 impossible, and is the
+      // rule that implements Article III. There is no legitimate reason for a client
+      // to write a member doc: role changes, joins, and leaves all run as callables
+      // that validate preconditions (zero balance, admin rights) atomically.
+      //
+      // 🔴 If you are ever tempted to open this up for "just the displayName", don't.
+      //    Grant it in a Function. A client that can write a member doc can write
+      //    balanceMinor.
+      match /members/{memberUid} {
+        allow read: if isMember(groupId);
+        allow write: if false;        // T2 + T4
+      }
+
+      // -----------------------------------------------------------------------
+      // groups/{gid}/expenses/{expenseId} — the important one
+      // -----------------------------------------------------------------------
+      match /expenses/{expenseId} {
+
+        // grandfathered: uids that may remain participants even though they are no
+        // longer in group.memberIds. Empty on create (every participant must be a
+        // current member); on update it is the expense's existing participant list,
+        // so an expense that predates someone leaving stays editable (docs/06
+        // §"leaveGroup" keeps departed members referenced by historical expenses).
+        function validExpense(grandfathered) {
+          let d = request.resource.data;
+          let g = groupData(groupId);
+          return isPositiveInt(d.amountMinor)                              // inv 1
+            && isCurrencyCode(d.currency)                                  // LAYER 1 of 2
+            && d.currency == g.currency                                    // inv 6, T10
+            && d.groupId == groupId
+            && d.description is string
+            && d.description.size() >= 1 && d.description.size() <= 100
+            && d.splitMethod in ['equal', 'exact', 'percent', 'shares']
+            && d.date is timestamp
+            && d.splits is list
+            && d.splits.size() >= 1
+            && d.splits.size() <= 50            // group cap (Q2) — bounds abuse
+            && d.paidBy is list
+            && d.paidBy.size() >= 1
+            && d.paidBy.size() <= 50
+            && d.participantIds is list
+            && d.participantIds.size() == d.splits.size()                  // inv 7 (shallow)
+            && d.participantIds.toSet().size() == d.participantIds.size()  // inv 5 (shallow)
+            // ---- T6 ---- LAYER 1 of 2 -> onExpenseWritten
+            // Covers splits[].uid via the denormalized participantIds array. It does
+            // NOT cover paidBy[].uid: those uids live inside maps and rules cannot
+            // project a field out of an array of maps. verifyExpenseIntegrity checks
+            // both arrays against the real member list.
+            && d.participantIds.hasOnly(g.memberIds.concat(grandfathered))
+            // ---- T3 ---- LAYER 1 of 2 -> onExpenseWritten
+            // Q1 Option A. Rules have no reduce(), so the client supplies redundant
+            // checksum fields and we assert they equal the total. This stops the
+            // NAIVE attack (splits that obviously don't add up) at write time.
+            // It does NOT stop the sophisticated one: an attacker can write
+            // splitsTotalMinor == amountMinor while the splits array sums to
+            // something else entirely. verifyExpenseIntegrity recomputes the ACTUAL
+            // sums in real code and quarantines the document if they disagree.
+            // 🔴 Without that Function this pair of lines is theatre (docs/12 Q1).
+            && d.splitsTotalMinor == d.amountMinor
+            && d.paidTotalMinor == d.amountMinor;
+        }
+
+        allow read: if isMember(groupId);
+
+        allow create: if isActiveMember(groupId)
+          && validExpense([])
+          && request.resource.data.createdBy == request.auth.uid           // T7
+          && request.resource.data.createdAt == request.time               // T7
+          && request.resource.data.deletedAt == null;
+
+        // ADR-11 (T11): only the creator or a group admin may edit. Everyone else
+        // discusses in the comments thread below — that subcollection is the
+        // mechanism that makes restricted editing workable, not decoration.
+        // Admin override exists for when the creator has left the group.
+        //
+        // NOTE (gap, deliberately left as docs/05 specifies): updatedAt is NOT
+        // pinned to request.time, so an editor can backdate the "last edited"
+        // display value. createdAt/createdBy are pinned and the activity feed is
+        // Function-written, so the real audit trail is unaffected. Add
+        // `&& request.resource.data.updatedAt == request.time` if that display
+        // value ever becomes load-bearing.
+        allow update: if isActiveMember(groupId)
+          && (resource.data.createdBy == request.auth.uid || isAdmin(groupId))
+          && validExpense(resource.data.participantIds)
+          && !changed(['createdBy', 'createdAt', 'groupId', 'currency'])
+          && request.resource.data.updatedBy == request.auth.uid;
+
+        allow delete: if false;       // Article V — soft delete only: set deletedAt
+                                      // via update, which the ADR-11 gate above
+                                      // therefore also governs.
+
+        // ---------------------------------------------------------------------
+        // groups/{gid}/expenses/{eid}/comments/{commentId}
+        // ---------------------------------------------------------------------
+        // Load-bearing under ADR-11: this is how a non-creator raises "wasn't this
+        // $40?" without silently rewriting someone else's record.
+        match /comments/{commentId} {
+          allow read: if isMember(groupId);
+
+          allow create: if isActiveMember(groupId)
+                        && request.resource.data.uid == request.auth.uid       // T7
+                        && request.resource.data.text is string
+                        && request.resource.data.text.size() >= 1
+                        && request.resource.data.text.size() <= 500
+                        && request.resource.data.createdAt == request.time     // T7
+                        && request.resource.data.deletedAt == null;
+
+          // T12 — non-editable BY DESIGN (ADR-11 / AC-D4.4). An editable comment in
+          // a dispute thread destroys the record of what was actually said. This is
+          // a product decision, not an oversight; do not "fix" it.
+          //
+          // ⚠️ KNOWN CONTRADICTION: checklists/phase-08 §3 asks for a "comment
+          // deleted" tombstone so a thread does not silently lose a turn. A tombstone
+          // needs a soft delete (an update setting deletedAt), which this rule
+          // forbids, while `delete` below is a hard delete that leaves no tombstone.
+          // The two cannot both hold. The narrow resolution, if the tombstone wins:
+          //     allow update: if isActiveMember(groupId)
+          //                   && resource.data.uid == request.auth.uid
+          //                   && resource.data.deletedAt == null
+          //                   && request.resource.data.diff(resource.data)
+          //                        .affectedKeys().hasOnly(['deletedAt'])
+          //                   && request.resource.data.deletedAt == request.time;
+          // which keeps `text` immutable and still satisfies T12. Left disabled
+          // pending a decision — see the report / docs/12.
+          allow update: if false;
+
+          allow delete: if isMember(groupId) && resource.data.uid == request.auth.uid;
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // groups/{gid}/settlements/{settlementId}
+      // -----------------------------------------------------------------------
+      match /settlements/{settlementId} {
+
+        function validSettlement() {
+          let d = request.resource.data;
+          let g = groupData(groupId);
+          return isPositiveInt(d.amountMinor)
+            && d.fromUid is string && d.toUid is string
+            && d.fromUid != d.toUid
+            // Both parties must be current members. Unlike expenses these are plain
+            // scalars, so this is a complete check rather than a shallow one.
+            && g.memberIds.hasAll([d.fromUid, d.toUid])
+            && isCurrencyCode(d.currency)              // LAYER 1 of 2
+            && d.currency == g.currency
+            && d.groupId == groupId
+            && d.date is timestamp
+            && (d.get('note', null) == null
+                || (d.note is string && d.note.size() <= 200));
+        }
+
+        allow read: if isMember(groupId);
+
+        allow create: if isActiveMember(groupId)
+                      && validSettlement()
+                      && request.resource.data.createdBy == request.auth.uid   // T7
+                      && request.resource.data.createdAt == request.time       // T7
+                      && request.resource.data.deletedAt == null;
+
+        // [DEVIATION from docs/05] docs/05 writes:
+        //     allow update: if isMember(groupId)
+        //                   && !changed(['createdBy','createdAt','amountMinor']);
+        // which lets ANY member rewrite fromUid / toUid / currency on ANYONE's
+        // settlement — the exact T11 attack ADR-11 closes for expenses, reopened on
+        // the other half of the ledger. A settlement moves balances just as an
+        // expense does, so it gets the same gate and a wider immutable field list.
+        // Relaxing this needs a recorded decision in docs/12, not a quiet edit.
+        allow update: if isActiveMember(groupId)
+                      && (resource.data.createdBy == request.auth.uid || isAdmin(groupId))
+                      && !changed(['createdBy', 'createdAt', 'amountMinor',
+                                   'fromUid', 'toUid', 'currency', 'groupId']);
+
+        allow delete: if false;       // Article V — soft delete via update
+      }
+
+      // -----------------------------------------------------------------------
+      // groups/{gid}/activity/{activityId}
+      // -----------------------------------------------------------------------
+      // T8 — append-only from the server's side, read-only from the client's. If a
+      // client could write here it could hide what it did, which defeats the entire
+      // point of an audit feed.
+      match /activity/{activityId} {
+        allow read: if isMember(groupId);
+        allow write: if false;
+      }
+    }
+
+    // =========================================================================
+    // invites/{inviteId}
+    // =========================================================================
+    // No client access at all — not even read. The join screen and the redemption
+    // both go through the redeemInvite callable, which is the only thing that can
+    // add a member (T4). A readable invite collection would leak group names and
+    // let tokens be brute-forced offline.
+    match /invites/{inviteId} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // 🔴 COLLECTION-GROUP RULES — T9. READ THIS BEFORE EDITING.
+    // =========================================================================
+    // docs/05 §"The collection-group trap":
+    //
+    // A rule written at /groups/{gid}/expenses/{eid} does NOT govern
+    // collectionGroup('expenses'). Collection-group queries are matched by
+    // /{path=**}/expenses/{eid} instead. Write only the nested rule and the
+    // collection-group query is denied; write a PERMISSIVE {path=**} rule to "fix"
+    // that and you have just exposed every expense in the database to every
+    // signed-in user.
+    //
+    // ⚠️ Rules are OR-ed: a request is allowed if ANY matching rule allows it. So
+    //    `allow write: if false` in a {path=**} block DENIES NOTHING — the nested
+    //    path rule still applies. Those lines below are documentation of intent, and
+    //    the same is true of the deny-only blocks that follow. Never treat a
+    //    {path=**} deny as a control; the only thing that restricts access is the
+    //    absence of any rule that allows it.
+    //
+    // ⚠️ The matching read rule is narrower than the nested one on purpose: a
+    //    collection-group read is scoped to expenses the caller PARTICIPATES IN,
+    //    not to every expense in every group they belong to.
+    //
+    // ⚠️ The client query MUST carry where('participantIds','array-contains',uid) or
+    //    Firestore rejects the whole query — it accepts a query only when the rule
+    //    is satisfiable from the query's own constraints. Bake that into the
+    //    repository function (core/src/repositories) so no screen can get it wrong.
+    //    Serving indexes are declared in firestore.indexes.json.
+    // =========================================================================
+
+    match /{path=**}/expenses/{expenseId} {
+      // Serves: "all my expenses" across groups, and the friend-detail screen.
+      allow read: if isSignedIn()
+                  && request.auth.uid in resource.data.participantIds;
+      allow write: if false;   // documentation only — writes go via the nested rule
+    }
+
+    // No screen needs a collection-group query over these, so none is granted.
+    // Written out explicitly so that "there is no rule" is visibly deliberate
+    // rather than an omission someone later 'fixes' with a permissive block.
+    // (Functionally these are no-ops: default-deny already covers them.)
+    match /{path=**}/members/{memberUid}      { allow read, write: if false; }
+    match /{path=**}/comments/{commentId}     { allow read, write: if false; }
+    match /{path=**}/settlements/{settlementId} { allow read, write: if false; }
+    match /{path=**}/activity/{activityId}    { allow read, write: if false; }
+    match /{path=**}/friends/{friendUid}      { allow read, write: if false; }
+
+    // =========================================================================
+    // Default deny
+    // =========================================================================
+    // Rules deny by default; this is here as an explicit statement of intent and a
+    // landing place for reviewers. Any new collection is inaccessible until it gets
+    // its own considered block above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // OPEN QUESTION — recorded here so it is not lost (see the report / docs/12)
+    // =========================================================================
+    // Reads use isMember() (exists on the member doc) while writes use
+    // isActiveMember() (leftAt == null). Because docs/06 keeps the member doc after
+    // someone leaves, a departed member RETAINS READ ACCESS to the group — including
+    // expenses added after they left. That may be a privacy leak or may be intended
+    // (they still appear in historical expenses). docs/05 specifies exists() and
+    // tightening reads would silently remove access, so it is flagged rather than
+    // changed unilaterally. Decide in Phase 10 hardening; the fix is one word:
+    // isMember -> isActiveMember on the read rules.
+    // =========================================================================
+  }
+}
