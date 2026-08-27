@@ -1,90 +1,126 @@
 #!/usr/bin/env bash
 # Rename the project brand across the whole repo.
 #
-#   ./scripts/rename-brand.sh <newname>        # dry run — shows what would change
-#   ./scripts/rename-brand.sh <newname> --go   # actually rewrite
+#   ./scripts/rename-brand.sh <newname>                     # dry run
+#   ./scripts/rename-brand.sh <newname> --go                # apply
+#   ./scripts/rename-brand.sh <newname> --display=NewName   # custom display capitalisation
+#   ./scripts/rename-brand.sh <newname> --from=oldbrand     # rename from something else
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# ⚠️  THE ONE THING THAT MAKES THIS SAFE
+# WHY THIS IS A SCRIPT AND NOT A FIND-AND-REPLACE
 #
-# "settle", "settled", "settles", "settling", "settlement(s)", "settleUp",
-# "settlementId" are DOMAIN VOCABULARY, not the brand. Settling up a debt is the
-# product's core concept — those words must survive the rename untouched.
+# The project was called "settl" first, and that name overlapped its own domain
+# vocabulary: settle, settled, settlement, settlementId, settleUp. Settling up is
+# the product's core concept, so those words had to survive the rename untouched.
+# A naive s/settl/newname/ turned `Settlement` into `NewnameEment` and broke
+# Firestore field names that documents were already keyed on — silently, and in a
+# way that passes review.
 #
-# A naive s/settl/newname/ corrupts the entire ledger layer silently: it would
-# turn `Settlement` into `NewnameEment`, break `settlementId` field names that
-# Firestore documents are already keyed on, and rename `settleUp` callables.
+# The guard for that is --guard=e, which makes every pattern match the old brand
+# only when it is NOT followed by 'e'. The current brand does not collide with
+# anything, so no guard is applied by default. If you ever rename TO a word that
+# is a prefix of domain vocabulary, set it again.
 #
-# So every pattern below matches `settl` ONLY when it is NOT followed by `e`.
-# That single lookahead is the difference between a 30-second rename and a
-# multi-hour debugging session.
+# TWO THINGS THIS DELIBERATELY WILL NOT RENAME
+#
+#   * competitor literals (PROTECT below) — they are other companies
+#   * docs/21-name-clearance.md — it records which names were REJECTED and why.
+#     Renaming it turns the evidence for a rename into a claim about ourselves,
+#     and the record stops explaining why the project was ever renamed.
+#     This has already happened once. Leave it excluded.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
-NEW="${1:-}"
-GO="${2:-}"
+NEW=""; GO=""; DISPLAY=""; FROM="splitsutra"; FROM_DISPLAY="SplitSutra"; GUARD=""
+for arg in "$@"; do
+  case "$arg" in
+    --go)         GO="--go" ;;
+    --display=*)  DISPLAY="${arg#--display=}" ;;
+    --from=*)         FROM="${arg#--from=}"; FROM_DISPLAY="" ;;
+    --from-display=*) FROM_DISPLAY="${arg#--from-display=}" ;;
+    --guard=*)    GUARD="${arg#--guard=}" ;;
+    -*)           echo "unknown flag: $arg" >&2; exit 1 ;;
+    *)            [[ -z "$NEW" ]] && NEW="$arg" ;;
+  esac
+done
 
 if [[ -z "$NEW" ]]; then
-  echo "usage: $0 <newname> [--go]" >&2; exit 1
+  echo "usage: $0 <newname> [--go] [--display=Name] [--from=old] [--from-display=Old] [--guard=e]" >&2; exit 1
 fi
 if [[ ! "$NEW" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
   echo "ERROR: '$NEW' is not a valid Firebase project ID / npm scope." >&2
-  echo "       Must be lowercase, 6-30 chars, start with a letter, [a-z0-9-] only." >&2
+  echo "       Lowercase, 6-30 chars, must start with a letter, [a-z0-9-] only." >&2
   exit 1
 fi
-# Capitalised display form: settl -> Settl
-NEW_CAP="$(printf '%s' "${NEW:0:1}" | tr '[:lower:]' '[:upper:]')${NEW:1}"
 
-# Competitor references in the clearance docs must NOT be renamed — they are
-# evidence for why we left the name, and rewriting them destroys the record.
+# Display form. Derived as ucfirst unless given, because a multi-word brand
+# (SplitSutra) cannot be derived from its lowercase identifier (splitsutra).
+if [[ -n "$DISPLAY" ]]; then
+  NEW_CAP="$DISPLAY"
+else
+  NEW_CAP="$(printf '%s' "${NEW:0:1}" | tr '[:lower:]' '[:upper:]')${NEW:1}"
+fi
+
+# The OLD display form cannot be derived either: ucfirst("splitsutra") is "Splitsutra",
+# which does not match the "SplitSutra" actually written in the files. Getting this wrong
+# makes the rename silently skip every display-name occurrence.
+if [[ -n "$FROM_DISPLAY" ]]; then
+  FROM_CAP="$FROM_DISPLAY"
+else
+  FROM_CAP="$(printf '%s' "${FROM:0:1}" | tr '[:lower:]' '[:upper:]')${FROM:1}"
+fi
+LOOK=""
+[[ -n "$GUARD" ]] && LOOK="(?!$GUARD)"
+
 PROTECT=( "settl.fyi" "settlapp.in" "settl.company" )
 
-files=$(grep -rlIPi 'settl(?!e)' . \
+files=$(grep -rlIPi "$FROM$LOOK" . \
           --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
           --exclude-dir=coverage --exclude-dir=playwright-report \
-          --exclude="rename-brand.sh" 2>/dev/null || true)
+          --exclude="rename-brand.sh" --exclude="21-name-clearance.md" 2>/dev/null || true)
 
-if [[ -z "$files" ]]; then echo "No brand occurrences found. Already renamed?"; exit 0; fi
+if [[ -z "$files" ]]; then echo "No occurrences of '$FROM' found. Already renamed?"; exit 0; fi
 
 if [[ "$GO" != "--go" ]]; then
-  echo "DRY RUN — pass --go to apply. Renaming brand 'settl' -> '$NEW' ('$NEW_CAP')"
+  echo "DRY RUN — pass --go to apply."
+  echo "  '$FROM' -> '$NEW'   (display: '$FROM_CAP' -> '$NEW_CAP')"
+  echo
+  [[ -n "$GUARD" ]] && echo "  guard: matches only when NOT followed by '$GUARD'"
   echo
   echo "$files" | while read -r f; do
-    n=$(grep -oIP 'settl(?!e)' "$f" 2>/dev/null | wc -l)
+    n=$(grep -oIPi "$FROM$LOOK" "$f" 2>/dev/null | wc -l)
     printf "%4d  %s\n" "$n" "$f"
   done
   echo
   echo "Total files: $(echo "$files" | wc -l)"
-  echo "Preserved untouched: settle / settled / settles / settling / settlement* / settleUp"
-  echo "Preserved literals:  ${PROTECT[*]}"
+  echo "Never touched: ${PROTECT[*]}, docs/21-name-clearance.md"
   exit 0
 fi
 
-echo "Renaming 'settl' -> '$NEW' across $(echo "$files" | wc -l) files..."
+echo "Renaming '$FROM' -> '$NEW' across $(echo "$files" | wc -l) files..."
 
 echo "$files" | while read -r f; do
-  # 1. park protected competitor literals behind placeholders
+  [ -f "$f" ] || continue
   i=0; for p in "${PROTECT[@]}"; do
     perl -pi -e "s/\Q$p\E/\x00PROTECT${i}\x00/g" "$f"; i=$((i+1))
   done
 
-  # 2. the rename itself — every pattern guarded by (?!e)
-  perl -pi -e "s/\@settl(?!e)\//\@$NEW\//g"   "$f"   # npm scope   @settl/core
-  perl -pi -e "s/--settl(?!e)-/--$NEW-/g"     "$f"   # css vars    --settl-color-bg
-  perl -pi -e "s/\bSettl(?!e)\b/$NEW_CAP/g"   "$f"   # display     Settl
-  perl -pi -e "s/\bsettl(?!e)/$NEW/g"         "$f"   # everything else: settl-dev, settl-prod, allcottcourt1808/settl
+  perl -pi -e "s/\@$FROM$LOOK\//\@$NEW\//g"     "$f"   # npm scope
+  perl -pi -e "s/--$FROM$LOOK-/--$NEW-/g"       "$f"   # css custom properties
+  perl -pi -e "s/\b$FROM_CAP$LOOK\b/$NEW_CAP/g" "$f"   # display name
+  perl -pi -e "s/\b$FROM$LOOK/$NEW/g"           "$f"   # identifiers, ids, paths
 
-  # 3. restore protected literals
   i=0; for p in "${PROTECT[@]}"; do
-    perl -pi -e "s/\x00PROTECT${i}\x00/\Q$p\E/g" "$f"; i=$((i+1))
+    perl -pi -e "s/\x00PROTECT${i}\x00/$p/g" "$f"; i=$((i+1))
   done
 done
 
-echo "Done. Remaining (should be competitor references only):"
-grep -rnIPi 'settl(?!e)' . --exclude-dir=.git --exclude-dir=node_modules --exclude="rename-brand.sh" 2>/dev/null || echo "  (none)"
+echo "Done. Remaining occurrences (competitor references and the clearance doc only):"
+grep -rnIPi "$FROM$LOOK" . --exclude-dir=.git --exclude-dir=node_modules \
+  --exclude="rename-brand.sh" 2>/dev/null || echo "  (none)"
 echo
 echo "STILL TO DO BY HAND:"
-echo "  1. Rename the directory:  C:\Users\neeth\coding\settl  ->  ...\$NEW"
-echo "  2. Check docs/19-qa-log.md R6 still reads correctly as history."
-echo "  3. Firebase project IDs are NOT reserved yet — reserve $NEW-dev / $NEW-prod in Phase 02."
+echo "  1. Rename the checkout directory to '$NEW'."
+echo "  2. Re-read docs/19-qa-log.md Q16/R6 — it must still read as history."
+echo "  3. Reserve $NEW-dev / $NEW-prod in Phase 02. Project IDs are permanent."
