@@ -26,7 +26,7 @@
     "test:e2e": "playwright test --project e2e-mobile --project e2e-desktop",
     "test:e2e:ui": "playwright test --project e2e-mobile --ui",
     "test:smoke": "playwright test --project smoke",
-    "depcruise": "depcruise packages apps firebase/functions",
+    "depcruise": "node scripts/depcruise.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm test:unit",
     "emulators": "firebase emulators:start --import=./.emulator-data --export-on-exit",
     "seed": "tsx firebase/seed.ts",
