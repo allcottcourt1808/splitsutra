@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// =============================================================================
+// SplitSutra — Cloud Storage Security Rules
+// =============================================================================
+// v1 USES NO STORAGE AT ALL. This file exists so the bucket is locked from the
+// moment it is created rather than inheriting a permissive default, and so the
+// deploy pipeline has a rules artifact to ship.
+//
+// The only planned Storage use is receipt photos, which are BACKLOG, not v1 —
+// see docs/17-backlog.md §"Receipt photos". That entry also notes Storage is the
+// first service that meaningfully leaves the free tier, so this deny-all doubles
+// as a cost control (docs/18, Article XI).
+//
+// 🔴 When receipts land, DO NOT replace this with a blanket authenticated allow.
+//    The shape that matches this app's model is roughly:
+//
+//      match /groups/{groupId}/expenses/{expenseId}/{fileName} {
+//        // Storage rules CANNOT read Firestore, so isMember() is unavailable here.
+//        // Membership has to come from a custom auth claim maintained by a
+//        // Function, or uploads have to be mediated by a callable that issues a
+//        // signed URL. Decide that deliberately — an "if request.auth != null"
+//        // rule makes every receipt in the product readable by every user.
+//        allow read:  if false;   // TODO(backlog): membership via custom claim
+//        allow write: if false;   // TODO(backlog): + size cap + contentType image/*
+//      }
+//
+//    Whatever it becomes, keep the two v1-shaped guarantees: a size cap
+//    (request.resource.size) and a contentType allowlist, both enforced here and
+//    not in the client.
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
