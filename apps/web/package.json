@@ -1,0 +1,33 @@
+{
+  "name": "@splitsutra/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "//notes": {
+    "firebase": "Present so apps/web/src/auth/** can use the MODULAR firebase/auth SDK for sign-in, and so Vite can pre-bundle the SDK that @splitsutra/core imports. Screens must NEVER import it directly — the dependency-cruiser rule from checklists/phase-01-foundation.md §4 fails the build if they do. FirebaseUI was dropped: see docs/19-qa-log.md Q17 / R7.",
+    "react-router": "v7 declarative mode. Everything is imported from 'react-router'; react-router-dom is a legacy shim in v7 and is not installed.",
+    "testing": "No test tooling here on purpose — the whole harness is set up in checklists/phase-02b-testing-setup.md."
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@splitsutra/core": "workspace:*",
+    "firebase": "^12.18.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "rollup-plugin-visualizer": "^7.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.2"
+  }
+}

@@ -1,0 +1,70 @@
+/**
+ * Global base layer.
+ *
+ * Everything here is expressed in `var(--splitsutra-*)`, which is generated from the
+ * `@splitsutra/core` token objects at startup (see tokensCss.ts). No literal colour,
+ * spacing, radius or font size appears in this file (Article IX).
+ *
+ * Component styling belongs in `*.module.css` next to the component. This file only
+ * establishes the document-level baseline that every component inherits.
+ */
+
+body {
+  background-color: var(--splitsutra-color-bg);
+  color: var(--splitsutra-color-text);
+
+  /* System font stack: matches the platform the user is already reading, and is what
+     the RN build gets for free. No webfont — it would be a render-blocking request on
+     the one screen (Add Expense) where latency actually costs a user. */
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--splitsutra-font-size-md);
+  font-weight: var(--splitsutra-font-weight-regular);
+  line-height: var(--splitsutra-font-line-height-normal);
+}
+
+/**
+ * The app is a phone app that happens to run in a browser (docs/07 §Design principle):
+ * built at 390x844 and centred in a max-640px column on desktop. Above the breakpoint
+ * the page gutter gets the subtle background so the column reads as a device.
+ */
+@media (min-width: 641px) {
+  body {
+    background-color: var(--splitsutra-color-bg-subtle);
+  }
+}
+
+/**
+ * Amounts are always right-aligned and use tabular figures so columns line up
+ * (docs/07 §Interaction rules 7). Applied by <Money> and <AmountInput>; exposed here
+ * because it is a typographic baseline, not a component decision.
+ */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/**
+ * Visually hidden but announced by screen readers. Used for the balance live region
+ * (docs/07 §Accessibility) and for icon-only control labels.
+ */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/**
+ * Selection uses the brand teal as a FILL, which is a legitimate use — the pairing is
+ * dark text on teal, measured at 7.27:1 (see the contrast table in core/theme/tokens.ts).
+ */
+::selection {
+  background-color: var(--splitsutra-color-primary);
+  color: var(--splitsutra-color-on-primary);
+}

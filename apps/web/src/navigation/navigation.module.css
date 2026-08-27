@@ -1,0 +1,226 @@
+/**
+ * App shell, bottom tab bar, and modal presentation.
+ *
+ * FLEXBOX ONLY (docs/02 §mobile-portability contract, rule 1):
+ *   - no `display: grid`
+ *   - no `float`
+ *   - no `position: absolute` for layout
+ *   - no `100vh` — the height chain is `html/body/#root { height: 100% }` in reset.css and
+ *     a flex column from there down. Mobile browser chrome makes `vh` overshoot by the
+ *     toolbar height, which is precisely how a bottom tab bar ends up under the address bar.
+ *
+ * Every value is a `var(--splitsutra-*)` token or a hairline `1px` border (Article IX).
+ */
+
+/* --- Shell ---------------------------------------------------------------- */
+
+/**
+ * The gutter. A flex ROW that centres one child, rather than `margin-inline: auto` — Yoga
+ * supports auto margins but `justify-content: center` is the construct that reads the same
+ * in both engines, and this is the file Phase 12 copies from.
+ */
+.viewport {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/**
+ * The phone column. docs/07 §Responsive: full-bleed below 640px, a centred 640px column
+ * above it. The app is a phone app that happens to run in a browser.
+ */
+.column {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  inline-size: 100%;
+  max-inline-size: var(--splitsutra-size-content-max-width);
+  background-color: var(--splitsutra-color-bg);
+}
+
+/* Above the phone breakpoint the column gets an edge so it reads as a device against the
+   subtle page background global.css paints there. */
+@media (min-width: 641px) {
+  .column {
+    border-inline: 1px solid var(--splitsutra-color-border);
+  }
+}
+
+/** Where `<Outlet />` renders. `min-height: 0` is what lets the screen's body scroll. */
+.content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* --- Tab bar -------------------------------------------------------------- */
+
+.tabBar {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 0 0 auto;
+  min-block-size: var(--splitsutra-size-tab-bar);
+  border-block-start: 1px solid var(--splitsutra-color-border);
+  background-color: var(--splitsutra-color-surface);
+  /* Safe area via a token, never a magic number (contract rule 10). On a notched phone
+     this is the home-indicator strip; everywhere else it resolves to 0px. */
+  padding-block-end: var(--splitsutra-safe-area-bottom);
+  padding-inline: var(--splitsutra-safe-area-left) var(--splitsutra-safe-area-right);
+}
+
+.tab {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--splitsutra-space-xs);
+  padding-block: var(--splitsutra-space-xs);
+  border-radius: var(--splitsutra-radius-sm);
+  color: var(--splitsutra-color-text-secondary);
+}
+
+/* Colour is not the only signal: the current tab is also announced by `aria-current="page"`
+   and rendered at a heavier weight. */
+.tabActive {
+  color: var(--splitsutra-color-primary-text);
+}
+
+/* Icons are sized in `em` and inherit `currentColor`, so one font-size token drives the
+   glyph and the active/inactive colour comes from `.tab` / `.tabActive`. */
+.tabIcon {
+  flex: 0 0 auto;
+  font-size: var(--splitsutra-font-size-xl);
+}
+
+.tabLabel {
+  font-size: var(--splitsutra-font-size-xs);
+  font-weight: var(--splitsutra-font-weight-medium);
+  line-height: var(--splitsutra-font-line-height-tight);
+  color: inherit;
+}
+
+.tabActive .tabLabel {
+  font-weight: var(--splitsutra-font-weight-semibold);
+}
+
+/**
+ * The raised Add button. docs/07: "a raised FAB-style button that opens the Add Expense
+ * flow as a modal — it is an action, not a destination."
+ *
+ * Lifted with a negative margin rather than `position: absolute`, so it stays inside the
+ * flex line and Yoga can reproduce it (contract rule 1).
+ */
+.tabRaised {
+  flex: 0 0 auto;
+  inline-size: var(--splitsutra-size-tab-bar);
+  min-inline-size: var(--splitsutra-size-tab-bar);
+  block-size: var(--splitsutra-size-tab-bar);
+  align-self: center;
+  margin-block-start: calc(-1 * var(--splitsutra-space-lg));
+  margin-inline: var(--splitsutra-space-sm);
+  border-radius: var(--splitsutra-radius-pill);
+  background-color: var(--splitsutra-color-primary);
+  color: var(--splitsutra-color-on-primary);
+}
+
+.tabRaised:active {
+  background-color: var(--splitsutra-color-primary-pressed);
+}
+
+@media (hover: hover) {
+  .tabRaised:hover {
+    background-color: var(--splitsutra-color-primary-dark);
+  }
+}
+
+/* --- Modal presentation --------------------------------------------------- */
+
+/**
+ * docs/07: "Modals are full-screen sheets on mobile widths and centred dialogs >= 768px.
+ * On web they are real routes so back/forward and deep links work; React Navigation models
+ * them as a modal stack."
+ *
+ * Below 768px this is simply a full-bleed column — identical to any other screen, which is
+ * what "full-screen sheet" means on a phone.
+ */
+.modalViewport {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.modalPanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  inline-size: 100%;
+  max-inline-size: var(--splitsutra-size-content-max-width);
+  background-color: var(--splitsutra-color-bg);
+}
+
+@media (min-width: 768px) {
+  .modalViewport {
+    align-items: center;
+    padding: var(--splitsutra-space-xl);
+  }
+
+  .modalPanel {
+    /* `flex: 0 1 auto` so the dialog is only as tall as its content, up to the space the
+       viewport allows. The screen body inside still owns its own scrolling. */
+    flex: 0 1 auto;
+    border: 1px solid var(--splitsutra-color-border);
+    border-radius: var(--splitsutra-radius-lg);
+    overflow: hidden;
+  }
+}
+
+/* --- Modal header --------------------------------------------------------- */
+
+/**
+ * The `✕  Title  Save` bar from the Add Expense wireframe. Shared by every modal route so
+ * the dismiss affordance never moves.
+ */
+.modalHeader {
+  flex: 0 0 auto;
+  gap: var(--splitsutra-space-sm);
+  padding-inline: var(--splitsutra-space-sm);
+  padding-block-start: var(--splitsutra-safe-area-top);
+  border-block-end: 1px solid var(--splitsutra-color-border);
+  background-color: var(--splitsutra-color-surface);
+}
+
+/* --- Screen header -------------------------------------------------------- */
+
+/** Contextual header for tabbed screens. Sticky by construction: it is a flex sibling of
+    the scroll region, not a `position: sticky` element. */
+.screenHeader {
+  flex: 0 0 auto;
+  gap: var(--splitsutra-space-sm);
+  padding-inline: var(--splitsutra-space-lg);
+  padding-block: var(--splitsutra-space-md);
+  padding-block-start: calc(var(--splitsutra-safe-area-top) + var(--splitsutra-space-md));
+  border-block-end: 1px solid var(--splitsutra-color-border);
+  background-color: var(--splitsutra-color-surface);
+}
+
+/* --- Suspense / boot fallback --------------------------------------------- */
+
+.bootFallback {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--splitsutra-space-md);
+  padding: var(--splitsutra-space-xl);
+  background-color: var(--splitsutra-color-bg);
+}

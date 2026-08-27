@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /* This is the ONE package allowed to see the DOM. `packages/core` compiles with
+       "lib": ["ES2022"] and no "DOM", which makes `window`/`document` a compile error
+       there (Article II, checklists/phase-01-foundation.md §3). */
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+
+    "noEmit": true,
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* No "baseUrl" on purpose. It is deprecated in TS 6 and stops functioning in TS 7
+       (TS5101). The mappings below are already written relative to THIS file, which is
+       how "paths" resolves when "baseUrl" is absent (TS >= 4.4) — so removing it changes
+       nothing about resolution, and keeps the config valid for the TS 7 migration. */
+    "paths": {
+      "@/*": ["./src/*"],
+      /* Resolve the workspace package to SOURCE, not to a build output. Core has no
+         build step during Phases 01-11, so pointing at `dist` would mean `pnpm dev`
+         fails on a clean clone. The matching alias lives in vite.config.ts. */
+      "@splitsutra/core": ["../../packages/core/src/index.ts"],
+      "@splitsutra/core/*": ["../../packages/core/src/*"],
+    },
+  },
+  "include": ["src", "vite.config.ts"],
+}

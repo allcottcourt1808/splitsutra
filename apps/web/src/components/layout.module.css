@@ -1,0 +1,116 @@
+/**
+ * Layout primitives: Screen, Stack, Row, Card, Divider, Spacer.
+ *
+ * FLEXBOX ONLY (docs/02 §mobile-portability contract, rule 1). Yoga — React Native's
+ * layout engine — implements flexbox and nothing else, so:
+ *
+ *   - no `display: grid`
+ *   - no `float`
+ *   - no `position: absolute` for layout (badges and overlays only)
+ *   - no `100vh`
+ *
+ * Values arrive as CSS custom properties set by the component from a token key, so
+ * every number below is either `0`, `1`, a token reference, or a hairline border.
+ */
+
+/* --- Screen --------------------------------------------------------------- */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* Without this a flex child refuses to shrink and the inner scroller never scrolls. */
+  min-height: 0;
+  background-color: var(--splitsutra-color-bg);
+}
+
+/* The scrollable body. Scrolling lives HERE, not on the document, so the bottom tab
+   bar stays put and `overscroll-behavior` stops the page bouncing behind a sheet. */
+.screenBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screenPadded {
+  padding-inline: var(--splitsutra-space-lg);
+  padding-block-start: var(--splitsutra-space-lg);
+}
+
+/* Bottom breathing room so the last row is never trapped under the tab bar or the
+   home indicator (contract rule 10 — safe area via a token, not a magic number). */
+.screenBody::after {
+  content: '';
+  display: block;
+  flex: 0 0 auto;
+  height: var(--splitsutra-space-xxl);
+}
+
+/* --- Stack / Row ---------------------------------------------------------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap, 0);
+  align-items: var(--stack-align, stretch);
+  justify-content: var(--stack-justify, flex-start);
+  padding: var(--stack-padding, 0);
+  flex: var(--stack-flex, 0 1 auto);
+  min-height: 0;
+  min-width: 0;
+}
+
+.row {
+  flex-direction: row;
+  /* Rows default to vertically centred: the overwhelmingly common case is an icon,
+     a label and a trailing amount on one baseline. */
+  align-items: var(--stack-align, center);
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+/* --- Card ----------------------------------------------------------------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--splitsutra-color-surface);
+  border: 1px solid var(--splitsutra-color-border);
+  border-radius: var(--splitsutra-radius-lg);
+  padding: var(--splitsutra-space-lg);
+  min-width: 0;
+}
+
+.cardFlush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* --- Divider -------------------------------------------------------------- */
+
+.divider {
+  flex: 0 0 auto;
+  height: 1px;
+  background-color: var(--splitsutra-color-border);
+  border: 0;
+}
+
+.dividerInset {
+  margin-inline-start: var(--splitsutra-space-lg);
+}
+
+/* --- Spacer --------------------------------------------------------------- */
+
+/* Pushes siblings apart in a flex line. `<Spacer />` reads better in JSX than
+   `justify-content: space-between` when only one gap should grow, and it is the same
+   trick RN uses. */
+.spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
