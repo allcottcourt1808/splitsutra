@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!--
+      viewport-fit=cover is what makes `env(safe-area-inset-*)` report real values on
+      notched devices. The tab bar reads those insets through a token
+      (docs/02 §mobile-portability contract, rule 10).
+      maximum-scale is deliberately NOT set: pinch-zoom must stay available (NFR-4).
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- Lets the UA paint form controls, scrollbars and the pre-hydration canvas in
+         the right theme. Actual colours come from the tokens (Article IX). -->
+    <meta name="color-scheme" content="light dark" />
+
+    <title>SplitSutra</title>
+    <meta
+      name="description"
+      content="Split expenses with friends and settle up without the arithmetic."
+    />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- TODO(phase-09): manifest.webmanifest + service worker (PWA). -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
