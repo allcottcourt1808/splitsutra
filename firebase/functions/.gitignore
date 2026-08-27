@@ -1,0 +1,18 @@
+node_modules/
+
+# Anchored with a leading slash so it matches ONLY the tsc outDir at the package root.
+# Unanchored "lib/" matches a directory named lib at any depth, which silently excluded
+# src/lib/ — the identity, invite, group, activity and diff helpers — from the repo.
+/lib/
+*.local
+firebase-debug.log
+firebase-debug.*.log
+*.tsbuildinfo
+
+# 🔴 Service-account keys are NEVER committed and are NEVER needed by this package.
+# The deployed runtime uses the built-in service identity; the emulator needs no
+# credentials at all. A committed Admin SDK key bypasses every Security Rule in
+# firestore.rules and is permanently recoverable from git history.
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+*.pem
