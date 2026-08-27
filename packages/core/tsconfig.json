@@ -1,0 +1,21 @@
+{
+  // Constitution Article II — `packages/core` is platform-agnostic.
+  //
+  // `"lib": ["ES2022"]` with **no `"DOM"`** is the mechanical enforcement of that article:
+  // `window`, `document`, `localStorage`, `HTMLElement` and friends are simply not declared,
+  // so touching one is a compile error rather than a Phase 12 surprise.
+  //
+  // `"types": []` is the second half of the same guard: without it, TypeScript auto-includes
+  // every `@types/*` package it can find (`@types/node` among them), quietly handing core a
+  // pile of platform globals it must not have.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "rootDir": "./src",
+    "noEmit": true,
+    "skipLibCheck": true,
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage"],
+}
