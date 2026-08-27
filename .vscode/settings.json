@@ -1,0 +1,49 @@
+{
+  // ── Line endings ──────────────────────────────────────────────────────────
+  // CI runs on Linux and git is set to `autocrlf input`. Without this, files
+  // authored in VS Code on Windows land as CRLF and show up as whole-file diffs.
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // ── Formatting ────────────────────────────────────────────────────────────
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+
+  // ── ESLint ────────────────────────────────────────────────────────────────
+  // The repo uses flat config (eslint.config.js), not .eslintrc.
+  "eslint.useFlatConfig": true,
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+
+  // ── TypeScript ────────────────────────────────────────────────────────────
+  // Use the workspace TypeScript, not the one bundled with VS Code — otherwise
+  // the editor and `pnpm typecheck` can disagree about the same file.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  // moduleResolution is "bundler" — relative imports are extensionless.
+  "typescript.preferences.importModuleSpecifierEnding": "minimal",
+
+  // ── Noise reduction ───────────────────────────────────────────────────────
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/playwright-report": true,
+    "**/test-results": true,
+    "**/.emulator-data": true,
+    "**/.firebase": true,
+    "**/pnpm-lock.yaml": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.emulator-data/**": true
+  },
+
+  // ── Firestore rules ───────────────────────────────────────────────────────
+  "files.associations": { "*.rules": "firerules" },
+
+  "cSpell.words": ["firebaseui", "Firestore", "zustand", "depcruise", "vitest", "unsettle"]
+}
