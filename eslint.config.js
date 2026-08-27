@@ -16,6 +16,13 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
+
+      // firebase/functions compiles to lib/ (its tsconfig outDir). Anchored to that one
+      // path on purpose: a bare `**/lib/**` also matches firebase/functions/src/lib/, the
+      // real source directory holding identity.ts and friends — which is precisely the
+      // mistake an unanchored `lib/` already made in .gitignore, where it silently kept
+      // those files out of the repo entirely.
+      'firebase/functions/lib/**',
       '**/coverage/**',
       '**/playwright-report/**',
       '**/test-results/**',
