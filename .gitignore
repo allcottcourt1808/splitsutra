@@ -1,0 +1,57 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ── Build output ─────────────────────────────────────────────────────────────
+dist/
+build/
+*.tsbuildinfo
+
+# ── Environment ──────────────────────────────────────────────────────────────
+# Everything .env* is ignored EXCEPT the committed template.
+# Firebase web config (VITE_FIREBASE_*) is a public identifier, not a secret — but
+# .env.local can also pick up things that are, so the whole family stays out.
+.env
+.env.*
+!.env.example
+
+# ── Secrets — NFR-7 ──────────────────────────────────────────────────────────
+# A committed Firebase Admin service-account key grants full database access and
+# bypasses Security Rules entirely. Once it is in git history it is permanently
+# compromised. These patterns are a backstop; `gitleaks` pre-commit is the primary
+# guard (docs/10-deployment.md).
+*-firebase-adminsdk-*.json
+*.serviceaccount.json
+*serviceAccount*.json
+*service-account*.json
+gcp-credentials.json
+
+# ── Firebase / emulators ─────────────────────────────────────────────────────
+.firebase/
+.emulator-data/
+firebase-debug.log*
+firestore-debug.log*
+database-debug.log*
+pubsub-debug.log*
+ui-debug.log*
+
+# ── Test output ──────────────────────────────────────────────────────────────
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# ── Editors / OS ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
