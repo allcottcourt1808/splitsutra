@@ -1,0 +1,24 @@
+{
+  "//": [
+    "TEMPLATE — these project IDs are NOT reserved yet (Phase 02, checklists/phase-02-firebase-setup.md §1).",
+    "Firebase project IDs are globally unique and first-come. 'splitsutra-dev' and 'splitsutra-prod' are",
+    "placeholders pending reservation in the Firebase console; if either is taken, the fallback",
+    "recorded in phase-02 is 'splitsutra-app-dev' / 'splitsutra-app-prod'. Update BOTH this file and the",
+    "VITE_FIREBASE_* values in apps/web/.env.example when the real IDs are claimed.",
+    "",
+    "Both projects are created on the free Spark plan and STAY there until Phase 11 (docs/18 §1).",
+    "Nothing before Phase 11 touches a cloud resource — Phases 00-10 run on the local emulator suite.",
+    "",
+    "The seed script hard-refuses any project ID ending in '-prod' (firebase/seed/src/guard.ts).",
+    "Keep the '-prod' suffix on the production alias or that guard stops protecting you.",
+    "",
+    "Regenerate/extend with:  firebase use --add <project-id> --alias <dev|prod>"
+  ],
+  "projects": {
+    "default": "splitsutra-dev",
+    "dev": "splitsutra-dev",
+    "prod": "splitsutra-prod"
+  },
+  "targets": {},
+  "etags": {}
+}
