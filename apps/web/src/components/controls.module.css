@@ -1,0 +1,237 @@
+/**
+ * Interactive controls: Pressable, Button, Input, AmountInput, SegmentedControl, Chip.
+ *
+ * Two rules dominate this file and neither is negotiable:
+ *
+ *   1. MINIMUM 44x44 TOUCH TARGET (Article IX / NFR-4). `min-block-size` and
+ *      `min-inline-size` are set from `--splitsutra-size-touch-target` on everything
+ *      tappable, including icon-only buttons.
+ *
+ *   2. NO HOVER-ONLY AFFORDANCES (contract rule 2). Hover states are wrapped in
+ *      `@media (hover: hover)` so they never fire from a stray touch, and nothing is
+ *      revealed by hover alone — every hover state has a matching `:active` and
+ *      `:focus-visible` state that a finger or a keyboard can reach.
+ */
+
+/* --- Pressable ------------------------------------------------------------ */
+
+.pressable {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--splitsutra-size-touch-target);
+  min-inline-size: var(--splitsutra-size-touch-target);
+  border-radius: var(--splitsutra-radius-md);
+  color: inherit;
+  background-color: transparent;
+  transition: background-color var(--splitsutra-motion-fast) ease-out;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Layout-only pressables (a whole list row) must not be forced to 44px wide; the row
+   already exceeds it. Height stays enforced. */
+.pressableBlock {
+  min-inline-size: 0;
+  inline-size: 100%;
+  justify-content: flex-start;
+}
+
+.pressable:active {
+  background-color: var(--splitsutra-color-bg-subtle);
+}
+
+@media (hover: hover) {
+  .pressable:hover {
+    background-color: var(--splitsutra-color-bg-subtle);
+  }
+}
+
+.pressable:disabled,
+.pressable[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- Button --------------------------------------------------------------- */
+
+.button {
+  gap: var(--splitsutra-space-sm);
+  padding-inline: var(--splitsutra-space-lg);
+  border-radius: var(--splitsutra-radius-md);
+  font-size: var(--splitsutra-font-size-md);
+  font-weight: var(--splitsutra-font-weight-semibold);
+  line-height: var(--splitsutra-font-line-height-tight);
+  white-space: nowrap;
+}
+
+.buttonFullWidth {
+  inline-size: 100%;
+}
+
+/* primary: brand teal FILL with the dark on-primary foreground.
+   White on #1CC29F is 2.27:1 and would fail AA; #04241D on it is 7.27:1. */
+.buttonPrimary {
+  background-color: var(--splitsutra-color-primary);
+  color: var(--splitsutra-color-on-primary);
+}
+
+.buttonPrimary:active {
+  background-color: var(--splitsutra-color-primary-pressed);
+}
+
+@media (hover: hover) {
+  .buttonPrimary:hover {
+    background-color: var(--splitsutra-color-primary-dark);
+  }
+}
+
+.buttonSecondary {
+  background-color: var(--splitsutra-color-surface);
+  color: var(--splitsutra-color-primary-text);
+  box-shadow: inset 0 0 0 1px var(--splitsutra-color-border-strong);
+}
+
+.buttonSecondary:active {
+  background-color: var(--splitsutra-color-bg-subtle);
+}
+
+@media (hover: hover) {
+  .buttonSecondary:hover {
+    background-color: var(--splitsutra-color-bg-subtle);
+  }
+}
+
+.buttonGhost {
+  background-color: transparent;
+  color: var(--splitsutra-color-primary-text);
+}
+
+.buttonDanger {
+  background-color: transparent;
+  color: var(--splitsutra-color-danger-text);
+  box-shadow: inset 0 0 0 1px var(--splitsutra-color-danger);
+}
+
+/* Destructive actions are never adjacent to common ones (docs/15 rule 8) — that is a
+   composition rule the screens honour; this just makes the control unmistakable. */
+.buttonDanger:active {
+  background-color: var(--splitsutra-color-bg-subtle);
+}
+
+.buttonLoading {
+  cursor: progress;
+}
+
+/* --- Input ---------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--splitsutra-space-xs);
+  min-inline-size: 0;
+}
+
+.inputShell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--splitsutra-space-sm);
+  min-block-size: var(--splitsutra-size-touch-target);
+  padding-inline: var(--splitsutra-space-md);
+  background-color: var(--splitsutra-color-surface);
+  border-radius: var(--splitsutra-radius-md);
+  box-shadow: inset 0 0 0 1px var(--splitsutra-color-border-strong);
+  transition: box-shadow var(--splitsutra-motion-fast) ease-out;
+}
+
+.inputShell:focus-within {
+  box-shadow: inset 0 0 0 2px var(--splitsutra-color-focus-ring);
+}
+
+.inputShellError {
+  box-shadow: inset 0 0 0 2px var(--splitsutra-color-danger);
+}
+
+.input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: var(--splitsutra-size-touch-target);
+  font-size: var(--splitsutra-font-size-md);
+  color: var(--splitsutra-color-text);
+}
+
+.input::placeholder {
+  color: var(--splitsutra-color-text-secondary);
+}
+
+/* --- AmountInput ---------------------------------------------------------- */
+
+/* "The amount field is the hero" (docs/15 rule 2): largest type on the screen,
+   autofocused, numeric keypad. */
+.amountShell {
+  gap: var(--splitsutra-space-sm);
+  padding-block: var(--splitsutra-space-sm);
+}
+
+.amountPrefix {
+  font-size: var(--splitsutra-font-size-xl);
+  font-weight: var(--splitsutra-font-weight-medium);
+  color: var(--splitsutra-color-text-secondary);
+}
+
+.amountInput {
+  font-size: var(--splitsutra-font-size-xxl);
+  font-weight: var(--splitsutra-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  text-align: end;
+  min-block-size: var(--splitsutra-size-touch-target);
+}
+
+/* --- SegmentedControl ----------------------------------------------------- */
+
+.segmented {
+  display: flex;
+  flex-direction: row;
+  gap: var(--splitsutra-space-xs);
+  padding: var(--splitsutra-space-xs);
+  background-color: var(--splitsutra-color-bg-subtle);
+  border-radius: var(--splitsutra-radius-md);
+}
+
+.segment {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  min-block-size: var(--splitsutra-size-touch-target);
+  border-radius: var(--splitsutra-radius-sm);
+  font-size: var(--splitsutra-font-size-sm);
+  font-weight: var(--splitsutra-font-weight-medium);
+  color: var(--splitsutra-color-text-secondary);
+}
+
+.segmentActive {
+  background-color: var(--splitsutra-color-surface);
+  color: var(--splitsutra-color-text);
+  font-weight: var(--splitsutra-font-weight-semibold);
+  box-shadow: inset 0 0 0 1px var(--splitsutra-color-border);
+}
+
+/* --- Chip ----------------------------------------------------------------- */
+
+.chip {
+  gap: var(--splitsutra-space-xs);
+  min-block-size: var(--splitsutra-size-touch-target);
+  padding-inline: var(--splitsutra-space-md);
+  border-radius: var(--splitsutra-radius-pill);
+  background-color: var(--splitsutra-color-bg-subtle);
+  font-size: var(--splitsutra-font-size-sm);
+  font-weight: var(--splitsutra-font-weight-medium);
+  color: var(--splitsutra-color-text);
+}
+
+.chipSelected {
+  background-color: var(--splitsutra-color-primary);
+  color: var(--splitsutra-color-on-primary);
+}

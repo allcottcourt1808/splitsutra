@@ -1,0 +1,159 @@
+/**
+ * List, ListRow, Avatar, AvatarStack, EmptyState.
+ *
+ * FLEXBOX ONLY (docs/02 §mobile-portability contract, rule 1). A list row is the place
+ * where `display: grid` is most tempting — leading / title+subtitle / trailing is exactly a
+ * three-column grid — and it is exactly where Yoga would leave us stranded. It is a flex
+ * row with a growing middle instead.
+ *
+ * `position: absolute` appears once, for the overlap offset in `<AvatarStack>`. That is an
+ * overlay, not layout, which is the carve-out rule 1 allows.
+ */
+
+/* --- List ----------------------------------------------------------------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.listItem {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Section header inside a list — "March 2026" above a month of expenses. */
+.listSection {
+  flex: 0 0 auto;
+  padding-inline: var(--splitsutra-space-lg);
+  padding-block: var(--splitsutra-space-sm);
+  background-color: var(--splitsutra-color-bg-subtle);
+}
+
+/* --- ListRow -------------------------------------------------------------- */
+
+.row {
+  gap: var(--splitsutra-space-md);
+  padding-inline: var(--splitsutra-space-lg);
+  padding-block: var(--splitsutra-space-md);
+  /* Enforced again here rather than trusted from <Pressable>, because a non-interactive
+     row is a plain <Row> and must still line up with its tappable neighbours. */
+  min-block-size: var(--splitsutra-size-touch-target);
+}
+
+.rowLeading {
+  flex: 0 0 auto;
+}
+
+/* The growing middle. `min-width: 0` is what lets the title truncate instead of pushing
+   the trailing amount off the edge. */
+.rowBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: var(--splitsutra-space-xs);
+}
+
+/* Amounts are always right-aligned in lists (docs/07 §Interaction rules 7). */
+.rowTrailing {
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: var(--splitsutra-space-xs);
+  text-align: end;
+}
+
+.rowChevron {
+  flex: 0 0 auto;
+  font-size: var(--splitsutra-font-size-lg);
+  color: var(--splitsutra-color-text-secondary);
+}
+
+/* Rows that are muted by meaning, not by state: settlement rows in the expense list are
+   "visually distinct (different icon, muted)" per docs/07 §GroupDetail. */
+.rowMuted {
+  background-color: var(--splitsutra-color-bg-subtle);
+}
+
+/* --- Avatar --------------------------------------------------------------- */
+
+.avatar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--avatar-size, var(--splitsutra-size-avatar-md));
+  block-size: var(--avatar-size, var(--splitsutra-size-avatar-md));
+  border-radius: var(--splitsutra-radius-pill);
+  background-color: var(--splitsutra-color-bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--splitsutra-color-border);
+  overflow: hidden;
+  user-select: none;
+}
+
+.avatarInitials {
+  font-size: var(--splitsutra-font-size-sm);
+  font-weight: var(--splitsutra-font-weight-semibold);
+  color: var(--splitsutra-color-text-secondary);
+  line-height: var(--splitsutra-font-line-height-tight);
+}
+
+.avatarImage {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+/* --- AvatarStack ---------------------------------------------------------- */
+
+.avatarStack {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Overlap. A negative margin rather than absolute positioning, so Yoga reproduces it. */
+.avatarStackItem + .avatarStackItem {
+  margin-inline-start: calc(-1 * var(--splitsutra-space-sm));
+}
+
+.avatarStackItem {
+  /* Rings so overlapping avatars stay individually legible against each other. */
+  box-shadow: 0 0 0 2px var(--splitsutra-color-surface);
+  border-radius: var(--splitsutra-radius-pill);
+}
+
+/* --- EmptyState ----------------------------------------------------------- */
+
+/**
+ * docs/15: an empty state is a first-run moment, not an error, and it ALWAYS offers the
+ * next action (rule "Empty states always offer the next action. No dead ends.").
+ */
+.empty {
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--splitsutra-space-md);
+  padding-block: var(--splitsutra-space-xxl);
+  padding-inline: var(--splitsutra-space-lg);
+  text-align: center;
+}
+
+.emptyGlyph {
+  font-size: var(--splitsutra-font-size-xxl);
+  line-height: var(--splitsutra-font-line-height-tight);
+  color: var(--splitsutra-color-text-secondary);
+}
+
+/* The actions sit below the copy, thumb-first (docs/15 rule 8), and stretch to the
+   column width so both first-run choices are equally weighted. */
+.emptyActions {
+  flex: 0 0 auto;
+  align-self: stretch;
+  align-items: stretch;
+  gap: var(--splitsutra-space-sm);
+  padding-block-start: var(--splitsutra-space-sm);
+}
