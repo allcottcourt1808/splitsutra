@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#11 merged. Five PRs are open and waiting.
+## State: PRs #1–#13 merged. Four PRs are open and waiting.
 
 `main` carries the workspace, the core domain with 171 tests, the design system, the
 navigation shell, the Firestore rules and triggers, and all twelve Cloud Functions.
@@ -13,13 +13,13 @@ navigation shell, the Firestore rules and triggers, and all twelve Cloud Functio
 
 | PR                                                            | What                                         | Ready?                   |
 | ------------------------------------------------------------- | -------------------------------------------- | ------------------------ |
-| [#12](https://github.com/allcottcourt1808/splitsutra/pull/12) | `format:check` in CI                         | ✅ merge it              |
-| [#13](https://github.com/allcottcourt1808/splitsutra/pull/13) | `formatMoney` moved into core, + crypto/time | ✅ merge it              |
+| [#12](https://github.com/allcottcourt1808/splitsutra/pull/12) | `format:check` in CI                         | ✅ MERGED                |
+| [#13](https://github.com/allcottcourt1808/splitsutra/pull/13) | `formatMoney` moved into core, + crypto/time | ✅ MERGED                |
 | [#14](https://github.com/allcottcourt1808/splitsutra/pull/14) | Component + navigation tests (238 pass)      | ✅ merge it              |
 | [#15](https://github.com/allcottcourt1808/splitsutra/pull/15) | Firebase init + first repositories           | 🚧 **draft, incomplete** |
 | [#16](https://github.com/allcottcourt1808/splitsutra/pull/16) | Seed dataset + writer                        | 🚧 **draft, incomplete** |
 
-#12/#13/#14 are complete and pass every gate locally. #15 and #16 are agent work that was
+#12 and #13 are merged. #14 is complete and passes every gate locally. #15 and #16 are agent work that was
 stopped mid-task; they are drafts on purpose, each with a "still to do" checklist in the PR
 body. Nothing in either is imported by anything yet, so neither can break `main`.
 
@@ -36,8 +36,8 @@ callables, the seed guard, the clearance record and this file. PR #11 restored i
 first before opening the second. A stack makes merge ORDER load-bearing, and nothing warns
 you when it goes wrong — every PR still shows a green MERGED badge.
 
-The five PRs above are all based on `main` directly. They touch disjoint files, so they can
-be merged in any order.
+Every PR above is based on `main` directly. They touch disjoint files, so they can be merged
+in any order.
 
 ## ✅ Fixed earlier: `packages/core` could not be loaded by Node
 
@@ -178,7 +178,7 @@ firebase-functions 7, dependency-cruiser 18, react-router 8.
 
 ## Next session, in order
 
-1. **Merge #12, #13, #14** — all three are green and independent.
+1. **Merge #14 and #17.** #12 and #13 are already in.
 2. **Finish #15's hooks** (`useAuth` first). This is the single thing blocking screens.
 3. **Finish #16** — write `firebase/seed.ts`, wire `firebase/seed/` into a tsconfig, run it
    against `--project demo-splitsutra`, and **watch the `-prod` refusal actually fire**.
