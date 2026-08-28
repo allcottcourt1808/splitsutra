@@ -4,19 +4,21 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: the runtime blocker is fixed. Four branches stacked.
+## State: the runtime blocker is fixed and merged. Three PRs open.
 
-`main` is untouched this session. Everything below sits on a stack, each branch based on the
-one above it, because the callables need core's build to exist before they compile.
+**PR #7 is MERGED** — `main` already carries the core build fix, and its branch is deleted.
+The three PRs below sit on a stack, each based on the one above it, because the callables
+need core's build to exist before they compile.
 
-| Order | Branch                     | Contents                                  |
-| ----- | -------------------------- | ----------------------------------------- |
-| 1     | `fix/core-build-step`      | core emits `dist/`; `.prettierignore` fix |
-| 2     | `test/domain-money-math`   | 171 domain tests, 100% coverage           |
-| 3     | `feat/missing-callables`   | the four remaining callables              |
-| 4     | `chore/session-checkpoint` | clearance outcome, seed WIP, this file    |
+| Order | PR  | Branch                     | Contents                                  |
+| ----- | --- | -------------------------- | ----------------------------------------- |
+| —     | #7  | _(merged, branch deleted)_ | core emits `dist/`; `.prettierignore` fix |
+| 1     | #8  | `test/domain-money-math`   | 171 domain tests, 100% coverage           |
+| 2     | #9  | `feat/missing-callables`   | the four remaining callables              |
+| 3     | #10 | `chore/session-checkpoint` | clearance outcome, seed WIP, this file    |
 
-**Merge them in that order.** Rebase each onto `main` after the one before it lands.
+**Merge #8, then #9, then #10.** Each is based on the one before it, so GitHub retargets the
+next onto `main` as each lands.
 
 All gates pass on the full stack: `pnpm verify` ✅ · `pnpm build` ✅ · `pnpm format:check` ✅.
 
@@ -156,8 +158,7 @@ firebase-functions 7, dependency-cruiser 18, react-router 8.
 
 ## Next session, in order
 
-1. **Merge the stack** — `fix/core-build-step` first, then tests, callables, this checkpoint.
-   Rebase each in turn.
+1. **Merge the stack** — #8, then #9, then #10, in that order. PR #7 is already in `main`.
 2. **Finish the seed script** — write `firebase/seed.ts` and the data writer, wire
    `firebase/seed/` into a tsconfig, then actually run it against `--project demo-splitsutra`
    and confirm the `-prod` refusal fires.
