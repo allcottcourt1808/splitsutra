@@ -60,6 +60,12 @@ jobs:
       # six-minute E2E run.
       - run: pnpm typecheck
       - run: pnpm lint
+      # Cheapest gate in the list, and it was missing. `.prettierignore` had no entry for
+      # firebase/functions/lib/, so `pnpm format:check` passed or failed locally depending
+      # on whether you happened to have built recently — and CI never ran it, so nothing
+      # caught that for the whole of Phase 01. Runs BEFORE build here on purpose: a
+      # formatting failure should not cost a full build first.
+      - run: pnpm format:check
       - run: pnpm depcruise # NFR-10: core stays platform-agnostic
       - run: pnpm test:unit # Phase 02b flips this to `pnpm test:unit --coverage`
       - run: pnpm build
