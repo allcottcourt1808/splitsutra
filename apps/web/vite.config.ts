@@ -32,9 +32,12 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       '@': here('./src'),
-      /* Resolve @splitsutra/core to SOURCE so `pnpm dev` works on a clean clone with no
-         build step in core, and so HMR crosses the package boundary. Mirrors the
-         `paths` entry in tsconfig.json — change both together. */
+      /* Resolve @splitsutra/core to SOURCE so `pnpm dev` works on a clean clone with
+         nothing built yet, and so HMR crosses the package boundary. Core does have a real
+         build now — firebase/functions consumes that, because Node resolves the .js
+         specifiers core's imports carry and nothing was emitting them — but the web app has
+         no reason to wait for it. Mirrors the `paths` entry in
+         tsconfig.json — change both together. */
       '@splitsutra/core': here('../../packages/core/src/index.ts'),
     },
   },

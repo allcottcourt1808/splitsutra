@@ -6,24 +6,61 @@
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "//entry-points": "These point at dist/, NOT at src/. This package used to name its TypeScript source as its entry points, which works for apps/web (Vite transpiles core) and fails for firebase/functions (real Node, ERR_MODULE_NOT_FOUND on the .js specifiers core's imports carry, which nothing ever emitted). Every gate in the repo passed in that state. `tsconfig.build.json` explains the rest. apps/web is unaffected by the change either way: vite.config.ts and apps/web/tsconfig.json both alias @splitsutra/core straight to source, so `pnpm dev` needs no build and HMR still crosses the package boundary.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./types": "./src/types/index.ts",
-    "./domain": "./src/domain/index.ts",
-    "./theme": "./src/theme/index.ts",
-    "./utils": "./src/utils/index.ts",
-    "./firebase": "./src/firebase/index.ts",
-    "./repositories": "./src/repositories/index.ts",
-    "./hooks": "./src/hooks/index.ts",
-    "./stores": "./src/stores/index.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    },
+    "./domain": {
+      "types": "./dist/domain/index.d.ts",
+      "default": "./dist/domain/index.js"
+    },
+    "./theme": {
+      "types": "./dist/theme/index.d.ts",
+      "default": "./dist/theme/index.js"
+    },
+    "./platform": {
+      "types": "./dist/platform/index.d.ts",
+      "default": "./dist/platform/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
+    },
+    "./firebase": {
+      "types": "./dist/firebase/index.d.ts",
+      "default": "./dist/firebase/index.js"
+    },
+    "./repositories": {
+      "types": "./dist/repositories/index.d.ts",
+      "default": "./dist/repositories/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "default": "./dist/hooks/index.js"
+    },
+    "./stores": {
+      "types": "./dist/stores/index.d.ts",
+      "default": "./dist/stores/index.js"
+    },
     "./package.json": "./package.json"
   },
+  "//files": "src ships alongside dist so the .d.ts.map files emitted by tsconfig.build.json resolve — without it, \"go to definition\" from a consumer lands on generated declarations instead of the real source.",
   "files": [
+    "dist",
     "src"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

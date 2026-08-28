@@ -19,9 +19,16 @@
        nothing about resolution, and keeps the config valid for the TS 7 migration. */
     "paths": {
       "@/*": ["./src/*"],
-      /* Resolve the workspace package to SOURCE, not to a build output. Core has no
-         build step during Phases 01-11, so pointing at `dist` would mean `pnpm dev`
-         fails on a clean clone. The matching alias lives in vite.config.ts. */
+      /* Resolve the workspace package to SOURCE, even though core now HAS a build
+         (packages/core/tsconfig.build.json) and its package.json entry points name
+         `dist`. Three reasons to keep the alias:
+           1. `pnpm dev` works on a clean clone with nothing built yet.
+           2. HMR crosses the package boundary — editing core refreshes the browser.
+           3. It typechecks core's source a SECOND time, here under "bundler", while
+              core's own build checks it under "NodeNext". A specifier only one of the
+              two resolvers accepts therefore cannot land.
+         firebase/functions deliberately does NOT do this: it consumes dist, the way
+         Cloud Functions will at runtime. The matching alias lives in vite.config.ts. */
       "@splitsutra/core": ["../../packages/core/src/index.ts"],
       "@splitsutra/core/*": ["../../packages/core/src/*"],
     },
