@@ -8,16 +8,26 @@
   //     directory import is spelled out in full  (`./types/index.js`, never `./types`).
   //
   //     This looks redundant under "moduleResolution": "bundler", which would happily
-  //     accept extensionless specifiers. It is not optional. `packages/core` publishes
-  //     RAW TypeScript source as its entry points ("main": "./src/index.ts", noEmit) —
-  //     so `firebase/functions` compiles core's own source under "NodeNext", where
-  //     extensionless and directory imports are BOTH hard errors (TS2834). Core's source
-  //     must therefore satisfy the strictest consumer, and .js is the spelling that is
-  //     legal under every resolver we use: bundler, NodeNext, and Vite alike.
+  //     accept extensionless specifiers. It is not optional, and the reason is emit, not
+  //     resolution: TypeScript rewrites module specifiers only for CommonJS output. For the
+  //     ESM this workspace produces, whatever the source says is what lands in the .js —
+  //     verbatim. So an extensionless specifier compiles clean and then fails when Node
+  //     loads it, because the Node ESM resolver has no extension search.
   //
-  //     Functions cannot simply switch to "bundler" to paper over this: it emits real JS
-  //     that Node loads on Cloud Functions Gen 2, and extensionless output fails at
-  //     RUNTIME with ERR_MODULE_NOT_FOUND — a deploy-time break, not a compile-time one.
+  //     `packages/core` is the package that makes this bite. It is consumed two ways at
+  //     once: `apps/web` aliases it to source and lets Vite transpile it, while
+  //     `firebase/functions` consumes its BUILT output (packages/core/dist) under NodeNext
+  //     on Cloud Functions Gen 2, where extensionless and directory imports are hard errors
+  //     at compile time (TS2834) and ERR_MODULE_NOT_FOUND at runtime. Core's source must
+  //     therefore satisfy the strictest consumer, and .js is the one spelling legal under
+  //     every resolver in play: bundler, NodeNext, and Vite alike.
+  //
+  //     🔴 This contract was violated for real, and no gate caught it. Core used to name
+  //        its TypeScript source as its entry points with no build step at all, so the .js
+  //        specifiers pointed at files nothing ever emitted. Typecheck, lint, depcruise,
+  //        unit tests and `pnpm build` all passed; only starting the emulator failed. The
+  //        build that fixed it is packages/core/tsconfig.build.json — read the comment
+  //        there before changing how core is consumed.
   //   * "verbatimModuleSyntax": true   =>  type-only imports MUST be written
   //                                        `import type { X } from '...'`
   //

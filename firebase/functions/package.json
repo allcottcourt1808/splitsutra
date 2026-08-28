@@ -7,10 +7,12 @@
   "engines": {
     "node": "24"
   },
+  "//build-order": "Every script that runs tsc here builds @splitsutra/core first, because this package consumes core as a BUILT package: NodeNext resolves the bare specifier through core's exports map to packages/core/dist. The dependency is declared here rather than left to `pnpm -r`'s topological ordering so that running one script directly — `pnpm --filter @splitsutra/functions typecheck` on a clean clone, or firebase.json's predeploy hook — works without the caller having to know. Typecheck builds core too, not just compiles it: tsc needs core's .d.ts files, which only the build emits.",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "build:watch": "tsc -p tsconfig.json --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:core": "pnpm --filter @splitsutra/core build",
+    "build": "pnpm build:core && tsc -p tsconfig.json",
+    "build:watch": "pnpm build:core && tsc -p tsconfig.json --watch",
+    "typecheck": "pnpm build:core && tsc -p tsconfig.json --noEmit",
     "clean": "node -e \"fs.rmSync('lib',{recursive:true,force:true})\"",
     "serve": "pnpm build && firebase emulators:start --only functions,firestore,auth",
     "logs": "firebase functions:log"

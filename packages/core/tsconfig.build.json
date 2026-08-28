@@ -1,0 +1,48 @@
+{
+  // The EMIT config. `tsconfig.json` next to it is the typecheck config (`noEmit`), and the
+  // two differ in exactly two ways on purpose:
+  //
+  //  1. THIS ONE EMITS.  `packages/core` used to publish raw TypeScript — `"main":
+  //     "./src/index.ts"` with no build step — which worked for `apps/web` only because Vite
+  //     transpiles it. `firebase/functions` runs on real Node, which resolves the `.js`
+  //     specifiers core's imports carry against files that were never written:
+  //
+  //         ERR_MODULE_NOT_FOUND: .../packages/core/src/types/index.js
+  //           imported from .../packages/core/src/index.ts
+  //
+  //     Typecheck, lint, depcruise, unit tests and `pnpm build` ALL passed in that state.
+  //     Only starting the emulator caught it. Deleting this file puts that back.
+  //
+  //  2. IT COMPILES UNDER NodeNext, NOT `bundler`.  Not a detail — it is the point. The
+  //     output has to be loadable by the Node resolver, so the compiler that produces it
+  //     should be using the Node resolver: extensionless and directory imports are hard
+  //     errors here (TS2834), which is the same rule Node enforces at runtime, moved
+  //     forward to build time. Core's source already satisfies it — every relative import
+  //     carries an explicit `.js` and every directory import is spelled out in full — which
+  //     is the cross-package contract tsconfig.base.json describes.
+  //
+  //     Keeping `tsconfig.json` on `bundler` means core is checked under BOTH resolvers on
+  //     every `pnpm verify`, so a specifier that only one of them accepts cannot land.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "noEmit": false,
+    "outDir": "./dist",
+    "declaration": true,
+    // Ships the map from a `.d.ts` back to the `.ts` that produced it, so "Go to definition"
+    // in `firebase/functions` lands on core's source instead of on generated declarations.
+    "declarationMap": true,
+    "sourceMap": true,
+  },
+  // `include`/`exclude` do NOT merge with the parent — a child config replaces them outright,
+  // so the parent's three exclusions are repeated here rather than inherited.
+  //
+  // `__tests__` is the one addition: `arbitraries.ts` imports `fast-check`, a devDependency of
+  // the workspace root that a consumer of this package does not have. Emitting it would put an
+  // unresolvable import inside `dist`. It is still typechecked — by `tsconfig.json`, which
+  // includes it.
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "src/**/__tests__/**"],
+}
