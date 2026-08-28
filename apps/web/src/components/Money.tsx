@@ -1,116 +1,61 @@
 /**
- * <Money> — THE ONLY PLACE CURRENCY IS FORMATTED.
+ * <Money> — the web app's only currency-rendering component.
  *
- * "No screen formats currency by hand" (docs/07 §Component library). One component owns
- * the minor-units -> string conversion and the colour semantics, so a formatting bug is
- * fixed in one place.
+ * "No screen formats currency by hand" (docs/07 §Component library). The colour semantics and
+ * the accompanying words live here; the minor-units → string conversion does not.
  *
- * ARTICLE I — MONEY IS NEVER A FLOAT.
- * The conversion below never divides. It pads the integer minor-unit value to a string,
- * slices it into whole and fractional digits, groups the whole part with `Intl`, and
- * splices the pieces back into the locale's own currency pattern. No `parseFloat`, no
- * `minor / 100`, so `0.1 + 0.2` never gets a chance to happen.
+ * ARTICLE VI — THE FORMATTING ITSELF MOVED DOWN INTO CORE.
+ * `formatMoney` now lives in `@splitsutra/core` (`packages/core/src/utils/money.ts`), because
+ * Cloud Functions render the same amounts into activity `summary` strings and React Native will
+ * render them again in Phase 12. Three copies of "how many decimal places does KWD have" is
+ * three chances to disagree about someone's balance. This component is what the phase-06 TODO
+ * asked it to become: a thin wrapper that adds tone and label.
  *
- * The minor-unit exponent comes from `Intl` (`resolvedOptions().minimumFractionDigits`),
- * which already knows that JPY has 0 and BHD has 3 — rather than a second hand-written
- * currency table, which would drift from the `CURRENCIES` table in core (Article VI).
+ * 🔴 WHAT WAS WRONG HERE BEFORE, AND MUST NOT COME BACK.
+ * The version this replaces took the minor-unit exponent from
+ * `Intl.NumberFormat(...).resolvedOptions().minimumFractionDigits`, and even exported that as a
+ * reusable `minorUnitExponent()` helper. docs/04-split-engine.md §1 bans exactly this: ICU data
+ * varies between runtimes and Hermes ships a trimmed ICU, so JPY can come back with exponent 2
+ * and `¥12,550` renders as `¥125.50` — every amount wrong by 100×, silently. The exponent now
+ * comes from the hardcoded ISO 4217 table in core, and `minorUnitExponent()` is gone rather than
+ * fixed: no caller should be able to ask that question anywhere but the table.
  *
- * TODO(phase-06): move `formatMinorUnits` into `@splitsutra/core` `utils/currency` as
- *   `formatMoney(minorUnits, currency, locale)`. Cloud Functions render the same
- *   amounts into activity `summary` strings, and Article VI forbids two implementations
- *   of the same money formatting. It lives here only until core's currency utils exist;
- *   this component then becomes a thin wrapper that adds the colour semantics.
- *
- * TODO(phase-06): tighten `minorUnits: number` to the branded `MinorUnits` type from
- *   `@splitsutra/core` once `core/src/types` lands. The brand is what stops a raw float
- *   being passed in from a form.
+ * ARTICLE II — the locale is resolved *here* and passed down. `navigator` is a DOM global, and
+ * `apps/web` is the one package allowed to touch it; core takes a locale as an argument.
  */
 
-import type { MoneyTone } from '@splitsutra/core';
+import {
+  formatMoney,
+  getCurrency,
+  type CurrencyCode,
+  type MinorUnits,
+  type MoneyTone,
+} from '@splitsutra/core';
 import styles from './text.module.css';
 import { cx } from './tokenProps';
 import { Text, type TextTone } from './Text';
 
-/** Falls back to en-US when the platform reports nothing usable. */
+/**
+ * The user's locale, or `en-US` when the platform reports nothing usable.
+ *
+ * This is the platform read that core is not allowed to make. It stays a plain function rather
+ * than a hook: `<Money>` renders in lists of hundreds of rows, and the language does not change
+ * without a reload.
+ */
 function resolveLocale(): string {
   const nav = typeof navigator === 'undefined' ? undefined : navigator.language;
   return nav !== undefined && nav.length > 0 ? nav : 'en-US';
 }
 
-const patternCache = new Map<string, Intl.NumberFormat>();
-const groupingCache = new Map<string, Intl.NumberFormat>();
-
-function currencyPattern(locale: string, currency: string): Intl.NumberFormat {
-  const key = `${locale}|${currency}`;
-  const hit = patternCache.get(key);
-  if (hit !== undefined) return hit;
-  const nf = new Intl.NumberFormat(locale, { style: 'currency', currency });
-  patternCache.set(key, nf);
-  return nf;
-}
-
-function integerGrouping(locale: string): Intl.NumberFormat {
-  const hit = groupingCache.get(locale);
-  if (hit !== undefined) return hit;
-  const nf = new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 });
-  groupingCache.set(locale, nf);
-  return nf;
-}
-
 /**
- * How many minor units make one major unit, as a digit count: USD/INR 2, JPY 0, BHD 3.
+ * The currency symbol, e.g. `"₹"`. For the AmountInput prefix (phase 06).
  *
- * Sourced from `Intl` rather than a hand-written table, so it cannot drift from the
- * `CURRENCIES` metadata that `@splitsutra/core` owns (Article VI).
+ * Reads the hardcoded table in core rather than `Intl.NumberFormat(...).formatToParts`, for the
+ * same reason as the exponent: docs/04 §1 designates the table's `symbol` field as the fallback
+ * for a trimmed Hermes ICU, and one source is better than a source plus a fallback.
  */
-export function minorUnitExponent(currency: string, locale: string = resolveLocale()): number {
-  return currencyPattern(locale, currency).resolvedOptions().minimumFractionDigits ?? 2;
-}
-
-/** The currency symbol for this locale, e.g. `"₹"`. For the AmountInput prefix. */
-export function currencySymbol(currency: string, locale: string = resolveLocale()): string {
-  const part = currencyPattern(locale, currency)
-    .formatToParts(0)
-    .find((p) => p.type === 'currency');
-  return part?.value ?? currency;
-}
-
-/**
- * Format integer minor units as a currency string, without ever producing a float.
- *
- * @param minorUnits e.g. `300000` with `INR` -> `"₹3,000.00"`
- */
-export function formatMinorUnits(
-  minorUnits: number,
-  currency: string,
-  locale: string = resolveLocale(),
-): string {
-  const pattern = currencyPattern(locale, currency);
-  const exponent = pattern.resolvedOptions().minimumFractionDigits ?? 2;
-
-  // Magnitude only. Direction is carried by colour AND words, never by a bare minus
-  // sign the user has to interpret (docs/15 rule 4).
-  const magnitude = Math.abs(Math.trunc(minorUnits));
-
-  // Integer -> digit string -> whole / fraction. No division anywhere.
-  const asDigits = String(magnitude).padStart(exponent + 1, '0');
-  const cut = asDigits.length - exponent;
-  const wholeDigits = asDigits.slice(0, cut);
-  const fractionDigits = exponent === 0 ? '' : asDigits.slice(cut);
-
-  const grouped = integerGrouping(locale).format(Number(wholeDigits));
-
-  // Splice into the locale's own currency pattern so symbol placement, non-breaking
-  // spaces and the decimal separator all stay correct for the user's locale.
-  return pattern
-    .formatToParts(0)
-    .map((part) => {
-      if (part.type === 'integer') return grouped;
-      if (part.type === 'fraction') return fractionDigits;
-      if (part.type === 'group') return '';
-      return part.value;
-    })
-    .join('');
+export function currencySymbol(currency: CurrencyCode): string {
+  return getCurrency(currency).symbol;
 }
 
 const TONE_TO_TEXT: Readonly<Record<MoneyTone, TextTone>> = {
@@ -120,10 +65,15 @@ const TONE_TO_TEXT: Readonly<Record<MoneyTone, TextTone>> = {
 };
 
 export interface MoneyProps {
-  /** Integer minor units. Never a float (Article I). */
-  minorUnits: number;
+  /**
+   * Integer minor units — `12550` is `$125.50`. Never a float (Article I).
+   *
+   * Branded, so a raw `number` off a form cannot be passed without going through
+   * `toMinorUnits()` and being validated.
+   */
+  minorUnits: MinorUnits;
   /** ISO 4217 code. Never sum two different ones (docs/15 rule 7). */
-  currency: string;
+  currency: CurrencyCode;
   /**
    * `auto` derives the money-direction colour from the sign: positive = you are owed,
    * negative = you owe, zero = settled.
@@ -158,7 +108,18 @@ export function Money({
       : tone;
 
   const textTone: TextTone = resolvedTone === 'plain' ? 'default' : TONE_TO_TEXT[resolvedTone];
-  const formatted = formatMinorUnits(minorUnits, currency);
+
+  // docs/15 rule 4: direction is carried by colour AND words, never by a bare minus sign the
+  // user has to interpret. That only holds while a tone is actually applied — under
+  // `tone="plain"` there is no colour, so the sign is the one thing left saying which way the
+  // money went, and `formatMoney` renders it.
+  //
+  // The cast is `Math.abs` of an integer, so it cannot break the brand's invariant.
+  // `toMinorUnits()` is deliberately not used: it also enforces MAX_AMOUNT_MINOR, which is a
+  // bound on a single stored amount, not on a summed balance — re-imposing it here would throw
+  // inside a render for a group that is merely large.
+  const shown = resolvedTone === 'plain' ? minorUnits : (Math.abs(minorUnits) as MinorUnits);
+  const formatted = formatMoney(shown, currency, resolveLocale());
 
   return (
     <Text
