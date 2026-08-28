@@ -4,21 +4,23 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: the runtime blocker is fixed and merged. Three PRs open.
+## State: PRs #1–#10 merged. The core runtime blocker is fixed.
 
-**PR #7 is MERGED** — `main` already carries the core build fix, and its branch is deleted.
-The three PRs below sit on a stack, each based on the one above it, because the callables
-need core's build to exist before they compile.
+`main` carries the workspace, the core domain with 171 tests, the design system, the
+navigation shell, the Firestore rules and triggers, and all twelve Cloud Functions.
 
-| Order | PR  | Branch                     | Contents                                  |
-| ----- | --- | -------------------------- | ----------------------------------------- |
-| —     | #7  | _(merged, branch deleted)_ | core emits `dist/`; `.prettierignore` fix |
-| 1     | #8  | `test/domain-money-math`   | 171 domain tests, 100% coverage           |
-| 2     | #9  | `feat/missing-callables`   | the four remaining callables              |
-| 3     | #10 | `chore/session-checkpoint` | clearance outcome, seed WIP, this file    |
+### 🪤 Trap that cost real time — never stack PRs on each other again
 
-**Merge #8, then #9, then #10.** Each is based on the one before it, so GitHub retargets the
-next onto `main` as each lands.
+PRs #8, #9 and #10 were opened as a **stack**: #9 based on #8's branch, #10 based on #9's.
+All three reported MERGED, and **two of them never reached `main`** — #9 merged into
+`test/domain-money-math` and #10 into `feat/missing-callables`. GitHub only retargets a
+stacked PR onto `main` after its base branch is deleted, and all three were merged within
+about thirty seconds, so that never happened. `main` silently lost 1,673 lines: the four
+callables, the seed guard, the clearance record and this file.
+
+**Open every PR against `main`.** If two changes genuinely depend on each other, merge the
+first before opening the second. A stack makes merge ORDER load-bearing, and nothing warns
+you when it goes wrong — every PR still shows a green MERGED badge.
 
 All gates pass on the full stack: `pnpm verify` ✅ · `pnpm build` ✅ · `pnpm format:check` ✅.
 
