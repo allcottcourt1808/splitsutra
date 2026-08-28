@@ -188,8 +188,74 @@ The owner selected **SplitSutra** on 2026-08-27, directly rather than through a 
 clearance round. The repository was renamed the same day, across every branch, before
 anything was published and before any Firebase project ID was reserved.
 
-The steps below are therefore **still outstanding for `SplitSutra`** — they have not been
-run. The name is settled; its availability is not yet established.
+**Clearance was then run on SplitSutra, 2026-08-27. Verdict: 🟡 CLEAR WITH CAVEATS, and the
+owner elected to keep the name.** Recorded here so nobody re-runs it.
+
+### What came back clean
+
+No collision anywhere. This is the material difference from Settl, which died on exactly
+this test.
+
+| Check                                        | Result                      |
+| -------------------------------------------- | --------------------------- |
+| Apple App Store · Google Play · Product Hunt | no exact or near match      |
+| npm · GitHub                                 | nothing but this repository |
+| `splitsutra.com` · `.app` · `.io` · `.in`    | **all four available**      |
+| GitHub org `splitsutra`                      | available                   |
+
+Domains were checked by **RDAP with control queries** — each lookup validated against a
+known-registered domain to prove the endpoint discriminates — which is step 2 of
+[How to finish clearance](#how-to-finish-clearance), done properly. The first `.app`
+endpoint used returned false negatives and was caught by its control. Treat that as the
+standard: a registry lookup without a control is a guess wearing a lab coat.
+
+### The three caveats, accepted knowingly
+
+1. 🔴 **`sutra` means "tomorrow" in Serbian, Croatian and Bosnian.** Split is also a
+   Croatian city, so "Split Sutra" reads there as the ordinary travel phrase _"Split
+   tomorrow"_ — and for a settle-up product, "split it tomorrow" is the exact behaviour the
+   app exists to cure. Brand search in that market is unwinnable. Accepted on the basis
+   that the Balkans are not a target market; it is permanent if that ever changes.
+2. 🟡 **The Kama Sutra overtone.** In English the dominant association of the bare word is
+   the sex manual. The compound blunts it — "SplitSutra" parses as "the splitting
+   handbook" — and no app-store rule touches it. Residual risk is blunt ad-network keyword
+   classifiers, relevant because [14-monetization-ads.md](14-monetization-ads.md) makes ads
+   the monetization path. Expect occasional manual appeals, not rejection.
+3. 🟠 **It is generic + generic, and it sits on this document's own exclusion list.** The
+   header above rules out `split*` prefixes as already exhausted, and weights the list
+   toward coined words because real words in this space are spoken for. SplitSutra is a
+   `split*` prefix plus `-Sutra`, itself a stock Indian brand suffix (Fin Sutra, Car Sutra,
+   Coach Sutra). That makes it hard to register, hard to defend, and invisible in store
+   search against Splitwise, Splitkaro, Splittr, Splid and Splito.
+
+In India — the likely early market — the name reads normally and carries no sexual
+inflection at all: _sutra_ is ordinary vocabulary, and the `-Sutra` suffix reads as "the
+guide to X". That is the strongest argument for the name, and it is a real one.
+
+### Still not established
+
+- **Trademark.** EUIPO and WIPO were unreachable; USPTO evidence is Justia-indexed, not
+  authoritative. Live registered `SUTRA` marks exist in **class 9** (AI/NLP software,
+  pending) and **class 42** (SaaS, reg. 5626057) — both classes this project touches. No
+  `SPLITSUTRA` mark was found, and no class 36 `SUTRA` mark was found, but that search was
+  not exhaustive enough to call clean. **Step 1 of the checklist above remains outstanding
+  and needs a professional before money is spent on a listing.**
+- **Social handles.** X/Twitter and Instagram both block unauthenticated lookups.
+- **Firebase project ID.** Unverifiable without attempting creation, by design. Zero global
+  footprint makes it likely free, but IDs are unique across _all_ projects including
+  private ones. Claim `splitsutra-dev` and `splitsutra-prod` in one sitting.
+
+### The names that would have been chosen instead
+
+Kept on the record in case the caveats above ever become expensive enough to revisit. All
+three were re-screened on 2026-08-27 and had `.app` free with a clear category:
+**Fairden** (this document's top pick, re-verified available), **Saanjha** (Punjabi/Hindi
+"shared, held in common" — _saanjha kharcha_ is literally "shared expense", the best
+semantic fit of anything screened), and **Anshara** (coined from Sanskrit _aṃśa_, "share").
+
+⛔ **Hisaab is dead — do not re-propose it.** "Hisaab: Splitwise Alternative" ships on
+Google Play, positioned explicitly as an Indian Splitwise competitor, alongside HisabX,
+HisabBook, Pocket Hisaab and others. It is the Settl failure mode exactly.
 
 Every mention of "Settl" in this document refers to the rejected codename and is left
 spelled that way on purpose. An automated rename overwrote these once; if that happens
@@ -197,8 +263,10 @@ again, the document stops being able to explain why the project was renamed.
 
 ---
 
-**One caution on process.** Settl failed after the codename was already in the repo, the
-docs and the project ID. Whatever the owner picks, do steps 1–4 **before** the rename lands
-anywhere, and rename once. The cost of this document is a morning; the cost of doing it
-again after launch is the App Store listing, the domain, the Firebase project IDs, and
-every URL anyone has ever shared.
+**One caution on process, now demonstrated twice.** Settl failed after the codename was
+already in the repo, the docs and the project ID. SplitSutra survived the same test, but
+only by luck — it too was renamed across every branch before anyone searched, and it landed
+on this document's own exclusion list. The order is: clear the name, **then** rename, and
+rename once. The cost of this document is a morning; the cost of doing it again after
+launch is the App Store listing, the domain, the Firebase project IDs, and every URL
+anyone has ever shared.
