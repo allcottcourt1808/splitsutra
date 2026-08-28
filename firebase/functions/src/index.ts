@@ -3,7 +3,7 @@
  * the deployer reads it to discover what to deploy — anything not re-exported here does not
  * exist as far as Firebase is concerned.
  *
- * That was the state until now: all eight implementations below were written, none were
+ * That was the state until now: all twelve implementations below were written, none were
  * exported, so the emulator reported "Failed to load function definition" and a deploy would
  * have shipped an empty codebase without failing.
  *
@@ -20,18 +20,29 @@
  * Extensionless specifiers compile fine and then fail on the deployed instance with
  * ERR_MODULE_NOT_FOUND, so the extension is required rather than stylistic.
  *
- * ## Not yet implemented
+ * ## The full inventory is now implemented
  *
- * `packages/core` defines input schemas for four more callables that have no implementation
- * yet — `addFriend`, `deleteGroup`, `recomputeGroupBalances` and `deleteAccount`. They are
- * deliberately absent rather than stubbed: an exported stub is a deployed, callable endpoint
- * that silently does nothing, which is worse than a missing one that fails loudly at the
- * client. See docs/06-cloud-functions.md for the full inventory.
+ * Every callable `packages/core` defines an input schema for now has a real implementation.
+ * `addFriend`, `deleteGroup`, `recomputeGroupBalances` and `deleteAccount` were previously
+ * absent rather than stubbed, on the reasoning that an exported stub is a deployed, callable
+ * endpoint that silently does nothing — worse than a missing one that fails loudly at the
+ * client. That reasoning still stands and applies to anything added here later: export it when
+ * it works, not before. See docs/06-cloud-functions.md for the inventory.
+ *
+ * Four of these are destructive or privacy-sensitive, and each carries its authorization rule
+ * in its own header — `deleteGroup` (admin, and every balance zero), `deleteAccount` (self, and
+ * every balance zero, in every group), `addFriend` (resolves only through the hashed
+ * `usernames/` index) and `recomputeGroupBalances` (active member; rebuilds from the ledger,
+ * never from the cache).
  */
 
 /* ── Callables: client-invoked, auth-checked in each function's own preamble ─────────── */
+export { addFriend } from './callable/addFriend.js';
 export { createInvite } from './callable/createInvite.js';
+export { deleteAccount } from './callable/deleteAccount.js';
+export { deleteGroup } from './callable/deleteGroup.js';
 export { leaveGroup } from './callable/leaveGroup.js';
+export { recomputeGroupBalances } from './callable/recomputeGroupBalances.js';
 export { redeemInvite } from './callable/redeemInvite.js';
 export { removeMember } from './callable/removeMember.js';
 
