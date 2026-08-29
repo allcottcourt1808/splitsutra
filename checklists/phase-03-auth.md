@@ -15,42 +15,84 @@ it, not the other way round.
 - [x] 🔴 `core/src/repositories/authRepo.ts` — `onAuthStateChanged` wrapper, `signOut`,
       `getIdToken`
 - [x] 🔴 Auth persistence set via the `PlatformAdapter` (`browserLocalPersistence` on web)
-- [x] 🔴 **Nothing outside `apps/web/src/auth/` may import `firebaseui` or
-      `firebase/compat`** — dependency-cruiser rule from Phase 01 enforces this. It is a
-      **blanket ban** now rather than a carve-out for that directory: FirebaseUI was
-      dropped entirely (§2), so nothing anywhere may import either.
+- [x] 🔴 **Nothing outside `apps/web/src/auth/FirebaseUIMount.tsx` may import `firebaseui` or
+      `firebase/compat`** — `firebaseui-only-in-web-auth` in `.dependency-cruiser.cjs`
+      enforces it, narrowed from a directory carve-out to a **single file** now that §2 is
+      built. Proven: a probe importing `firebase/compat/app` from anywhere else goes red.
 
 > The behaviour is not in the hook. `core/src/hooks/authStore.ts` holds it, and holds it
 > without React — core cannot depend on `react-dom` (Article II) and the `unit` vitest
 > project runs on `node`, so a hook here has no renderer to be driven by. The store carries
 > 23 tests; `useAuth.ts` is a `useSyncExternalStore` binding with no branches left in it.
 
-## 2. FirebaseUI mount (web only) — 🔴 **DROPPED. Do not build this.** (Q17 / R7)
+## 2. FirebaseUI mount (web only) — ✅ **BUILT.** (reverses the earlier drop)
+
+> **This section was previously marked DROPPED. That decision was reversed** on request, and
+> the widget now renders `/login` — sign-in and sign-up both. What follows is what was actually
+> built and what it costs; the original reasoning for dropping it is preserved at the bottom,
+> because none of it turned out to be wrong — it was just outweighed.
+
+- [x] 🔴 `pnpm --filter web add firebaseui@6.1.0 --save-exact` — **pinned exactly**, it is
+      low-maintenance upstream (last publish 2023-08-02)
+- [x] 🔴 ⚠️ **`react-firebaseui` NOT installed.** Abandoned, React 16 peers, breaks under
+      StrictMode. `no-react-firebaseui` in `.dependency-cruiser.cjs` bans it outright.
+- [x] 🔴 `apps/web/src/auth/FirebaseUIMount.tsx`:
+  - mounts the vanilla widget on a `ref` inside `useEffect`
+  - `AuthUI.getInstance() ?? new AuthUI(auth)` — **StrictMode double-mounts in dev and a
+    second `new AuthUI()` throws**
+  - `ui.reset()` on cleanup **and again before `start()`** — see the bug below
+- [x] 🔴 Providers configured: Email/Password (`requireDisplayName: true`), Phone, Google
+- [x] 🔴 `signInFlow: 'popup'` for Google (redirect loses state on some mobile browsers, and
+      loses the `/invite/:token` destination the guard is holding)
+- [x] 🔴 `firebase/compat` imported in **exactly one file** — enforced by
+      `firebaseui-only-in-web-auth`
+- [x] 🟡 `signInSuccessWithAuthResult` → return `false`; `<RedirectIfAuthed>` handles routing
+- [ ] 🟡 Code-split the whole `/login` route so compat never loads for signed-in users (NFR-2)
+- [ ] 🟡 Account linking so email + Google with the same address is one account (AC-A1.4)
+- [ ] 🟢 Terms of service and privacy policy URLs
+
+### 🔴 The bug this flushed out: `reset()` before `start()`, not only on teardown
+
+Sign in, then sign out. The widget came back **empty, with an error where the form should be**,
+and stayed broken until a full page reload. The `AuthUI` instance deliberately survives the
+unmount — that is what `getInstance()` is for — and `start()` on one still holding the previous
+mount's state throws instead of re-rendering.
+
+A page reload hid it completely, which is why it would have survived any amount of local
+clicking that started from a fresh tab: **the only broken path was the one a real user takes.**
+
+### ⚠️ What this costs, recorded rather than glossed
+
+`firebaseui@6.1.0` declares `peerDependencies: firebase "^9.1.3 || ^10.0.0"`; this project is on
+firebase **12.18.0**. pnpm reports it as an unmet peer and installs it anyway:
+
+```
+└─┬ firebaseui 6.1.0
+  └── ✕ unmet peer firebase@"^9.1.3 || ^10.0.0": found 12.18.0
+```
+
+It works because firebase 12 still ships `firebase/compat`, and because compat is a _wrapper_:
+`firebase.initializeApp(config)` with the same config resolves to the `[DEFAULT]` app core
+already created, so the widget and the rest of the app share one session. That is what makes
+`authStore` see the sign-in and run `upsertUserProfile`.
+
+Two things remain true from the original drop, and are now accepted costs rather than blockers:
+
+1. **It is unsupported by version range.** A firebase major that removes `compat` breaks it.
+   The blast radius is one file, by construction and by lint rule.
+2. **It does not port.** docs/02 says so, and Phase 12 (React Native) still needs its own auth
+   screens. This bought a working `/login` now and will be deleted, not ported.
+
+<details>
+<summary>The original reasoning for dropping it (kept for the record)</summary>
 
 > `firebaseui@6.1.0` declares `peerDependencies: firebase "^9.1.3 || ^10.0.0"` and this
 > project is on firebase 12, so it installs as an unmet peer, and upstream has shipped
 > nothing for SDK 11 or 12. The deciding argument is in docs/02 itself: FirebaseUI is
 > web-only and "does not port", so Phase 12 needs custom auth screens regardless — it would
-> have bought a day now and charged it back later. Auth uses the **modular** `firebase/auth`
-> SDK, in `apps/web/src/auth/`. The section below is kept only as the record of what was
-> decided against; `no-firebaseui-or-compat` in `.dependency-cruiser.cjs` enforces it.
+> have bought a day now and charged it back later.
 
-- [ ] 🔴 `pnpm --filter web add firebaseui` — **pin the exact version**, it is
-      low-maintenance upstream
-- [ ] 🔴 ⚠️ **Do NOT install `react-firebaseui`.** It's abandoned, declares React 16 peers,
-      and breaks under React 18/19 StrictMode.
-- [ ] 🔴 `apps/web/src/auth/FirebaseUIMount.tsx`:
-  - Mount the vanilla widget on a `ref` inside `useEffect`
-  - Use `firebaseui.auth.AuthUI.getInstance() ?? new firebaseui.auth.AuthUI(auth)` —
-    **StrictMode double-mounts in dev and a second `new AuthUI()` throws**
-  - Call `ui.reset()` on cleanup
-- [ ] 🔴 Configure providers: Email/Password, Phone, Google
-- [ ] 🔴 `signInFlow: 'popup'` for Google (redirect loses state on some mobile browsers)
-- [ ] 🔴 Import `firebase/compat/*` **only** in this file
-- [ ] 🟡 Code-split the whole `/login` route so compat never loads for signed-in users (NFR-2)
-- [ ] 🟡 `signInSuccessWithAuthResult` → upsert profile → return `false` (we handle routing)
-- [ ] 🟡 Enable account linking so email + Google with the same address is one account (AC-A1.4)
-- [ ] 🟢 Terms of service and privacy policy URLs
+</details>
 
 ## 3. Profile creation
 
@@ -140,13 +182,19 @@ it, not the other way round.
 
 ## Exit criteria
 
-- [ ] All three providers sign in successfully against the emulator — **not yet driven by
-      hand.** What is confirmed: the app boots against the emulator suite with no
-      `auth/already-initialized`, and `/groups` redirects to `/login` for a signed-out
-      visitor. Signing in through each of the three forms is still an unticked box
-- [ ] A `users/{uid}` document appears on first sign-in and is not duplicated on the second
-- [ ] Session survives a hard refresh (AC-A1.7)
+- [x] Email/password sign-**up** and sign-**in** driven end to end against the emulator:
+      account created → `<RedirectIfAuthed>` moved to `/groups` → `users/{uid}` written with
+      `displayName: "Emulator Tester"`, `defaultCurrency: "USD"`. Google and phone render and
+      are configured, but neither was completed by hand — Google needs a real consent screen
+      and the emulator sends no SMS (both are §8 manual checks)
+- [x] A `users/{uid}` document appears on first sign-in and is not duplicated on the second —
+      verified against the emulator's REST API: exactly one document after sign-up, sign-out
+      and sign-in again
+- [x] Session survives a hard refresh (AC-A1.7) — reloaded on `/account`, stayed signed in,
+      no bounce through `/login`
 - [x] Route guards work in both directions with no login-screen flash
-- [x] `firebaseui` appears in **no** file — it was dropped (§2), and `no-firebaseui-or-compat`
-      in `.dependency-cruiser.cjs` is now a blanket ban rather than a carve-out
+- [x] `firebaseui` appears in exactly one file — confirmed by `pnpm depcruise`.
+      ⚠️ The rule catches it via its `firebase/compat` import, not by the `firebaseui`
+      specifier: dependency-cruiser does not resolve that package (no `exports` field), so
+      that half of the pattern is inert. Noted in the rule's own comment rather than assumed
 - [ ] `pnpm verify` green
