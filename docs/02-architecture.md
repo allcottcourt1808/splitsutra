@@ -201,11 +201,11 @@ The rest of the app knows only `useAuth()`. Consequences:
 
 ## Environments
 
-| Env     | Firebase project  | Purpose                                    |
-| ------- | ----------------- | ------------------------------------------ |
-| `local` | emulator suite    | Day-to-day dev. No cloud cost, no real SMS |
-| `dev`   | `splitsutra-dev`  | Deployed integration testing, real devices |
-| `prod`  | `splitsutra-prod` | Real users                                 |
+| Env     | Firebase project       | Purpose                                    |
+| ------- | ---------------------- | ------------------------------------------ |
+| `local` | emulator suite         | Day-to-day dev. No cloud cost, no real SMS |
+| `dev`   | `splitsutra-dev-eac96` | Deployed integration testing, real devices |
+| `prod`  | `splitsutra-prod`      | Real users                                 |
 
 Config is injected via Vite env vars (`VITE_FIREBASE_*`). Firebase web config is **not
 secret** — it is a public identifier. Security comes from Security Rules and App Check,

@@ -31,7 +31,7 @@ Target repo: `https://github.com/allcottcourt1808/splitsutra`
 rewrites plus preview channels come built in. Vercel/Netlify would work but add a second
 dashboard and a second deploy pipeline for no benefit here.
 
-- `dev` → `splitsutra-dev.web.app`
+- `dev` → `splitsutra-dev-eac96.web.app`
 - `prod` → `splitsutra-prod.web.app`, plus a custom domain later if wanted.
 
 ### Preview channels

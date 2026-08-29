@@ -19,15 +19,15 @@
 
 Create **two** projects. Do not develop against production.
 
-| Project ID        | Purpose                                       |
-| ----------------- | --------------------------------------------- |
-| `splitsutra-dev`  | Deployed dev/staging, real devices, test data |
-| `splitsutra-prod` | Real users                                    |
+| Project ID             | Purpose                                       |
+| ---------------------- | --------------------------------------------- |
+| `splitsutra-dev-eac96` | Deployed dev/staging, real devices, test data |
+| `splitsutra-prod`      | Real users                                    |
 
 Wire both as CLI aliases:
 
 ```bash
-firebase use --add splitsutra-dev --alias dev
+firebase use --add splitsutra-dev-eac96 --alias dev
 ```
 
 ### Per-project console configuration
@@ -154,9 +154,9 @@ app in one command. **Worth the 30 minutes; you will run it hundreds of times.**
 
 ```
 VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=splitsutra-dev.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=splitsutra-dev
-VITE_FIREBASE_STORAGE_BUCKET=splitsutra-dev.appspot.com
+VITE_FIREBASE_AUTH_DOMAIN=splitsutra-dev-eac96.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=splitsutra-dev-eac96
+VITE_FIREBASE_STORAGE_BUCKET=splitsutra-dev-eac96.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_USE_EMULATORS=true
