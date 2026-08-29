@@ -12,105 +12,109 @@
  * Values arrive as CSS custom properties set by the component from a token key, so
  * every number below is either `0`, `1`, a token reference, or a hairline border.
  */
+/* Every rule below is a PRIMITIVE: <Screen>, <Stack>, <Row>, <Card>, <Divider> and <Spacer> applies these itself, and a caller's
+ * `className` lands on the same element. The layer is what makes the caller win — see the
+ * layer-order note at the top of styles/reset.css. */
+@layer primitives {
+  /* --- Screen --------------------------------------------------------------- */
 
-/* --- Screen --------------------------------------------------------------- */
+  .screen {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    /* Without this a flex child refuses to shrink and the inner scroller never scrolls. */
+    min-height: 0;
+    background-color: var(--splitsutra-color-bg);
+  }
 
-.screen {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  /* Without this a flex child refuses to shrink and the inner scroller never scrolls. */
-  min-height: 0;
-  background-color: var(--splitsutra-color-bg);
-}
-
-/* The scrollable body. Scrolling lives HERE, not on the document, so the bottom tab
+  /* The scrollable body. Scrolling lives HERE, not on the document, so the bottom tab
    bar stays put and `overscroll-behavior` stops the page bouncing behind a sheet. */
-.screenBody {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
-}
+  .screenBody {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
 
-.screenPadded {
-  padding-inline: var(--splitsutra-space-lg);
-  padding-block-start: var(--splitsutra-space-lg);
-}
+  .screenPadded {
+    padding-inline: var(--splitsutra-space-lg);
+    padding-block-start: var(--splitsutra-space-lg);
+  }
 
-/* Bottom breathing room so the last row is never trapped under the tab bar or the
+  /* Bottom breathing room so the last row is never trapped under the tab bar or the
    home indicator (contract rule 10 — safe area via a token, not a magic number). */
-.screenBody::after {
-  content: '';
-  display: block;
-  flex: 0 0 auto;
-  height: var(--splitsutra-space-xxl);
-}
+  .screenBody::after {
+    content: '';
+    display: block;
+    flex: 0 0 auto;
+    height: var(--splitsutra-space-xxl);
+  }
 
-/* --- Stack / Row ---------------------------------------------------------- */
+  /* --- Stack / Row ---------------------------------------------------------- */
 
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--stack-gap, 0);
-  align-items: var(--stack-align, stretch);
-  justify-content: var(--stack-justify, flex-start);
-  padding: var(--stack-padding, 0);
-  flex: var(--stack-flex, 0 1 auto);
-  min-height: 0;
-  min-width: 0;
-}
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stack-gap, 0);
+    align-items: var(--stack-align, stretch);
+    justify-content: var(--stack-justify, flex-start);
+    padding: var(--stack-padding, 0);
+    flex: var(--stack-flex, 0 1 auto);
+    min-height: 0;
+    min-width: 0;
+  }
 
-.row {
-  flex-direction: row;
-  /* Rows default to vertically centred: the overwhelmingly common case is an icon,
+  .row {
+    flex-direction: row;
+    /* Rows default to vertically centred: the overwhelmingly common case is an icon,
      a label and a trailing amount on one baseline. */
-  align-items: var(--stack-align, center);
-}
+    align-items: var(--stack-align, center);
+  }
 
-.wrap {
-  flex-wrap: wrap;
-}
+  .wrap {
+    flex-wrap: wrap;
+  }
 
-/* --- Card ----------------------------------------------------------------- */
+  /* --- Card ----------------------------------------------------------------- */
 
-.card {
-  display: flex;
-  flex-direction: column;
-  background-color: var(--splitsutra-color-surface);
-  border: 1px solid var(--splitsutra-color-border);
-  border-radius: var(--splitsutra-radius-lg);
-  padding: var(--splitsutra-space-lg);
-  min-width: 0;
-}
+  .card {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--splitsutra-color-surface);
+    border: 1px solid var(--splitsutra-color-border);
+    border-radius: var(--splitsutra-radius-lg);
+    padding: var(--splitsutra-space-lg);
+    min-width: 0;
+  }
 
-.cardFlush {
-  padding: 0;
-  overflow: hidden;
-}
+  .cardFlush {
+    padding: 0;
+    overflow: hidden;
+  }
 
-/* --- Divider -------------------------------------------------------------- */
+  /* --- Divider -------------------------------------------------------------- */
 
-.divider {
-  flex: 0 0 auto;
-  height: 1px;
-  background-color: var(--splitsutra-color-border);
-  border: 0;
-}
+  .divider {
+    flex: 0 0 auto;
+    height: 1px;
+    background-color: var(--splitsutra-color-border);
+    border: 0;
+  }
 
-.dividerInset {
-  margin-inline-start: var(--splitsutra-space-lg);
-}
+  .dividerInset {
+    margin-inline-start: var(--splitsutra-space-lg);
+  }
 
-/* --- Spacer --------------------------------------------------------------- */
+  /* --- Spacer --------------------------------------------------------------- */
 
-/* Pushes siblings apart in a flex line. `<Spacer />` reads better in JSX than
+  /* Pushes siblings apart in a flex line. `<Spacer />` reads better in JSX than
    `justify-content: space-between` when only one gap should grow, and it is the same
    trick RN uses. */
-.spacer {
-  flex: 1 1 auto;
-  min-width: 0;
+  .spacer {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }

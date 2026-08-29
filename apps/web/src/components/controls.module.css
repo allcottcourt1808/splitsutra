@@ -15,44 +15,50 @@
 
 /* --- Pressable ------------------------------------------------------------ */
 
-.pressable {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  min-block-size: var(--splitsutra-size-touch-target);
-  min-inline-size: var(--splitsutra-size-touch-target);
-  border-radius: var(--splitsutra-radius-md);
-  color: inherit;
-  background-color: transparent;
-  transition: background-color var(--splitsutra-motion-fast) ease-out;
-  user-select: none;
-  touch-action: manipulation;
-}
+/* PRIMITIVE. <Pressable> merges a caller className onto this element, so these rules
+ * are layered and every caller class outranks them. See styles/reset.css.
+ * The consumers further down this file (.button, .chip, .segment, .input) stay
+ * UNLAYERED — they compose onto .pressable and have to win. */
+@layer primitives {
+  .pressable {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    min-block-size: var(--splitsutra-size-touch-target);
+    min-inline-size: var(--splitsutra-size-touch-target);
+    border-radius: var(--splitsutra-radius-md);
+    color: inherit;
+    background-color: transparent;
+    transition: background-color var(--splitsutra-motion-fast) ease-out;
+    user-select: none;
+    touch-action: manipulation;
+  }
 
-/* Layout-only pressables (a whole list row) must not be forced to 44px wide; the row
+  /* Layout-only pressables (a whole list row) must not be forced to 44px wide; the row
    already exceeds it. Height stays enforced. */
-.pressableBlock {
-  min-inline-size: 0;
-  inline-size: 100%;
-  justify-content: flex-start;
-}
+  .pressableBlock {
+    min-inline-size: 0;
+    inline-size: 100%;
+    justify-content: flex-start;
+  }
 
-.pressable:active {
-  background-color: var(--splitsutra-color-bg-subtle);
-}
-
-@media (hover: hover) {
-  .pressable:hover {
+  .pressable:active {
     background-color: var(--splitsutra-color-bg-subtle);
   }
-}
 
-.pressable:disabled,
-.pressable[aria-disabled='true'] {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
+  @media (hover: hover) {
+    .pressable:hover {
+      background-color: var(--splitsutra-color-bg-subtle);
+    }
+  }
+
+  .pressable:disabled,
+  .pressable[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+} /* @layer primitives */
 
 /* --- Button --------------------------------------------------------------- */
 

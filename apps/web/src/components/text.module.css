@@ -5,132 +5,136 @@
  * contrast table at the top of packages/core/src/theme/tokens.ts — the brand teal
  * `#1CC29F` is 2.27:1 on white and would fail WCAG AA (NFR-5) as body text.
  */
+/* Every rule below is a PRIMITIVE: <Text> and <Money> applies these itself, and a caller's
+ * `className` lands on the same element. The layer is what makes the caller win — see the
+ * layer-order note at the top of styles/reset.css. */
+@layer primitives {
+  .text {
+    color: var(--splitsutra-color-text);
+    font-size: var(--splitsutra-font-size-md);
+    font-weight: var(--splitsutra-font-weight-regular);
+    line-height: var(--splitsutra-font-line-height-normal);
+    min-width: 0;
+  }
 
-.text {
-  color: var(--splitsutra-color-text);
-  font-size: var(--splitsutra-font-size-md);
-  font-weight: var(--splitsutra-font-weight-regular);
-  line-height: var(--splitsutra-font-line-height-normal);
-  min-width: 0;
-}
+  /* --- Variants ------------------------------------------------------------- */
 
-/* --- Variants ------------------------------------------------------------- */
+  .title {
+    font-size: var(--splitsutra-font-size-lg);
+    font-weight: var(--splitsutra-font-weight-semibold);
+    line-height: var(--splitsutra-font-line-height-tight);
+  }
 
-.title {
-  font-size: var(--splitsutra-font-size-lg);
-  font-weight: var(--splitsutra-font-weight-semibold);
-  line-height: var(--splitsutra-font-line-height-tight);
-}
+  .display {
+    font-size: var(--splitsutra-font-size-xxl);
+    font-weight: var(--splitsutra-font-weight-bold);
+    line-height: var(--splitsutra-font-line-height-tight);
+  }
 
-.display {
-  font-size: var(--splitsutra-font-size-xxl);
-  font-weight: var(--splitsutra-font-weight-bold);
-  line-height: var(--splitsutra-font-line-height-tight);
-}
+  .body {
+    font-size: var(--splitsutra-font-size-md);
+  }
 
-.body {
-  font-size: var(--splitsutra-font-size-md);
-}
+  .caption {
+    font-size: var(--splitsutra-font-size-sm);
+    color: var(--splitsutra-color-text-secondary);
+  }
 
-.caption {
-  font-size: var(--splitsutra-font-size-sm);
-  color: var(--splitsutra-color-text-secondary);
-}
+  /* Amounts are always tabular so columns line up (docs/07 §Interaction rules 7). */
+  .amount {
+    font-size: var(--splitsutra-font-size-md);
+    font-weight: var(--splitsutra-font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
 
-/* Amounts are always tabular so columns line up (docs/07 §Interaction rules 7). */
-.amount {
-  font-size: var(--splitsutra-font-size-md);
-  font-weight: var(--splitsutra-font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-}
+  /* --- Weight --------------------------------------------------------------- */
 
-/* --- Weight --------------------------------------------------------------- */
+  .weightRegular {
+    font-weight: var(--splitsutra-font-weight-regular);
+  }
+  .weightMedium {
+    font-weight: var(--splitsutra-font-weight-medium);
+  }
+  .weightSemibold {
+    font-weight: var(--splitsutra-font-weight-semibold);
+  }
+  .weightBold {
+    font-weight: var(--splitsutra-font-weight-bold);
+  }
 
-.weightRegular {
-  font-weight: var(--splitsutra-font-weight-regular);
-}
-.weightMedium {
-  font-weight: var(--splitsutra-font-weight-medium);
-}
-.weightSemibold {
-  font-weight: var(--splitsutra-font-weight-semibold);
-}
-.weightBold {
-  font-weight: var(--splitsutra-font-weight-bold);
-}
+  /* --- Tone ----------------------------------------------------------------- */
 
-/* --- Tone ----------------------------------------------------------------- */
+  .toneDefault {
+    color: var(--splitsutra-color-text);
+  }
+  .toneSecondary {
+    color: var(--splitsutra-color-text-secondary);
+  }
+  .tonePrimary {
+    color: var(--splitsutra-color-primary-text);
+  }
+  .toneDanger {
+    color: var(--splitsutra-color-danger-text);
+  }
+  .toneInverse {
+    color: var(--splitsutra-color-text-inverse);
+  }
+  .toneOnPrimary {
+    color: var(--splitsutra-color-on-primary);
+  }
 
-.toneDefault {
-  color: var(--splitsutra-color-text);
-}
-.toneSecondary {
-  color: var(--splitsutra-color-text-secondary);
-}
-.tonePrimary {
-  color: var(--splitsutra-color-primary-text);
-}
-.toneDanger {
-  color: var(--splitsutra-color-danger-text);
-}
-.toneInverse {
-  color: var(--splitsutra-color-text-inverse);
-}
-.toneOnPrimary {
-  color: var(--splitsutra-color-on-primary);
-}
-
-/* Money direction. These three are reserved for money and nothing else
+  /* Money direction. These three are reserved for money and nothing else
    (docs/07 §Colour semantics — a hard rule). */
-.tonePositive {
-  color: var(--splitsutra-color-positive-text);
-}
-.toneNegative {
-  color: var(--splitsutra-color-negative-text);
-}
-.toneNeutral {
-  color: var(--splitsutra-color-neutral-text);
-}
+  .tonePositive {
+    color: var(--splitsutra-color-positive-text);
+  }
+  .toneNegative {
+    color: var(--splitsutra-color-negative-text);
+  }
+  .toneNeutral {
+    color: var(--splitsutra-color-neutral-text);
+  }
 
-/* --- Alignment ------------------------------------------------------------ */
+  /* --- Alignment ------------------------------------------------------------ */
 
-.alignStart {
-  text-align: start;
-}
-.alignCenter {
-  text-align: center;
-}
-.alignEnd {
-  text-align: end;
-}
+  .alignStart {
+    text-align: start;
+  }
+  .alignCenter {
+    text-align: center;
+  }
+  .alignEnd {
+    text-align: end;
+  }
 
-/* --- Truncation ----------------------------------------------------------- */
+  /* --- Truncation ----------------------------------------------------------- */
 
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.clamp2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+  .clamp2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 
-/* --- Money ---------------------------------------------------------------- */
+  /* --- Money ---------------------------------------------------------------- */
 
-.money {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-  white-space: nowrap;
-}
+  .money {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    white-space: nowrap;
+  }
 
-.moneyLarge {
-  font-size: var(--splitsutra-font-size-xxl);
-  font-weight: var(--splitsutra-font-weight-bold);
-  line-height: var(--splitsutra-font-line-height-tight);
+  .moneyLarge {
+    font-size: var(--splitsutra-font-size-xxl);
+    font-weight: var(--splitsutra-font-weight-bold);
+    line-height: var(--splitsutra-font-line-height-tight);
+  }
 }

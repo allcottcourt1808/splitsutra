@@ -9,137 +9,167 @@
  *   - no CSS Grid, no `float`, no `100vh`
  *   - the height chain is a flex column, because Yoga has no `vh` concept at all
  */
+/**
+ * 🔴 LAYER ORDER FOR THE WHOLE APP. Declared here because this is the first stylesheet
+ * `main.tsx` imports, and a layer's position is fixed by where its name is FIRST seen.
+ *
+ * Later layers win, and an unlayered rule beats every layer. So:
+ *
+ *   reset        <- UA flattening. Loses to everything, which is what a reset is for.
+ *   primitives   <- the base rule of a component that merges a caller's `className`
+ *                   (.pressable, .text, .stack, .row, .card, .list, .avatar).
+ *   (unlayered)  <- every consumer rule. Always wins over a primitive it composes onto.
+ *
+ * WHY THIS EXISTS. Before layers, a consumer class and the primitive it lands on were
+ * both single classes — identical specificity — so the CASCADE FELL BACK TO SOURCE ORDER,
+ * and source order here is CSS-module import order, which no one chose. layout.module.css
+ * happened to load last, so `.stack` beat every class ever passed into a <Stack>.
+ * 41 declarations across the design system were silently dropped: the tab bar rendered
+ * its icons beside the labels instead of above, the active tab was the same colour as the
+ * inactive ones, the raised Add button lost its pill and its fill, and every empty state
+ * was top-aligned with no gap and no padding.
+ *
+ * None of it was visible to the tests — happy-dom applies no stylesheet and computes no
+ * layout — and none of it was a mistake in any individual rule.
+ *
+ * 🔴 Do NOT put a consumer rule in a layer. Unlayered is the winning position, and that is
+ * the whole mechanism: a caller's class outranks the primitive by construction rather than
+ * by being lucky about import order.
+ */
+@layer reset, primitives;
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  /* Momentum scrolling inside the content column rather than on the document, so the
-     bottom tab bar never scrolls away. */
-  -webkit-tap-highlight-color: transparent;
-}
-
-html,
-body,
-#root {
-  /* `height: 100%` is the portable base; the shell layers `min-height: 100dvh` on top.
-     `100vh` is banned: mobile browser chrome makes it overshoot by the toolbar height,
-     which puts the tab bar under the address bar. */
-  height: 100%;
-}
-
-body {
-  /* The app is one flex column, top to bottom. This is the whole layout model. */
-  display: flex;
-  flex-direction: column;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-img,
-picture,
-video,
-svg {
-  display: block;
-  max-width: 100%;
-}
-
-/* Inputs and buttons do not inherit type by default. */
-input,
-button,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: none;
-}
-
-button {
-  cursor: pointer;
-}
-
-/* Firefox draws a number spinner and Safari draws a search decoration; neither exists
-   on mobile and both break the amount field's alignment. */
-input[type='number']::-webkit-outer-spin-button,
-input[type='number']::-webkit-inner-spin-button {
-  appearance: none;
-  margin: 0;
-}
-
-input[type='number'] {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-ul,
-ol {
-  list-style: none;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-size: inherit;
-  font-weight: inherit;
-}
-
-/* Text should wrap sensibly rather than overflow the phone column (NFR-3). */
-p,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-li,
-span {
-  overflow-wrap: break-word;
-}
-
-/* Remove the default focus ring only where a token-driven one replaces it — never
-   globally. Keyboard navigability is NFR-6. */
-:focus-visible {
-  outline: 2px solid var(--splitsutra-color-focus-ring);
-  outline-offset: 2px;
-  border-radius: var(--splitsutra-radius-sm);
-}
-
-:focus:not(:focus-visible) {
-  outline: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
+@layer reset {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+    box-sizing: border-box;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Momentum scrolling inside the content column rather than on the document, so the
+     bottom tab bar never scrolls away. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    /* `height: 100%` is the portable base; the shell layers `min-height: 100dvh` on top.
+     `100vh` is banned: mobile browser chrome makes it overshoot by the toolbar height,
+     which puts the tab bar under the address bar. */
+    height: 100%;
+  }
+
+  body {
+    /* The app is one flex column, top to bottom. This is the whole layout model. */
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  img,
+  picture,
+  video,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* Inputs and buttons do not inherit type by default. */
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  /* Firefox draws a number spinner and Safari draws a search decoration; neither exists
+   on mobile and both break the amount field's alignment. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ul,
+  ol {
+    list-style: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  /* Text should wrap sensibly rather than overflow the phone column (NFR-3). */
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  li,
+  span {
+    overflow-wrap: break-word;
+  }
+
+  /* Remove the default focus ring only where a token-driven one replaces it — never
+   globally. Keyboard navigability is NFR-6. */
+  :focus-visible {
+    outline: 2px solid var(--splitsutra-color-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--splitsutra-radius-sm);
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

@@ -12,26 +12,29 @@
 
 /* --- List ----------------------------------------------------------------- */
 
-.list {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
-  min-width: 0;
-}
+/* PRIMITIVE: <List> merges a caller className onto the <ul>. See styles/reset.css. */
+@layer primitives {
+  .list {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
 
-.listItem {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
+  .listItem {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
 
-/* Section header inside a list — "March 2026" above a month of expenses. */
-.listSection {
-  flex: 0 0 auto;
-  padding-inline: var(--splitsutra-space-lg);
-  padding-block: var(--splitsutra-space-sm);
-  background-color: var(--splitsutra-color-bg-subtle);
-}
+  /* Section header inside a list — "March 2026" above a month of expenses. */
+  .listSection {
+    flex: 0 0 auto;
+    padding-inline: var(--splitsutra-space-lg);
+    padding-block: var(--splitsutra-space-sm);
+    background-color: var(--splitsutra-color-bg-subtle);
+  }
+} /* @layer primitives */
 
 /* --- ListRow -------------------------------------------------------------- */
 
@@ -78,53 +81,56 @@
 
 /* --- Avatar --------------------------------------------------------------- */
 
-.avatar {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  inline-size: var(--avatar-size, var(--splitsutra-size-avatar-md));
-  block-size: var(--avatar-size, var(--splitsutra-size-avatar-md));
-  border-radius: var(--splitsutra-radius-pill);
-  background-color: var(--splitsutra-color-bg-subtle);
-  box-shadow: inset 0 0 0 1px var(--splitsutra-color-border);
-  overflow: hidden;
-  user-select: none;
-}
+/* PRIMITIVE: <Avatar> merges a caller className. See styles/reset.css. */
+@layer primitives {
+  .avatar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    inline-size: var(--avatar-size, var(--splitsutra-size-avatar-md));
+    block-size: var(--avatar-size, var(--splitsutra-size-avatar-md));
+    border-radius: var(--splitsutra-radius-pill);
+    background-color: var(--splitsutra-color-bg-subtle);
+    box-shadow: inset 0 0 0 1px var(--splitsutra-color-border);
+    overflow: hidden;
+    user-select: none;
+  }
 
-.avatarInitials {
-  font-size: var(--splitsutra-font-size-sm);
-  font-weight: var(--splitsutra-font-weight-semibold);
-  color: var(--splitsutra-color-text-secondary);
-  line-height: var(--splitsutra-font-line-height-tight);
-}
+  .avatarInitials {
+    font-size: var(--splitsutra-font-size-sm);
+    font-weight: var(--splitsutra-font-weight-semibold);
+    color: var(--splitsutra-color-text-secondary);
+    line-height: var(--splitsutra-font-line-height-tight);
+  }
 
-.avatarImage {
-  inline-size: 100%;
-  block-size: 100%;
-  object-fit: cover;
-}
+  .avatarImage {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
 
-/* --- AvatarStack ---------------------------------------------------------- */
+  /* --- AvatarStack ---------------------------------------------------------- */
 
-.avatarStack {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  flex: 0 0 auto;
-}
+  .avatarStack {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex: 0 0 auto;
+  }
 
-/* Overlap. A negative margin rather than absolute positioning, so Yoga reproduces it. */
-.avatarStackItem + .avatarStackItem {
-  margin-inline-start: calc(-1 * var(--splitsutra-space-sm));
-}
+  /* Overlap. A negative margin rather than absolute positioning, so Yoga reproduces it. */
+  .avatarStackItem + .avatarStackItem {
+    margin-inline-start: calc(-1 * var(--splitsutra-space-sm));
+  }
 
-.avatarStackItem {
-  /* Rings so overlapping avatars stay individually legible against each other. */
-  box-shadow: 0 0 0 2px var(--splitsutra-color-surface);
-  border-radius: var(--splitsutra-radius-pill);
-}
+  .avatarStackItem {
+    /* Rings so overlapping avatars stay individually legible against each other. */
+    box-shadow: 0 0 0 2px var(--splitsutra-color-surface);
+    border-radius: var(--splitsutra-radius-pill);
+  }
+} /* @layer primitives */
 
 /* --- EmptyState ----------------------------------------------------------- */
 
