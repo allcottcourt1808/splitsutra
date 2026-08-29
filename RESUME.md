@@ -1,30 +1,55 @@
 # Resume here
 
-**Last updated:** 2026-08-29. Project: **SplitSutra**.
+**Last updated:** 2026-08-29 (evening). Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
-Checkout: `C:\Users\neeth\coding\splitsutra`.
+Checkout: `C:Users
+eethcodingsplitsutra`.
 
-## State: PRs #1–#22 merged. Two PRs open (#23, #24). `main` is at `8b4efc8`.
+## State: PRs #1–#30 merged except #23. `main` is at `375326f`.
 
-`main` carries the workspace, the core domain, the design system, the navigation shell, the
-Firestore rules and triggers, all twelve Cloud Functions, the auth data layer, the hooks that
-unblock screens, a seed script that actually runs, a design system whose styles actually reach
-the page, and — new since the last checkpoint — **friend requests (#20), Firebase Auth wired
-into the web app with route guards (#21), and `/login` rendering through FirebaseUI (#22)**.
+Three PRs open: **#23** (pre-existing shadcn docs), **#31** (Activity tab, ready), **#32**
+(Groups + Add tabs, 🔴 draft, interrupted).
 
-⚠️ The last full gate measurement was taken on the **#19** branch and has **not been re-run
-since #20–#22 landed**, so treat these numbers as stale rather than current:
-`typecheck` (both resolvers) · `lint` · `depcruise` (188 modules, 519 deps) · `format:check` ·
-287 tests (194 unit + 93 component). Re-measure before quoting a count anywhere.
+### Where the tabs stand
 
-### The two open PRs
+`TABS` in `apps/web/src/navigation/paths.ts` declares five: Groups · Friends · **Add** ·
+Activity · Account.
 
-| PR                                                            | Branch                  | What                                                |
-| ------------------------------------------------------------- | ----------------------- | --------------------------------------------------- |
-| [#24](https://github.com/allcottcourt1808/splitsutra/pull/24) | `test/firestore-rules`  | Security Rules tests — every `allow`, pass and fail |
-| [#23](https://github.com/allcottcourt1808/splitsutra/pull/23) | `feat/add-shadcn-theme` | docs: shadcn theme setup instructions               |
+| Tab      | State                                                                |
+| -------- | -------------------------------------------------------------------- |
+| Friends  | ✅ shipped (#20, #21, #25)                                           |
+| Account  | ✅ shipped                                                           |
+| Activity | ✅ complete on `feat/tab-activity` → **#31**, full gate green        |
+| Groups   | 🔴 interrupted on `wip/tabs-groups-expenses` → **#32**, not gated    |
+| Add      | 🔴 interrupted on the same branch, `EditExpenseScreen` never written |
 
-Both based on `main` directly, like every other branch here.
+### 🔴 Pick up here
+
+**#32 is unfinished and ungated.** Missing: `EditExpenseScreen`; **every screen test for
+both tabs** (Article X unmet); the barrel + `routes.tsx` wiring, so `/groups` and
+`/expense` still render `PendingScreen`. `SettleUpScreen.tsx` was mid-write when the agent
+was stopped and may be truncated — **read it before trusting it.** Also: `activityRepo`
+and `groupRepo` both query `groups` by `memberIds`; collapse to one.
+
+The stack is `main` ← #31 ← #32. Merging a stack too fast is what cost 1,673 lines
+previously: merge #31, wait for GitHub to retarget #32 onto `main`, confirm its base and
+diff, and only then touch it.
+
+### 🔴 Two open decisions, neither mine to make
+
+1. **Comment tombstones are impossible under the current rules.** Phase-08 wants a "comment
+   deleted" marker; the rules set `allow update: if false` (T12) while `delete` is a hard
+   delete. Both cannot hold, and it cuts against Article V. Documented in `deleteComment`.
+2. **Console-only Firebase Auth setup (phase-02 §3) is still entirely undone**, and it is the
+   part that costs money: the three providers, authorized domains, and 🔴 the **US-only SMS
+   region policy + 50/day quota**. `apps/web/.env.local` still has
+   `VITE_USE_EMULATORS=false`, so phone sign-in sends real SMS at real cost right now. Flip
+   it to `true` for day-to-day work.
+
+---
+
+<details>
+<summary>Older checkpoint notes</summary>
 
 ### 🧪 What #24 adds — the rules tests that were owed since #20
 
@@ -419,3 +444,5 @@ not exist. `docs/09` lists them; they are now the highest-value tests outstandin
 6. **`e2e/specs/`**, which still does not exist. Independent of 2–4 — a good parallel track.
 7. **Uncomment the emulator-backed suites in `.github/workflows/ci.yml`** once 5 exists,
    otherwise none of this runs in CI.
+
+</details>
