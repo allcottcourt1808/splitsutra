@@ -1,0 +1,21 @@
+{
+  // Typecheck config for the emulator test suites (rules + integration).
+  //
+  // `firebase/tsconfig.json` excludes this directory, and `firebase/tests` is not a workspace
+  // package, so before this file existed the suites were typechecked by nothing — the same gap
+  // that config documents for `firebase/seed.ts`. Wired into the root `typecheck` script as
+  // `typecheck:tests`.
+  //
+  // `bundler` resolution rather than the sibling's `NodeNext`: vitest resolves these, so the
+  // extensionless `./helpers` imports are correct here and `.js` extensions would not be.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"],
+}
