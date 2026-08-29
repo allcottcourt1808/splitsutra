@@ -48,6 +48,7 @@ import { RedirectIfAuthed, RequireAuth } from './auth/AuthGuards';
 import { AppShell } from './navigation/AppShell';
 import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
 import { AccountScreen } from './screens/AccountScreen';
+import { ActivityScreen } from './screens/ActivityScreen';
 import { AddFriendScreen } from './screens/AddFriendScreen';
 import { EditProfileScreen } from './screens/EditProfileScreen';
 import { FriendDetailScreen } from './screens/FriendDetailScreen';
@@ -69,6 +70,7 @@ const screenNames = Object.keys(ROUTE_PATTERNS) as ScreenName[];
  */
 const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
   SignIn: SignInScreen,
+  ActivityFeed: ActivityScreen,
   FriendList: FriendsScreen,
   FriendDetail: FriendDetailScreen,
   AddFriend: AddFriendScreen,

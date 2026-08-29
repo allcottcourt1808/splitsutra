@@ -38,6 +38,12 @@ export * from './friendRepo.js';
 /* ── `friendRequests/{id}` — the consent step, and the in-app notification it doubles as. ──── */
 export * from './friendRequestRepo.js';
 
+/* ── `groups/{gid}/activity` — read-only (T8). One query per group; see activityRepo. ───── */
+export * from './activityRepo.js';
+
+/* ── `…/expenses/{eid}/comments` — the ADR-11 correction channel. Never updatable (T12). ── */
+export * from './commentRepo.js';
+
 /**
  * 🔴 `./refs.js` is deliberately **not** re-exported.
  *
