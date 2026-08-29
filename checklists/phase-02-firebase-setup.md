@@ -7,17 +7,17 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
 
 ## 1. Create projects
 
-- [ ] 🔴 Create `splitsutra-dev` in the Firebase console (Q3). ⚠️ Firebase project IDs are **globally unique** — if taken, try `splitsutra-app-dev`
-- [ ] 🔴 Create `splitsutra-prod` (matching suffix)
-- [ ] 🔴 Register a **Web app** in each; copy the config into `.env.local` / `.env.example`
-- [ ] 🔴 `firebase use --add` for both, aliased `dev` and `prod`
+- [x] 🔴 Create `splitsutra-dev` in the Firebase console (Q3). ⚠️ Firebase project IDs are **globally unique** — if taken, try `splitsutra-app-dev` — created as **`splitsutra-dev-eac96`**; a failed CLI run had already consumed the bare name
+- [x] 🔴 Create `splitsutra-prod` (matching suffix) — clean `-prod` suffix, which keeps guard.ts rule 1 (no-override) in force
+- [ ] 🔴 Register a **Web app** in each; copy the config into `.env.local` / `.env.example` — **dev done** (`1:724928905429:web:e175f01035116cd8fc225c`), config in `.env.local`; **prod not registered** — not needed until Phase 11
+- [x] 🔴 `firebase use --add` for both, aliased `dev` and `prod` — written directly into `.firebaserc`
 
 ## 2. Firestore
 
-- [ ] 🔴 Create the database in **Native mode**, in **both** projects
-- [ ] 🔴 ⚠️ Region: **`us-central1`** (Q4). **This is permanent.** Single-region, not `nam5` multi-region — cheaper, lower write latency, colocated with Functions.
-- [ ] 🔴 Start in **locked mode** — rules come from the repo, never the console
-- [ ] 🟡 Confirm both projects use the same region so latency behaves consistently
+- [x] 🔴 Create the database in **Native mode**, in **both** projects — Standard edition, verified via `firestore:databases:get`
+- [x] 🔴 ⚠️ Region: **`us-central1`** (Q4). **This is permanent.** Single-region, not `nam5` multi-region — cheaper, lower write latency, colocated with Functions.
+- [x] 🔴 Start in **locked mode** — rules come from the repo, never the console — both created with default closed rules; repo rules not yet deployed
+- [x] 🟡 Confirm both projects use the same region so latency behaves consistently
 
 ## 3. Authentication
 
