@@ -36,6 +36,9 @@ export * from './useProfile.js';
 /** `useFriends()` — the established friendships, ordered by name (phase-05 §7). */
 export * from './useFriends.js';
 
+/** `useFriend()` — one friendship, or `null` once resolved as not-a-friend. */
+export * from './useFriend.js';
+
 /**
  * `useFriendRequests()` — the pending inbox and outbox.
  *
