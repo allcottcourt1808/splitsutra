@@ -1,0 +1,318 @@
+/**
+ * `groups/{groupId}` and `groups/{groupId}/members/{uid}` — checklists/phase-05 §1.
+ *
+ * ## Reads are subscriptions, membership writes are callables
+ *
+ * `createGroup` and `updateGroup` are direct client writes because Security Rules can validate
+ * them from the request alone. Everything that touches **membership or a balance** — joining,
+ * leaving, removing, deleting, repairing — is a callable: those preconditions require reading
+ * other members' documents, which Rules cannot do within their access budget, and a client that
+ * could write a member document could write its own `balanceMinor` (Article III, threat T2).
+ *
+ * ## `watchMyGroups` filters in memory, on purpose
+ *
+ * The only composite index declared for this collection is `memberIds` ARRAY + `lastActivityAt`
+ * DESC (docs/03 §Required composite indexes). Adding `where('isImplicit','==',false)` or
+ * `where('deletedAt','==',null)` to the query would need two more indexes to serve one screen,
+ * so both are applied to the result instead. The page is capped at {@link MY_GROUPS_PAGE_SIZE},
+ * which bounds what that costs.
+ */
+
+import {
+  doc,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
+
+import {
+  DEFAULT_CURRENCY,
+  createInviteSchema,
+  deleteGroupSchema,
+  groupBaseSchema,
+  groupTypeSchema,
+  leaveGroupSchema,
+  recomputeGroupBalancesSchema,
+  removeMemberSchema,
+  type CreateInviteInput,
+  type CurrencyCode,
+  type DeleteGroupInput,
+  type Group,
+  type GroupMember,
+  type GroupType,
+  type LeaveGroupInput,
+  type RecomputeGroupBalancesInput,
+  type RemoveMemberInput,
+} from '../types/index.js';
+import { CALLABLE, callFunction } from './callables.js';
+import { groupDoc, groupsCollection, memberDoc, membersCollection } from './refs.js';
+import { watchDoc, watchQuery, type OnError, type OnNext, type Unsubscribe } from './subscribe.js';
+
+/** docs/03 §Query patterns: `… orderBy lastActivityAt desc limit 50`. */
+export const MY_GROUPS_PAGE_SIZE = 50;
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Reads
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * `true` for a group that belongs on the Groups tab.
+ *
+ * ADR-06 / D2: an implicit group is the hidden two-person container behind a 1:1 friend
+ * expense. It is a real group with real expenses, but showing it here would present every
+ * friendship as a group the user never created.
+ */
+function isVisibleGroup(group: Group): boolean {
+  return !group.isImplicit && group.deletedAt === null;
+}
+
+/** The signed-in user's groups, most recently active first. Implicit and deleted ones removed. */
+export function watchMyGroups(
+  uid: string,
+  onNext: OnNext<readonly Group[]>,
+  onError: OnError,
+): Unsubscribe {
+  return watchQuery(
+    query(
+      groupsCollection(),
+      where('memberIds', 'array-contains', uid),
+      orderBy('lastActivityAt', 'desc'),
+      limit(MY_GROUPS_PAGE_SIZE),
+    ),
+    (groups) => {
+      onNext(groups.filter(isVisibleGroup));
+    },
+    onError,
+  );
+}
+
+/** Subscribe to one group. Emits `null` when it does not exist or the caller cannot read it. */
+export function watchGroup(
+  groupId: string,
+  onNext: OnNext<Group | null>,
+  onError: OnError,
+): Unsubscribe {
+  return watchDoc(groupDoc(groupId), onNext, onError);
+}
+
+/**
+ * Current members first, then departed ones, each block ordered by display name.
+ *
+ * Sorted client-side: `displayName` is a denormalized snapshot the profile fan-out rewrites, and
+ * a group is capped at 50 members (Q2), so this is not where the cost is (Article XII).
+ */
+function byMembership(a: GroupMember, b: GroupMember): number {
+  const left = a.leftAt === null ? 0 : 1;
+  const right = b.leftAt === null ? 0 : 1;
+  if (left !== right) return left - right;
+  return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' });
+}
+
+/** Every member document in the group, including people who have left. */
+export function watchMembers(
+  groupId: string,
+  onNext: OnNext<readonly GroupMember[]>,
+  onError: OnError,
+): Unsubscribe {
+  return watchQuery(
+    membersCollection(groupId),
+    (members) => {
+      onNext([...members].sort(byMembership));
+    },
+    onError,
+  );
+}
+
+/**
+ * One member document — the caller's own, on the group list.
+ *
+ * `balanceMinor` lives here and nowhere else that a client can read, so the per-group balance on
+ * the Groups tab is one listener per group rather than a field on the group document.
+ */
+export function watchMember(
+  groupId: string,
+  uid: string,
+  onNext: OnNext<GroupMember | null>,
+  onError: OnError,
+): Unsubscribe {
+  return watchDoc(memberDoc(groupId, uid), onNext, onError);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Writes — direct
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** What a user may choose when creating a group. `friend` is created by the system only (D2). */
+export type CreatableGroupType = Exclude<GroupType, 'friend'>;
+
+export interface CreateGroupInput {
+  /** 1–60 characters after trimming. */
+  readonly name: string;
+  readonly type: CreatableGroupType;
+  /** 🔴 Immutable once written (AC-C1.1, threat T10). */
+  readonly currency?: CurrencyCode | undefined;
+  /** Default `false`; the settle-up view is a display choice, not a ledger change (AC-E3.3). */
+  readonly simplifyDebts?: boolean | undefined;
+  readonly photoURL?: string | null | undefined;
+}
+
+/**
+ * Create a group. Returns the new group id.
+ *
+ * Every field Rules pin is set here and none of them is a caller's choice: `createdBy` is the
+ * signed-in uid, `memberIds` is exactly `[uid]` and `memberCount` is 1 (threat T4 — a client
+ * that could seed a wider member list could add itself to a stranger's group). The creator's
+ * `members/{uid}` document is written by `onGroupCreated`, not from here.
+ *
+ * `createdAt`, `updatedAt` and `lastActivityAt` are all `serverTimestamp()`: Rules require
+ * `createdAt == request.time`, and a client-chosen `lastActivityAt` would let a group pin itself
+ * to the top of everyone's list for ever.
+ */
+export async function createGroup(uid: string, input: CreateGroupInput): Promise<string> {
+  const name = groupBaseSchema.shape.name.parse(input.name);
+  const type = groupTypeSchema.parse(input.type);
+  const currency = groupBaseSchema.shape.currency.parse(input.currency ?? DEFAULT_CURRENCY);
+  const photoURL = groupBaseSchema.shape.photoURL.parse(input.photoURL ?? null);
+
+  const reference = doc(groupsCollection());
+
+  await setDoc(reference, {
+    id: reference.id,
+    name,
+    type,
+    isImplicit: false,
+    photoURL,
+    currency,
+    memberIds: [uid],
+    memberCount: 1,
+    simplifyDebts: input.simplifyDebts ?? false,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    lastActivityAt: serverTimestamp(),
+    deletedAt: null,
+    // v2 forward design (docs/03). Written explicitly so a v1 document is complete rather
+    // than relying on a schema default to fill a missing key on every read.
+    baseCurrency: null,
+    allowMixedCurrency: null,
+  });
+
+  return reference.id;
+}
+
+/** The fields a member may edit. Everything absent from this type is immutable to a client. */
+export interface GroupPatch {
+  readonly name?: string | undefined;
+  readonly type?: CreatableGroupType | undefined;
+  readonly simplifyDebts?: boolean | undefined;
+  readonly photoURL?: string | null | undefined;
+}
+
+/**
+ * Update a group's editable fields.
+ *
+ * 🔴 `currency` is not here and must never be added. Changing it after an expense exists would
+ * reinterpret every stored `amountMinor` in the group (AC-C1.1, T10); Rules reject it, and a
+ * caller reaching for it wants a new group.
+ */
+export async function updateGroup(groupId: string, patch: GroupPatch): Promise<void> {
+  const update: Record<string, unknown> = {};
+
+  if (patch.name !== undefined) update['name'] = groupBaseSchema.shape.name.parse(patch.name);
+  if (patch.type !== undefined) update['type'] = groupTypeSchema.parse(patch.type);
+  if (patch.simplifyDebts !== undefined) update['simplifyDebts'] = patch.simplifyDebts;
+  if (patch.photoURL !== undefined) {
+    update['photoURL'] = groupBaseSchema.shape.photoURL.parse(patch.photoURL);
+  }
+
+  if (Object.keys(update).length === 0) return;
+
+  await updateDoc(groupDoc(groupId), { ...update, updatedAt: serverTimestamp() });
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Writes — callables
+ * ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Each one enforces a precondition that reads other members' documents, which Rules cannot do.
+ * The `HttpsError` messages these throw are written to be shown to a user — `leaveGroup` names
+ * the outstanding amount — so callers should surface `error.message` rather than replace it.
+ */
+
+export interface LeaveGroupResult {
+  readonly groupId: string;
+  readonly left: true;
+}
+
+/** Leave a group. Refused while the caller's balance is not zero (AC-C1.6). */
+export async function leaveGroup(input: LeaveGroupInput): Promise<LeaveGroupResult> {
+  const payload = leaveGroupSchema.parse(input);
+  return callFunction<LeaveGroupInput, LeaveGroupResult>(CALLABLE.leaveGroup, payload);
+}
+
+export interface RemoveMemberResult {
+  readonly groupId: string;
+  readonly uid: string;
+  readonly removed: true;
+}
+
+/** Remove someone else. Admin only, and only at a zero balance (AC-C1.7). */
+export async function removeMember(input: RemoveMemberInput): Promise<RemoveMemberResult> {
+  const payload = removeMemberSchema.parse(input);
+  return callFunction<RemoveMemberInput, RemoveMemberResult>(CALLABLE.removeMember, payload);
+}
+
+export interface DeleteGroupResult {
+  readonly groupId: string;
+  readonly deleted: true;
+  /** `true` when the group was already soft-deleted — the call is idempotent. */
+  readonly alreadyDeleted: boolean;
+}
+
+/** Soft-delete a group. Admin only, and only when every balance is zero (AC-C1.5, Article V). */
+export async function deleteGroup(input: DeleteGroupInput): Promise<DeleteGroupResult> {
+  const payload = deleteGroupSchema.parse(input);
+  return callFunction<DeleteGroupInput, DeleteGroupResult>(CALLABLE.deleteGroup, payload);
+}
+
+export interface RecomputeGroupBalancesResult {
+  readonly groupId: string;
+  readonly currency: CurrencyCode;
+  /** `true` when the stored balances disagreed with the ledger and were corrected. */
+  readonly repaired: boolean;
+  readonly driftCount: number;
+}
+
+/**
+ * Rebuild every balance in the group from the ledger — the "Balances look wrong?" repair valve.
+ *
+ * Article V: the ledger is the truth and a balance is a cache, so this is always safe to run and
+ * is idempotent. It deliberately returns counts rather than amounts; the caller already has a
+ * live listener on the member documents, and a second copy of a balance in a response payload is
+ * exactly the drift Article III exists to prevent.
+ */
+export async function recomputeGroupBalances(
+  input: RecomputeGroupBalancesInput,
+): Promise<RecomputeGroupBalancesResult> {
+  const payload = recomputeGroupBalancesSchema.parse(input);
+  return callFunction<RecomputeGroupBalancesInput, RecomputeGroupBalancesResult>(
+    CALLABLE.recomputeGroupBalances,
+    payload,
+  );
+}
+
+export interface CreateInviteResult {
+  readonly inviteId: string;
+  /** 128 bits of lowercase hex. Never readable from Firestore — this response is the only copy. */
+  readonly token: string;
+  readonly groupName: string;
+}
+
+/** Mint a 14-day invite token for a group the caller belongs to (AC-B3.1). */
+export async function createInvite(input: CreateInviteInput): Promise<CreateInviteResult> {
+  const payload = createInviteSchema.parse(input);
+  return callFunction<CreateInviteInput, CreateInviteResult>(CALLABLE.createInvite, payload);
+}
