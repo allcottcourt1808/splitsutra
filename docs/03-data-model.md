@@ -294,6 +294,40 @@ Append-only. Written by Functions only.
 
 Pre-rendering `summary` server-side means the feed needs no joins to display.
 
+## `friendRequests/{requestId}`
+
+```ts
+{
+  id: string; // equals the document ID: `${fromUid}__${toUid}`
+  fromUid: string;
+  fromName: string; // snapshot at send time (D4)
+  fromPhotoURL: string | null;
+  toUid: string;
+  toName: string;
+  toPhotoURL: string | null;
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled';
+  implicitGroupId: string | null; // set by the acceptance
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  respondedAt: Timestamp | null; // null exactly while pending
+}
+```
+
+The consent step in front of a friendship (AC-B1.4). Function-written; both parties may read.
+
+**The document ID is derived, not random.** A duplicate request is impossible by construction,
+and both "have I asked them?" and "have they asked me?" are a `get` of a known path rather than
+a query — which is what makes the mutual auto-accept free and race-free. The cost is that a pair
+keeps only its latest state rather than a history; this is a consent record, not a ledger.
+
+**Both names are denormalized**, not just the sender's. Rules allow a `users/{uid}` read only
+where `isSelf(uid)`, so neither party can read the other's profile — an inbox row carrying only
+`fromUid` would be a request from nobody.
+
+There is still no `notifications` collection: a pending request **is** the in-app notification
+(AC-B1.10). It is authoritative rather than a copy that can drift, and it clears itself on every
+device the moment it is answered.
+
 ## `invites/{inviteId}`
 
 ```ts
@@ -328,6 +362,8 @@ when a query needs one.
 | `expenses`                    | `deletedAt` ASC, `date` DESC                       | Group expense list, excluding deleted |
 | `expenses` (collection group) | `groupId` ASC, `participantIds` ARRAY, `date` DESC | Friend detail: shared expenses        |
 | `activity`                    | `createdAt` DESC                                   | Group feed pagination                 |
+| `friendRequests`              | `toUid` ASC, `status` ASC, `createdAt` DESC        | Incoming requests (the inbox badge)   |
+| `friendRequests`              | `fromUid` ASC, `status` ASC, `createdAt` DESC      | Outgoing requests, for withdrawing    |
 | `settlements`                 | `deletedAt` ASC, `date` DESC                       | Settlement history                    |
 
 > **Collection-group queries need collection-group indexes and their own Security Rules
@@ -404,4 +440,5 @@ Every new field is nullable, so v1 documents remain valid without a backfill.
   algorithm produces the same answer with far fewer documents to keep consistent.
 - No FX rate storage or conversion in v1 — the forward design above is deliberately unbuilt.
 - No `receipts` / Storage paths (deferred — see [17-backlog.md](17-backlog.md)).
-- No `notifications` collection (deferred with push).
+- No `notifications` collection (deferred with push). In-app notification of a friend request
+  is the pending `friendRequests` document itself — see that section.

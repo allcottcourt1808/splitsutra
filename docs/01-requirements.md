@@ -45,9 +45,29 @@ automated test. IDs are referenced from the phase checklists.
 - **AC-B1.1** User can search for an existing user by exact email or exact E.164 phone number.
 - **AC-B1.2** Search returns at most one result, exposing only `displayName` and `photoURL` — never the full user document.
 - **AC-B1.3** If no user exists, the app offers to send an invite link (see B3).
-- **AC-B1.4** Adding a friend creates a reciprocal entry: `users/{me}/friends/{them}` **and** `users/{them}/friends/{me}`.
-- **AC-B1.5** Adding an existing friend is idempotent — no duplicate, no error.
-- **AC-B1.6** A user cannot add themselves as a friend.
+- **AC-B1.4** 🔴 **Adding a friend sends a request; it does not create the friendship.** The
+  target must accept before anything is written to either `friends` collection.
+  _Revised._ This previously read "adding a friend creates a reciprocal entry", which made
+  the flow unilateral: a friendship IS a group (D2), so anyone who knew your email could put
+  themselves in a shared group with you and you had no way to refuse.
+- **AC-B1.5** Sending a request to someone you have already asked is idempotent — no
+  duplicate, no error, and **no refresh of its `createdAt`** (which would let a sender bump
+  themselves back to the top of the recipient’s inbox at will). Sending to an existing
+  friend returns the existing `implicitGroupId`.
+- **AC-B1.6** A user cannot send themselves a friend request.
+- **AC-B1.7** On accept, the reciprocal entries and the implicit 1:1 group are created in
+  **one transaction** — `users/{me}/friends/{them}`, `users/{them}/friends/{me}`, the group,
+  and both member documents.
+- **AC-B1.8** The recipient may decline. **A decline is final for that direction**: the same
+  sender cannot ask again. The escape hatch is that the recipient can add the sender
+  themselves, which auto-accepts — so a mis-tap costs one tap to undo, and a deliberate
+  refusal is permanent. A sender may withdraw an unanswered request (`cancelled`), which
+  **can** be re-sent; withdrawing must not cost you the ability to ask again.
+- **AC-B1.9** If both people request each other, the second send accepts the first rather
+  than opening a second pending request.
+- **AC-B1.10** A pending request is the **in-app notification**: it appears live in the
+  recipient’s Friends screen and badges the Friends tab, and it clears on every device the
+  moment it is answered. No `notifications` collection (docs/03 defers that with push).
 
 ### B2. Friend list & balances
 

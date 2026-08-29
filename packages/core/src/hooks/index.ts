@@ -14,7 +14,7 @@
  * Consumers reach it through the `@splitsutra/core/hooks` subpath declared in `package.json`.
  *
  * What lands here next:
- * - **Phases 05–08** — the subscription hooks over each repository (`useGroups`, `useGroup`,
+ * - **Phases 05–08** — the remaining subscription hooks (`useGroups`, `useGroup`,
  *   `useExpenses`, `useBalances`, `useActivity`).
  */
 
@@ -32,3 +32,15 @@ export * from './useAuth.js';
 
 /** `useProfile()` — the same profile, with a `loading` that accounts for the document. */
 export * from './useProfile.js';
+
+/** `useFriends()` — the established friendships, ordered by name (phase-05 §7). */
+export * from './useFriends.js';
+
+/**
+ * `useFriendRequests()` — the pending inbox and outbox.
+ *
+ * Also the in-app notification: `incomingCount` is what the Friends tab badges. docs/03 defers a
+ * `notifications` collection with push, and this feature does not need one — the pending request
+ * IS the notification, and it clears itself on every device the moment it is answered.
+ */
+export * from './useFriendRequests.js';

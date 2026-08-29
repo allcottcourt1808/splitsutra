@@ -40,6 +40,9 @@ export * from './user.js';
 /** `users/{uid}/friends/{friendUid}`. */
 export * from './friend.js';
 
+/** `friendRequests/{requestId}` — the consent step in front of a friendship. */
+export * from './friendRequest.js';
+
 /** `groups/{groupId}` and `groups/{groupId}/members/{uid}`. */
 export * from './group.js';
 
