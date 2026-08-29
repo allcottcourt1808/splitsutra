@@ -1,40 +1,38 @@
 /**
  * Application entry point. `index.html` loads exactly this file and nothing else.
  *
- * The order of the three setup calls below is not arbitrary, and getting it wrong produces
- * failures that look unrelated to startup:
+ * Startup itself lives in `platform/startup.ts` — tokens, the platform adapter, and
+ * `initFirebase`, in that order, because each needs the one before it. This file does the two
+ * things that genuinely belong to the entry point: find the root element, and decide what to
+ * render into it.
  *
- *   1. `installTokenCssVars()` writes the design tokens onto `:root` as CSS custom
- *      properties. Every stylesheet in the app reads `var(--…)`, so this has to run before
- *      the first paint or the first frame renders unstyled.
- *   2. `setPlatformAdapter(webAdapter)` hands core the one thing it refuses to decide for
- *      itself (Article II). Core throws if something reaches for the adapter before it is
- *      set, so this belongs here — above React — rather than inside a component.
- *   3. `createRoot(...).render(...)` last, once the two above are true for every component
- *      that is about to mount.
+ * 🔴 **A failed startup renders a screen, it does not throw.** `readFirebaseConfig()` throws on
+ * a missing `.env.local`, and at module scope that lands before `createRoot` — so the app
+ * mounts nothing and the symptom is a blank white page that reads like a broken build. That is
+ * the first thing anyone cloning this repo hits, so it gets a real screen naming the missing
+ * variables (`SetupRequiredScreen`).
  *
  * StrictMode is on deliberately, even though it double-invokes effects in development. That
  * double-invocation is what surfaces the setup bugs this app is most exposed to — a second
- * `initializeApp`, or auth persistence applied twice — and `getAuthClient` memoises a
- * promise specifically so that it survives it. Turning StrictMode off would hide the class
- * of bug it exists to reveal.
+ * `initializeApp`, a second `onAuthStateChanged` subscription, auth persistence applied
+ * twice — and every one of those paths is written to survive it: `initFirebase()` returns its
+ * existing handles instead of re-initialising, and `authStore` starts its listener once and
+ * never tears it down on refcount zero. Turning StrictMode off would hide the class of bug it
+ * exists to reveal.
  */
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 
-import { setPlatformAdapter } from '@splitsutra/core';
-
 import './styles/reset.css';
 import './styles/global.css';
 
-import { webAdapter } from './platform/webAdapter';
+import { startApp } from './platform/startup';
 import { router } from './routes';
-import { installTokenCssVars } from './styles/tokensCss';
+import { SetupRequiredScreen } from './screens/SetupRequiredScreen';
 
-installTokenCssVars();
-setPlatformAdapter(webAdapter);
+const startup = startApp();
 
 const container = document.getElementById('root');
 
@@ -47,6 +45,10 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    {startup.ok ? (
+      <RouterProvider router={router} />
+    ) : (
+      <SetupRequiredScreen error={startup.error} />
+    )}
   </StrictMode>,
 );

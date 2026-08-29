@@ -86,8 +86,14 @@ export function readFirebaseConfig(): FirebaseWebConfig {
  * `true` when this build should talk to the local emulator suite instead of a real project.
  *
  * Driven by `VITE_USE_EMULATORS`; blank or `false` in `dev` and `prod` builds.
+ *
+ * ⚠️ Not named `useEmulators`, which is what it reads as. `react-hooks/rules-of-hooks` matches
+ * on the `use` prefix alone and treats any such call as a hook — so the old name made calling
+ * it from `startApp()` a lint error, and would have made calling it from a conditional inside a
+ * component one too. The option it feeds is still spelled `useEmulators` because that is core's
+ * field name, and core has no React in it.
  */
-export function useEmulators(): boolean {
+export function emulatorsEnabled(): boolean {
   return str(import.meta.env.VITE_USE_EMULATORS).toLowerCase() === 'true';
 }
 

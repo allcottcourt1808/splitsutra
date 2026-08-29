@@ -1,138 +1,65 @@
 /**
- * Firebase Auth wiring for the web app.
+ * The credential flows — email/password, Google, phone OTP (AC-A1.1).
  *
- * ── WHY THERE IS NO FIREBASEUI HERE (Q17 / R7) ───────────────────────────────────────────
- * docs/02 §Authentication architecture and ADR-03 describe a FirebaseUI widget quarantined
- * behind `apps/web/src/auth/FirebaseUIMount.tsx`. That plan was dropped.
- * `firebaseui@6.1.0` declares `peerDependencies: firebase "^9.1.3 || ^10.0.0"`; this
- * project is on firebase 11, so it installs as an unmet peer and upstream has shipped
- * nothing for SDK 11 or 12. The deciding argument is in docs/02 itself: FirebaseUI is
- * web-only and "does not port", so Phase 12 has to write custom auth screens regardless —
- * FirebaseUI would have bought a day now and charged it back later.
+ * ── WHAT THIS FILE IS NOW, AND WHAT IT USED TO BE ────────────────────────────────────────
+ * It used to initialise Firebase itself: `initializeApp`, `getAuth(app)`, `setPersistence`,
+ * memoised behind its own `getAuthClient()` promise. That was correct while core had no
+ * `src/firebase/`, and it became a **latent startup collision** the moment core got one.
  *
- * Consequences:
- *   - 🔴 **Nothing in this repo imports `firebaseui` or `firebase/compat`.** The old
- *     `firebaseui-is-quarantined` carve-out for this directory is now the blanket
- *     `no-firebaseui-or-compat` rule in `.dependency-cruiser.cjs` — a strictly stronger
- *     guarantee, and the thing that stops the compat shim creeping back in.
- *   - The modular `firebase/auth` SDK used below is normal usage, not compat.
- *   - `RecaptchaVerifier` (needed for phone OTP) is modular too, and stays inside this
- *     directory so no screen ever touches it.
+ * 🔴 `getAuth()` and `initializeAuth()` cannot both run against the same app.
+ *    `getAuth` lazily initialises auth with defaults; `initializeAuth` — which core calls,
+ *    because it is the only entry point that accepts a persistence strategy — throws
+ *    `auth/already-initialized` if auth has been touched. So whichever of the two ran first
+ *    won, and the loser failed at runtime. Which one ran first depended on import order and
+ *    on which screen the user happened to land on. Nothing typechecked differently either
+ *    way; the tests never called it; a green suite proved nothing about it.
  *
- * ── WHY IT IS HERE AND NOT IN CORE ───────────────────────────────────────────────────────
- * It should not be, permanently. `@splitsutra/core` owns Firebase app init and `authRepo`.
+ * Resolved by deleting this file's half. `initFirebase()` in `platform/startup.ts` is now the
+ * only initialisation in the app, and everything here reaches the same `Auth` through core's
+ * `getAuthClient()`. Persistence (AC-A1.7) arrives through the `PlatformAdapter`, as Article II
+ * requires, instead of being applied twice from two places.
  *
- * TODO(phase-02): replace `initApp()` with `initFirebase(readFirebaseConfig())` from
- *   `@splitsutra/core` once `packages/core/src/firebase/` exists.
- * TODO(phase-03): move the sign-in calls into `core/src/repositories/authRepo.ts` and this
- *   file shrinks to nothing (checklists/phase-03-auth.md §1). The UI in `SignInPanel.tsx`
- *   then talks only to the repository, which is what makes the native login screens in
- *   Phase 12 a re-skin rather than a rewrite.
+ * ── WHAT IS DELIBERATELY NOT HERE ────────────────────────────────────────────────────────
+ * `watchAuthState`, `getCurrentUser`, `getIdToken` and `signOut` used to live here too, and
+ * are now core's (`repositories/authRepo.ts`). That is the split docs/02 describes: core owns
+ * everything *after* a credential exists — who is signed in, when it changes, the token,
+ * signing out — because that is the part Phase 12 reuses unchanged. What stays here is only
+ * what genuinely cannot leave the browser:
+ *
+ *   - `signInWithPopup` needs `window.open`
+ *   - `RecaptchaVerifier` needs a real DOM element to attach to
+ *
+ * A screen imports the functions below and nothing else from `firebase/auth`.
+ *
+ * ── NO FIREBASEUI (Q17 / R7) ─────────────────────────────────────────────────────────────
+ * `firebaseui@6.1.0` declares `peerDependencies: firebase "^9.1.3 || ^10.0.0"` and this
+ * project is on firebase 12, so it installs as an unmet peer and upstream has shipped nothing
+ * for SDK 11 or 12. The deciding argument is in docs/02 itself: FirebaseUI is web-only and
+ * "does not port", so Phase 12 needs custom auth screens regardless. `no-firebaseui-or-compat`
+ * in `.dependency-cruiser.cjs` enforces the ban. The modular `firebase/auth` SDK used below is
+ * normal usage, not compat.
  */
 
-import { getApp, getApps, initializeApp } from 'firebase/app';
 import {
   GoogleAuthProvider,
   RecaptchaVerifier,
-  connectAuthEmulator,
   createUserWithEmailAndPassword,
-  getAuth,
-  onAuthStateChanged,
-  setPersistence,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signInWithPopup,
-  signOut as fbSignOut,
   updateProfile,
-  type Auth,
   type ConfirmationResult,
   type User,
 } from 'firebase/auth';
-import { getPlatformAdapter } from '@splitsutra/core';
-import { EMULATOR, readFirebaseConfig, useEmulators } from '../platform/firebaseEnv';
+
+import { getAuthClient } from '@splitsutra/core/firebase';
 
 /* -------------------------------------------------------------------------- */
-/* Initialisation                                                             */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Memoised as a PROMISE, not as an `Auth`. Persistence must be applied before the first
- * sign-in call or the session silently falls back to in-memory and does not survive a
- * refresh (AC-A1.7) — so every consumer awaits the same settled setup.
- *
- * React 19 StrictMode double-invokes effects in dev; memoising here is what stops that
- * turning into two `initializeApp` calls.
- */
-let authPromise: Promise<Auth> | null = null;
-
-export function getAuthClient(): Promise<Auth> {
-  if (authPromise !== null) return authPromise;
-
-  authPromise = (async (): Promise<Auth> => {
-    const app = getApps().length === 0 ? initializeApp(readFirebaseConfig()) : getApp();
-    const auth = getAuth(app);
-
-    if (useEmulators()) {
-      // `disableWarnings` suppresses the red banner the SDK injects into the DOM, which
-      // would sit on top of the phone column.
-      connectAuthEmulator(auth, EMULATOR.authUrl, { disableWarnings: true });
-    }
-
-    // Article II: core never decides how a platform stores a session. The web adapter
-    // returns `browserLocalPersistence`; the RN adapter returns the AsyncStorage-backed one.
-    await setPersistence(auth, getPlatformAdapter().getAuthPersistence());
-    return auth;
-  })();
-
-  return authPromise;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Session                                                                    */
-/* -------------------------------------------------------------------------- */
-
-export type { User as AuthUser };
-
-/**
- * Subscribe to the auth state. Returns an unsubscribe.
- *
- * `onAuthStateChanged` fires once with the restored session (or `null`) before anything
- * else, which is what lets the route guards distinguish "still resolving" from "signed
- * out" — and therefore avoid the flash of the login screen that phase-03 §4 calls out as
- * the most common bug in this area.
- */
-export function watchAuthState(
-  onChange: (user: User | null) => void,
-  onError: (error: unknown) => void,
-): () => void {
-  let unsubscribe: (() => void) | null = null;
-  let cancelled = false;
-
-  getAuthClient()
-    .then((auth) => {
-      if (cancelled) return;
-      unsubscribe = onAuthStateChanged(auth, onChange, onError);
-    })
-    .catch(onError);
-
-  return () => {
-    cancelled = true;
-    unsubscribe?.();
-  };
-}
-
-export async function signOut(): Promise<void> {
-  const auth = await getAuthClient();
-  await fbSignOut(auth);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Sign-in methods — AC-A1.1: email/password, phone, Google                    */
+/* Email + password                                                           */
 /* -------------------------------------------------------------------------- */
 
 export async function signInWithEmail(email: string, password: string): Promise<User> {
-  const auth = await getAuthClient();
-  const credential = await signInWithEmailAndPassword(auth, email, password);
+  const credential = await signInWithEmailAndPassword(getAuthClient(), email, password);
   return credential.user;
 }
 
@@ -140,16 +67,22 @@ export async function signInWithEmail(email: string, password: string): Promise<
  * Create an account, seeding `displayName` from what the user typed.
  *
  * The Auth profile is not the source of truth — `users/{uid}` is (docs/03) — but seeding it
- * means the very first `upsertUserProfile()` has a real name to copy instead of falling
- * back to the email local-part.
+ * means the very first `upsertUserProfile()` has a real name to copy instead of falling back to
+ * the email local-part.
+ *
+ * ⚠️ `updateProfile` is awaited BEFORE this resolves, and that ordering is load-bearing.
+ * `onAuthStateChanged` fires the moment the account exists, and the auth store runs
+ * `upsertUserProfile` on that emission. If the name landed afterwards, the profile document
+ * would already have been written with the fallback — and `upsertUserProfile` deliberately
+ * never rewrites `displayName` on a later launch (it would silently revert the user's own
+ * edits), so the seed would be lost permanently rather than corrected on the next run.
  */
 export async function signUpWithEmail(
   email: string,
   password: string,
   displayName: string,
 ): Promise<User> {
-  const auth = await getAuthClient();
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  const credential = await createUserWithEmailAndPassword(getAuthClient(), email, password);
   const trimmed = displayName.trim();
   if (trimmed.length > 0) {
     await updateProfile(credential.user, { displayName: trimmed });
@@ -157,20 +90,27 @@ export async function signUpWithEmail(
   return credential.user;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Google                                                                     */
+/* -------------------------------------------------------------------------- */
+
 /**
  * Google sign-in via POPUP, not redirect.
  *
- * checklists/phase-03-auth.md §2: redirect loses state on some mobile browsers. It also
- * loses the `/invite/:token` destination the guard is holding, which is exactly the deep
- * link AC-B3.3 requires to survive login.
+ * checklists/phase-03-auth.md §2: redirect loses state on some mobile browsers. It also loses
+ * the `/invite/:token` destination the route guard is holding, which is exactly the deep link
+ * AC-B3.3 requires to survive login.
+ *
+ * ⚠️ Requires `popupRedirectResolver` to have been passed to `initFirebase` — see the note in
+ * `platform/startup.ts`. Without it this fails with
+ * `auth/operation-not-supported-in-this-environment`.
  */
 export async function signInWithGoogle(): Promise<User> {
-  const auth = await getAuthClient();
   const provider = new GoogleAuthProvider();
-  // Always show the chooser: a shared laptop that silently reuses the last Google account
-  // is how one person's expenses end up in another person's group.
+  // Always show the chooser: a shared laptop that silently reuses the last Google account is
+  // how one person's expenses end up in another person's group.
   provider.setCustomParameters({ prompt: 'select_account' });
-  const credential = await signInWithPopup(auth, provider);
+  const credential = await signInWithPopup(getAuthClient(), provider);
   return credential.user;
 }
 
@@ -181,28 +121,34 @@ export async function signInWithGoogle(): Promise<User> {
 /**
  * Build the invisible reCAPTCHA the phone provider requires.
  *
- * ⚠️ This is the one genuinely DOM-bound piece of auth: it needs a real element to attach
- * to. It stays in this directory for that reason — Article II keeps it out of core, and
- * Phase 12 replaces it with the native SafetyNet / DeviceCheck flow, which needs no
- * equivalent. A screen must never construct one.
+ * ⚠️ The one genuinely DOM-bound piece of auth: it needs a real element to attach to. It stays
+ * in this directory for that reason — Article II keeps it out of core, and Phase 12 replaces it
+ * with the native SafetyNet / DeviceCheck flow, which needs no equivalent. A screen must never
+ * construct one directly.
+ *
+ * The caller owns the returned verifier and must `clear()` it — a second verifier on the same
+ * element throws, which is what happens under StrictMode's double-invoked effects if the first
+ * is not torn down.
  */
-export async function createPhoneVerifier(container: HTMLElement): Promise<RecaptchaVerifier> {
-  const auth = await getAuthClient();
-  return new RecaptchaVerifier(auth, container, { size: 'invisible' });
+export function createPhoneVerifier(container: HTMLElement): RecaptchaVerifier {
+  return new RecaptchaVerifier(getAuthClient(), container, { size: 'invisible' });
 }
 
 /**
- * Send the SMS code. `phoneE164` must already be normalised, e.g. `+919876543210`.
+ * Send the SMS code. `phoneE164` must already be normalised, e.g. `+14155550123`.
  *
- * The returned handle is what confirms the code; hold it in component state and throw it
- * away when the user edits the number.
+ * ⚠️ SMS is the one auth method that costs real money per attempt and is the standard target
+ * for toll fraud, which is why docs/18 restricts the SMS region policy to a single region.
+ * The reCAPTCHA above is the other half of that defence; neither is optional.
+ *
+ * The returned handle is what confirms the code; hold it in component state and throw it away
+ * when the user edits the number.
  */
 export async function startPhoneSignIn(
   phoneE164: string,
   verifier: RecaptchaVerifier,
 ): Promise<ConfirmationResult> {
-  const auth = await getAuthClient();
-  return signInWithPhoneNumber(auth, phoneE164, verifier);
+  return signInWithPhoneNumber(getAuthClient(), phoneE164, verifier);
 }
 
 export async function confirmPhoneCode(
