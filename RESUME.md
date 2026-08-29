@@ -4,11 +4,12 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#15 merged. One PR open (#16). `main` is green.
+## State: PRs #1–#16 merged. One docs PR open (#18). `main` is green.
 
 `main` carries the workspace, the core domain, the design system, the navigation shell, the
 Firestore rules and triggers, all twelve Cloud Functions, and — new since the last
-checkpoint — **the auth data layer and the hooks that unblock screens**.
+checkpoint — **the auth data layer, the hooks that unblock screens, and a seed script that
+actually runs**.
 
 Verified on `main` after #14 and #15 merged independently of each other:
 `typecheck` (both resolvers) · `lint` · `depcruise` (185 modules, 516 deps) · `format:check` ·
@@ -16,11 +17,11 @@ Verified on `main` after #14 and #15 merged independently of each other:
 
 ### The one open PR
 
-| PR                                                            | What                                            | Ready?          |
-| ------------------------------------------------------------- | ----------------------------------------------- | --------------- |
-| [#16](https://github.com/allcottcourt1808/splitsutra/pull/16) | `pnpm seed` — entry point, tsconfig, a real run | ✅ **merge it** |
+| PR                                                            | What                                    | Ready?          |
+| ------------------------------------------------------------- | --------------------------------------- | --------------- |
+| [#18](https://github.com/allcottcourt1808/splitsutra/pull/18) | Checklist ticks + this file. Docs only. | ✅ **merge it** |
 
-It is complete and every gate passes. It is based on `main` directly.
+Based on `main` directly, like every other branch here.
 
 ## 🪤 Trap that cost real time — never stack PRs on each other again
 
@@ -45,7 +46,7 @@ you when it goes wrong — every PR still shows a green MERGED badge.
 2. **`useAuth` / `useProfile`,** with the whole state machine in `hooks/authStore.ts` — plain
    TypeScript, no React, 23 tests. See the note below on why.
 3. **#16 — `pnpm seed` runs.** `firebase/seed.ts` had never existed, so nothing imported the
-   guard and the script had never been executed once.
+   guard and the script had never been executed once. Merged.
 4. **`firebase/seed/` is typechecked now**, via a new `firebase/tsconfig.json` chained from
    the root `typecheck` script. Its first run found two real errors.
 5. **An Article VI violation removed** — `dataset.ts` had its own exponent-scaling formatter,
@@ -216,7 +217,7 @@ firebase-functions 7, dependency-cruiser 18, react-router 8.
 
 ## Next session, in order
 
-1. **Merge #16.**
+1. **Merge #18** (docs only).
 2. **Wire the web app to core** — `initFirebase` in `main.tsx`, shrink `firebaseAuth.ts` to the
    sign-in calls only, add the route guards. One PR; items 1 and 2 of "Still missing".
 3. **Screens**, replacing `PendingScreen` one route at a time.
