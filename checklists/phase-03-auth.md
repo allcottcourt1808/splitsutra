@@ -10,15 +10,30 @@ Covers **AC-A1.1 → AC-A3.3**. Reference: ADR-03 in [../docs/12-decisions.md](.
 Getting the order right matters: define the contract first so FirebaseUI is plugged into
 it, not the other way round.
 
-- [ ] 🔴 `core/src/hooks/useAuth.ts` exposing exactly:
-      `{ user, profile, loading, error, signOut }`
-- [ ] 🔴 `core/src/repositories/authRepo.ts` — `onAuthStateChanged` wrapper, `signOut`,
+- [x] 🔴 `core/src/hooks/useAuth.ts` exposing exactly:
+      `{ user, profile, loading, error, signOut }` (PR #15)
+- [x] 🔴 `core/src/repositories/authRepo.ts` — `onAuthStateChanged` wrapper, `signOut`,
       `getIdToken`
-- [ ] 🔴 Auth persistence set via the `PlatformAdapter` (`browserLocalPersistence` on web)
-- [ ] 🔴 **Nothing outside `apps/web/src/auth/` may import `firebaseui` or
-      `firebase/compat`** — dependency-cruiser rule from Phase 01 enforces this
+- [x] 🔴 Auth persistence set via the `PlatformAdapter` (`browserLocalPersistence` on web)
+- [x] 🔴 **Nothing outside `apps/web/src/auth/` may import `firebaseui` or
+      `firebase/compat`** — dependency-cruiser rule from Phase 01 enforces this. It is a
+      **blanket ban** now rather than a carve-out for that directory: FirebaseUI was
+      dropped entirely (§2), so nothing anywhere may import either.
 
-## 2. FirebaseUI mount (web only)
+> The behaviour is not in the hook. `core/src/hooks/authStore.ts` holds it, and holds it
+> without React — core cannot depend on `react-dom` (Article II) and the `unit` vitest
+> project runs on `node`, so a hook here has no renderer to be driven by. The store carries
+> 23 tests; `useAuth.ts` is a `useSyncExternalStore` binding with no branches left in it.
+
+## 2. FirebaseUI mount (web only) — 🔴 **DROPPED. Do not build this.** (Q17 / R7)
+
+> `firebaseui@6.1.0` declares `peerDependencies: firebase "^9.1.3 || ^10.0.0"` and this
+> project is on firebase 12, so it installs as an unmet peer, and upstream has shipped
+> nothing for SDK 11 or 12. The deciding argument is in docs/02 itself: FirebaseUI is
+> web-only and "does not port", so Phase 12 needs custom auth screens regardless — it would
+> have bought a day now and charged it back later. Auth uses the **modular** `firebase/auth`
+> SDK, in `apps/web/src/auth/`. The section below is kept only as the record of what was
+> decided against; `no-firebaseui-or-compat` in `.dependency-cruiser.cjs` enforces it.
 
 - [ ] 🔴 `pnpm --filter web add firebaseui` — **pin the exact version**, it is
       low-maintenance upstream
@@ -39,13 +54,23 @@ it, not the other way round.
 
 ## 3. Profile creation
 
-- [ ] 🔴 `core/src/repositories/userRepo.ts` → `upsertUserProfile()`
-- [ ] 🔴 Called on **every** app launch when authed, not only first sign-in — makes a
-      missing profile self-healing (AC-A1.2, AC-A1.3)
-- [ ] 🔴 Defaults: `displayName` from the provider (fallback to email local-part or the
+- [x] 🔴 `core/src/repositories/userRepo.ts` → `upsertUserProfile()` (PR #15)
+- [x] 🔴 Called on **every** app launch when authed, not only first sign-in — makes a
+      missing profile self-healing (AC-A1.2, AC-A1.3). `authStore` runs it on every session
+      emission, memoised per account, so a normal launch is one read and zero writes.
+- [x] 🔴 Defaults: `displayName` from the provider (fallback to email local-part or the
       masked phone number), `defaultCurrency` from Q4
-- [ ] 🔴 Security rule: `users/{uid}` create/update only where `isSelf(uid)` (AC-A2.4)
-- [ ] 🟡 `useProfile()` hook, subscribed via `onSnapshot`
+- [x] 🔴 Security rule: `users/{uid}` create/update only where `isSelf(uid)` (AC-A2.4) —
+      `firestore.rules`, plus `ownsClaimedIdentity()` so a user cannot claim an email or
+      phone they do not hold and hijack the friend-lookup entry for that person
+- [x] 🟡 `useProfile()` hook, subscribed via `onSnapshot` — a selector over `useAuth`, not a
+      second subscription. What it adds is a `loading` that separates "signed out" from
+      "signed in, document still in flight", which look identical at the call site.
+
+> 🔴 It is **not** one `setDoc(…, { merge: true })`. Create and update are different
+> operations to Rules and no single payload satisfies both — create demands
+> `createdAt == request.time`, update demands `!changed(['uid','createdAt'])`. A merge
+> carrying `serverTimestamp()` is a create that works and an update that is denied.
 
 ## 4. Route guarding
 

@@ -97,16 +97,31 @@ boundary is enforced by CI from day one.
 - [ ] 🔴 Export inferred TS types (`z.infer`) — **never hand-write a parallel interface**
 - [ ] 🔴 `CurrencyCode` union + the `CURRENCIES` metadata table
 - [ ] 🔴 The branded `MinorUnits` type
-- [ ] 🟡 Firestore converters (`withConverter`) that parse through Zod on read, so a
+- [x] 🟡 Firestore converters (`withConverter`) that parse through Zod on read, so a
       malformed document fails loudly at the boundary instead of deep in the UI
+      — `core/src/types/converters.ts`, attached in `core/src/repositories/refs.ts` so a
+      reference cannot leave that file without one (PR #15)
 
 ## 7. Firebase client init
 
-- [ ] 🔴 `core/src/firebase/init.ts` — `initializeApp` from env config
-- [ ] 🔴 Emulator connection guarded by `VITE_USE_EMULATORS`, using **`127.0.0.1`, not
+- [x] 🔴 `core/src/firebase/init.ts` — `initializeApp` from env config (PR #15). The config
+      is an **argument**, never read from a global: `import.meta.env` is a Vite feature
+      Metro does not have, so `apps/web/src/platform/firebaseEnv.ts` reads it and passes a
+      plain object in (Article II).
+- [x] 🔴 Emulator connection guarded by `VITE_USE_EMULATORS`, using **`127.0.0.1`, not
       `localhost`** (Node/IPv6 gotcha — see [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md))
-- [ ] 🔴 `PlatformAdapter` interface + a web implementation
-- [ ] 🟡 Enable Firestore offline persistence (`persistentLocalCache`)
+      — `assertNotLocalhost()` refuses it at startup with the explanation, rather than
+      letting it surface as a phantom "the emulator is down"
+- [x] 🔴 `PlatformAdapter` interface + a web implementation
+- [x] 🟡 Enable Firestore offline persistence (`persistentLocalCache`) — selectable, so the
+      Phase 12 port can ask for the memory cache without core knowing the platform
+
+> ⚠️ **Still outstanding: the web app does not call `initFirebase` yet.**
+> `apps/web/src/auth/firebaseAuth.ts` still runs its own `initializeApp` + `getAuth`, so
+> there are two initialisation paths and only one of them is the portable one. They cannot
+> simply coexist either — `initializeAuth()` throws `auth/already-initialized` against an
+> app `getAuth()` has already touched. Swapping it over is the same change as the route
+> guards, so it is tracked in phase-03 §4.
 
 ## 8. CI
 
