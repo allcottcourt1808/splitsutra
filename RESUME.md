@@ -4,24 +4,55 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#16 merged. One docs PR open (#18). `main` is green.
+## State: PRs #1–#18 merged. One PR open (#19). `main` is green.
 
 `main` carries the workspace, the core domain, the design system, the navigation shell, the
 Firestore rules and triggers, all twelve Cloud Functions, and — new since the last
-checkpoint — **the auth data layer, the hooks that unblock screens, and a seed script that
-actually runs**.
+checkpoint — **the auth data layer, the hooks that unblock screens, a seed script that
+actually runs, and a design system whose styles actually reach the page**.
 
-Verified on `main` after #14 and #15 merged independently of each other:
-`typecheck` (both resolvers) · `lint` · `depcruise` (185 modules, 516 deps) · `format:check` ·
-**261 tests** (194 unit + 67 component).
+Verified on the #19 branch, and in a real browser against both `pnpm dev` and a production
+`vite build` + `vite preview`:
+`typecheck` (both resolvers) · `lint` · `depcruise` (188 modules, 519 deps) · `format:check` ·
+**287 tests** (194 unit + 93 component).
 
 ### The one open PR
 
-| PR                                                            | What                                    | Ready?          |
-| ------------------------------------------------------------- | --------------------------------------- | --------------- |
-| [#18](https://github.com/allcottcourt1808/splitsutra/pull/18) | Checklist ticks + this file. Docs only. | ✅ **merge it** |
+| PR                                                            | What                                      | Ready?          |
+| ------------------------------------------------------------- | ----------------------------------------- | --------------- |
+| [#19](https://github.com/allcottcourt1808/splitsutra/pull/19) | CSS cascade layers — 41 dead declarations | ✅ **merge it** |
 
 Based on `main` directly, like every other branch here.
+
+### 🔴 What #19 found: the design system was not reaching the page
+
+Asked whether the app runs locally, it did — and then the tab bar turned out to be laying its
+icons _beside_ the labels, so every label wrapped mid-word ("Group / s", "Accou / nt").
+
+The cause was not a typo. `<Pressable>`, `<Text>`, `<Stack>`, `<Row>`, `<Card>`, `<List>` and
+`<Avatar>` each merge a caller's `className` onto the element that carries their own base
+class. Both are single classes, so specificity ties and **the cascade falls back to source
+order — which here is CSS-module import order, something nobody chose**.
+`layout.module.css` happened to load last, so `.stack` beat every class ever passed into a
+`<Stack>`; `controls.module.css` loaded after `navigation.module.css`, so `.pressable` beat
+`.tab`.
+
+Measured on the running app: **41 declarations silently dropped.**
+
+|             | Intended                  | Was rendering                     |
+| ----------- | ------------------------- | --------------------------------- |
+| Tab bar     | icon above label          | icon beside label, labels wrapped |
+| Active tab  | primary teal              | identical to the inactive tabs    |
+| Raised "+"  | teal pill                 | transparent, 10px radius          |
+| Empty state | centred, gap `md`, padded | top-aligned, gap 0, padding 0     |
+
+The fix is `@layer reset, primitives;` declared at the top of `styles/reset.css`, with every
+primitive base rule layered and **every consumer rule left unlayered** — unlayered beats
+layered, so a caller now wins by construction rather than by being lucky about import order.
+
+⚠️ A specificity bump (`.tab.tab`) would have fixed the same 41 lines and left the trap for
+the next component. `styles/__tests__/cascadeLayers.test.tsx` holds the invariant instead;
+mutation-tested by un-layering `.pressable`, which fails 6 of its 26 assertions.
 
 ## 🪤 Trap that cost real time — never stack PRs on each other again
 
@@ -108,6 +139,17 @@ If you add hooks in Phase 05+, follow the same shape: logic in a plain module, h
   `packages/core/src/hooks/__tests__/authStore.test.ts`.
 - **Long heredocs through the shell mangle backslashes and quotes.** A regex written that way
   arrived as `[PARSE_ERROR]`. Write the script to a file and run it.
+- 🔴 **happy-dom replaces the global `URL`, and its polyfill resolves RELATIVE references
+  wrongly against a `file:` base.** `new URL('../../components/x.css', import.meta.url)` came
+  back as `/src/x.css` — leading directories silently dropped — so `readFileSync` failed on a
+  path that looked plausible in the error. Parsing an _absolute_ url is fine. Send
+  `import.meta.url` through `URL` once, then do every join with `node:path`.
+  `apps/web/src/__tests__/helpers/cssSource.ts` is the working version, and
+  `Pressable.test.tsx` now uses it too.
+- **A component test cannot see a style at all.** happy-dom applies no stylesheet and
+  computes no layout, so all 41 dropped declarations above were invisible to a green suite.
+  Anything that depends on the cascade has to be asserted against the CSS **source**, or
+  measured in a real browser.
 
 ## ✅ Fixed earlier: `packages/core` could not be loaded by Node
 
@@ -217,9 +259,14 @@ firebase-functions 7, dependency-cruiser 18, react-router 8.
 
 ## Next session, in order
 
-1. **Merge #18** (docs only).
+1. **Merge #19** (the cascade fix).
 2. **Wire the web app to core** — `initFirebase` in `main.tsx`, shrink `firebaseAuth.ts` to the
-   sign-in calls only, add the route guards. One PR; items 1 and 2 of "Still missing".
+   sign-in calls only, add the route guards, and build a real `SignIn` screen. One PR; items 1
+   and 2 of "Still missing".
+   ⚠️ **Copy `apps/web/.env.example` to `.env.local` first.** Nothing reads the Firebase config
+   today, which is the only reason the app boots without it; `initFirebase(readFirebaseConfig())`
+   throws hard on a missing value, so the first symptom will be a blank screen that looks like
+   the wiring broke.
 3. **Screens**, replacing `PendingScreen` one route at a time.
 4. **Rules tests** (`firebase/tests/rules/`), then `e2e/specs/`. Independent of 2 and 3 — a
    good parallel track.

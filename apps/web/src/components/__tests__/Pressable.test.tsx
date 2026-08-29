@@ -15,25 +15,16 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { lightTokens } from '@splitsutra/core';
+import { readCss } from '../../__tests__/helpers/cssSource';
 import { render, renderAt } from '../../__tests__/helpers/render';
 import { Pressable } from '../Pressable';
-import { readFileSync } from 'node:fs';
 import styles from '../controls.module.css';
 
-// Read the stylesheet off disk instead of importing it with `?raw`. Vitest routes every
-// `.css` specifier through its CSS-modules handling and returns the class-name proxy no
-// matter what query you append, so `?raw` yielded an object that throws on Symbol access
-// rather than the source text these assertions parse.
-// Vitest serves modules over http, so `import.meta.url` is an http URL and `fileURLToPath`
-// rejects it. The pathname is still the real path, except that on Windows it arrives with a
-// leading slash in front of the drive letter, which `readFileSync` will not accept.
-function moduleRelativePath(specifier: string): string {
-  const raw = decodeURIComponent(new URL(specifier, import.meta.url).pathname);
-  const looksWindows = raw.charAt(0) === '/' && raw.charAt(2) === ':';
-  return looksWindows ? raw.slice(1) : raw;
-}
-
-const controlsCss = readFileSync(moduleRelativePath('../controls.module.css'), 'utf8');
+// Read the stylesheet off disk rather than importing it: vitest routes every `.css`
+// specifier through its CSS-modules handling and hands back the class-name proxy, so even
+// `?raw` yields an object that throws on Symbol access instead of the source text these
+// assertions parse. `readCss` also owns the happy-dom `URL` workaround — see its header.
+const controlsCss = readCss('components/controls.module.css');
 
 function only(container: HTMLElement): HTMLElement {
   const el = container.firstElementChild;
