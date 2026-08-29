@@ -68,6 +68,11 @@
     "zod": "^4.4.3",
     "zustand": "^5.0.15"
   },
+  "//devDependencies": "react and its types are here only so this package can typecheck and BUILD itself. react is an OPTIONAL peer (see peerDependenciesMeta) because domain, types and utils have nothing to do with React and firebase/functions consumes them without it; src/hooks does import it, and without @types/react resolvable from this package tsc reports react as an untyped module. tsconfig.json pins types: [] so nothing here is auto-included as a global — only the explicit import in src/hooks resolves.",
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "react": "^19.2.8"
+  },
   "peerDependencies": {
     "react": "^19.0.0"
   },
