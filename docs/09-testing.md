@@ -117,7 +117,10 @@ Target: `packages/core/src/repositories/` and the Cloud Functions.
   integration test.
 - Recompute is **idempotent**: firing the trigger twice yields identical balances.
 - `redeemInvite` is idempotent, rejects expired/used tokens, and enforces the member cap.
-- `addFriend` writes both sides reciprocally in one transaction.
+- Accepting a friend request writes both sides reciprocally in one transaction.
+- `sendFriendRequest` writes nothing but the request itself — no group, no friend docs.
+- A `declined` request cannot be re-sent; a `cancelled` one can.
+- Mutual requests auto-accept rather than leaving two pending documents.
 - `leaveGroup` refuses with a non-zero balance and succeeds at zero.
 - `deleteAccount` refuses when balances are outstanding.
 

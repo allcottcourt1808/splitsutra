@@ -20,10 +20,13 @@
  * decision that has to be made explicitly.
  */
 
+import type { ComponentType } from 'react';
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 
 import { AppShell } from './navigation/AppShell';
 import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
+import { AddFriendScreen } from './screens/AddFriendScreen';
+import { FriendsScreen } from './screens/FriendsScreen';
 import { PendingScreen } from './screens/PendingScreen';
 
 /** Rendered without the tab bar. See the note above before adding to this. */
@@ -31,10 +34,25 @@ const OUTSIDE_SHELL: ReadonlySet<ScreenName> = new Set<ScreenName>(['SignIn', 'J
 
 const screenNames = Object.keys(ROUTE_PATTERNS) as ScreenName[];
 
-const routeFor = (name: ScreenName): RouteObject => ({
-  path: ROUTE_PATTERNS[name],
-  element: <PendingScreen screen={name} />,
-});
+/**
+ * The screens that actually exist. Everything else still renders `<PendingScreen>`, which is
+ * what lets the route table stay complete while the screens land one at a time.
+ *
+ * Deleting an entry from here is how a screen is un-shipped, and the last entry to be added
+ * takes `PendingScreen` with it — see the TODO in that file.
+ */
+const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
+  FriendList: FriendsScreen,
+  AddFriend: AddFriendScreen,
+};
+
+const routeFor = (name: ScreenName): RouteObject => {
+  const Screen = SCREENS[name];
+  return {
+    path: ROUTE_PATTERNS[name],
+    element: Screen === undefined ? <PendingScreen screen={name} /> : <Screen />,
+  };
+};
 
 export const router = createBrowserRouter([
   // `/` is not a screen — it is a redirect into the default tab, so a bare visit to the

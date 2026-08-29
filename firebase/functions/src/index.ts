@@ -29,15 +29,27 @@
  * client. That reasoning still stands and applies to anything added here later: export it when
  * it works, not before. See docs/06-cloud-functions.md for the inventory.
  *
- * Four of these are destructive or privacy-sensitive, and each carries its authorization rule
- * in its own header — `deleteGroup` (admin, and every balance zero), `deleteAccount` (self, and
- * every balance zero, in every group), `addFriend` (resolves only through the hashed
- * `usernames/` index) and `recomputeGroupBalances` (active member; rebuilds from the ledger,
- * never from the cache).
+ * Several of these are destructive or privacy-sensitive, and each carries its authorization
+ * rule in its own header — `deleteGroup` (admin, and every balance zero), `deleteAccount`
+ * (self, and every balance zero, in every group), `sendFriendRequest` (resolves only through
+ * the hashed `usernames/` index) and `recomputeGroupBalances` (active member; rebuilds from
+ * the ledger, never from the cache).
+ *
+ * ## `addFriend` was replaced, not renamed
+ *
+ * 🔴 It is gone from this file, and by the rule above that is a **teardown**: the deployed
+ * `addFriend` is deleted on the next deploy rather than upgraded in place. That is correct —
+ * its contract changed, not its name. A client calling the old name now gets
+ * `functions/not-found` instead of silently creating a friendship nobody agreed to, which is
+ * the failure mode to prefer. Nothing has been deployed from this repository yet, so no live
+ * caller is affected; once that stops being true, ship the client and the functions together.
+ *
+ * In its place: `sendFriendRequest` (the lookup half) and `respondToFriendRequest` (the write
+ * half, behind the consent of whoever was asked), plus `cancelFriendRequest` for the sender.
  */
 
 /* ── Callables: client-invoked, auth-checked in each function's own preamble ─────────── */
-export { addFriend } from './callable/addFriend.js';
+export { cancelFriendRequest } from './callable/cancelFriendRequest.js';
 export { createInvite } from './callable/createInvite.js';
 export { deleteAccount } from './callable/deleteAccount.js';
 export { deleteGroup } from './callable/deleteGroup.js';
@@ -45,6 +57,8 @@ export { leaveGroup } from './callable/leaveGroup.js';
 export { recomputeGroupBalances } from './callable/recomputeGroupBalances.js';
 export { redeemInvite } from './callable/redeemInvite.js';
 export { removeMember } from './callable/removeMember.js';
+export { respondToFriendRequest } from './callable/respondToFriendRequest.js';
+export { sendFriendRequest } from './callable/sendFriendRequest.js';
 
 /* ── Triggers: Firestore-driven. Article V — recompute is idempotent, so a retried ─────
  *    delivery cannot double-count. */

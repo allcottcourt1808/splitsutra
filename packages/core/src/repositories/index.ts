@@ -15,7 +15,7 @@
  * the `@splitsutra/core/repositories` subpath declared in `package.json`.
  *
  * What lands here next:
- * - **Phase 05** — `groupRepo.ts`, `friendRepo.ts` — checklists/phase-05-friends-groups.md.
+ * - **Phase 05** — `groupRepo.ts` — checklists/phase-05-friends-groups.md.
  * - **Phases 06–08** — `expenseRepo.ts`, `settlementRepo.ts`, `commentRepo.ts`,
  *   `activityRepo.ts`.
  */
@@ -31,6 +31,12 @@ export * from './userRepo.js';
 
 /* ── The callable Cloud Functions seam: everything Rules deny the client directly. ─────────── */
 export * from './callables.js';
+
+/* ── `users/{uid}/friends` — the established friendships. Function-written, owner-readable. ── */
+export * from './friendRepo.js';
+
+/* ── `friendRequests/{id}` — the consent step, and the in-app notification it doubles as. ──── */
+export * from './friendRequestRepo.js';
 
 /**
  * 🔴 `./refs.js` is deliberately **not** re-exported.

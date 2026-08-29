@@ -18,7 +18,9 @@ code** the client runs. There is never a second implementation of the money math
 | `onUserProfileWritten`   | Firestore | `users/{uid}` write                    | Maintain `usernames/` index, fan out name/photo     |
 | `redeemInvite`           | Callable  | client call                            | Validate token, add member atomically               |
 | `createInvite`           | Callable  | client call                            | Mint an invite token for a group                    |
-| `addFriend`              | Callable  | client call                            | Reciprocal friend docs + implicit 1:1 group         |
+| `sendFriendRequest`      | Callable  | client call                            | Resolve a contact, write one `pending` request      |
+| `respondToFriendRequest` | Callable  | client call                            | Accept (friend docs + implicit group) or decline    |
+| `cancelFriendRequest`    | Callable  | client call                            | Sender withdraws an unanswered request              |
 | `removeMember`           | Callable  | client call                            | Admin removes a member (blocks if balance ≠ 0)      |
 | `leaveGroup`             | Callable  | client call                            | Self-removal (blocks if balance ≠ 0)                |
 | `deleteGroup`            | Callable  | client call                            | Admin delete (blocks unless all balances = 0)       |
@@ -151,21 +153,43 @@ SDK can bridge that gap.
 
 Step 4 matters: double-tapping the join button must not error.
 
-### `addFriend`
+### `sendFriendRequest` / `respondToFriendRequest` / `cancelFriendRequest`
+
+Replaces `addFriend`, which did the lookup and the write in one call with no consent step.
+Split either side of the recipient's answer (AC-B1.4). `friendRequests/{fromUid}__{toUid}`
+is the document; the derived id makes a duplicate request impossible by construction.
 
 ```
-1. Reject self-friending (AC-B1.6)
+sendFriendRequest
+1. Reject self-friending                        (AC-B1.6)
 2. Resolve target via usernames/{sha256(key)}   → not-found if unregistered
-3. Already friends?  → return existing implicitGroupId (idempotent, AC-B1.5)
+3. Tombstoned target?                           → the SAME not-found message
 4. Transaction:
-     create implicit group (type 'friend', isImplicit true, both members)
-     create users/{me}/friends/{them}
-     create users/{them}/friends/{me}
-     create both member docs
+     they already asked me (pending)?  → accept it now         (AC-B1.9)
+     I already asked, pending?         → idempotent no-op      (AC-B1.5)
+     I already asked, accepted?        → return implicitGroupId
+     I already asked, declined?        → failed-precondition   (AC-B1.8)
+     already friends?                  → return implicitGroupId
+     otherwise                         → write one 'pending' doc
+
+respondToFriendRequest   (recipient only; toUid read from the doc, never the payload)
+     decline → status 'declined', nothing else written
+     accept  → one transaction: implicit group + both member docs + BOTH friend docs,
+               then status 'accepted' with the group id     (AC-B1.7)
+
+cancelFriendRequest      (sender only) → status 'cancelled', which CAN be re-sent
 ```
 
-Both sides written in one transaction — a one-directional friendship is a bug that is
-painful to detect later.
+Both sides of a friendship are written in one transaction — a one-directional friendship
+is a bug that is painful to detect later. `lib/friendship.ts` owns that transaction and is
+shared by the accept path and the mutual auto-accept.
+
+🔴 The group's **currency is the sender's default**, because the sender is the group's
+creator and admin. Accepting must not silently redenominate a group around the accepter's
+preference, and the currency is immutable after creation (T10, AC-C1.1).
+
+🔴 A decline is terminal rather than rate-limited. See AC-B1.8 for why, and for the
+recipient-initiated escape hatch that makes that safe.
 
 ### `leaveGroup` / `removeMember` / `deleteGroup`
 

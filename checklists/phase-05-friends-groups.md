@@ -59,7 +59,7 @@ Covers **Epic B** and **Epic C**.
 - [ ] 🟡 `findUserByContact(input)` in `userRepo` — one `get`, returns
       `{ uid, displayName, photoURL }` only (AC-B1.2)
 
-## 6. Friends — `addFriend` callable
+## 6. Friends — the request/accept callables
 
 - [ ] 🔴 Reject self-friending (AC-B1.6)
 - [ ] 🔴 Idempotent: already friends → return the existing `implicitGroupId` (AC-B1.5)
@@ -98,7 +98,7 @@ Covers **Epic B** and **Epic C**.
 - [ ] 🔴 Rules: `list` on `usernames` denied (T5)
 - [ ] 🔴 Rules: client cannot change `group.currency` (T10)
 - [ ] 🔴 Rules: **positive** cases — a member _can_ read the group and update its name
-- [ ] 🟡 Integration: `addFriend` is idempotent and writes both sides
+- [ ] 🟡 Integration: accepting a request is idempotent and writes both sides
 - [ ] 🟡 Integration: `redeemInvite` rejects expired/used tokens; double-redeem succeeds
 - [ ] 🟡 Integration: `leaveGroup` refuses at non-zero balance
 - [ ] 🟡 E2E **E2**: create group → invite link → second user joins → appears in member list

@@ -40,6 +40,7 @@ import { activitySchema, type Activity } from './activity.js';
 import { commentSchema, type Comment } from './comment.js';
 import { expenseSchema, type Expense } from './expense.js';
 import { friendSchema, type Friend } from './friend.js';
+import { friendRequestSchema, type FriendRequest } from './friendRequest.js';
 import { groupMemberSchema, groupSchema, type Group, type GroupMember } from './group.js';
 import { inviteSchema, type Invite } from './invite.js';
 import { settlementSchema, type Settlement } from './settlement.js';
@@ -224,6 +225,16 @@ export const friendConverter: FirestoreDataConverter<Friend, DocumentData> = zod
   friendSchema,
   'friendUid',
 );
+
+/**
+ * `friendRequests/{requestId}` — the document ID is `${fromUid}__${toUid}`, mirrored into `id`.
+ *
+ * Unlike `usernames/`, the ID here IS a field: `withDocumentId` therefore reconciles the two and
+ * throws if a document's stored `id` disagrees with the path it was read from — which for this
+ * collection would mean a request whose sender and recipient are not the pair the ID encodes.
+ */
+export const friendRequestConverter: FirestoreDataConverter<FriendRequest, DocumentData> =
+  zodConverter(friendRequestSchema, 'id');
 
 /** `groups/{groupId}`. */
 export const groupConverter: FirestoreDataConverter<Group, DocumentData> = zodConverter(

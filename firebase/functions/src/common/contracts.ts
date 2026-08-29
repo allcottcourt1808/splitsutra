@@ -34,7 +34,9 @@
  * docs/06 names RedeemInviteSchema explicitly, the rest follow the same shape):
  *   RedeemInviteSchema            { token: string }
  *   CreateInviteSchema            { groupId: string }
- *   AddFriendSchema               { email?: string; phoneNumber?: string }
+ *   SendFriendRequestSchema       { email?: string; phoneNumber?: string }
+ *   RespondToFriendRequestSchema  { requestId: string; accept: boolean }
+ *   CancelFriendRequestSchema     { requestId: string }
  *   RemoveMemberSchema            { groupId: string; uid: string }
  *   LeaveGroupSchema              { groupId: string }
  *   DeleteGroupSchema             { groupId: string }
@@ -61,7 +63,7 @@ export type {
  * created to do (see the header).
  */
 export {
-  addFriendSchema as AddFriendSchema,
+  cancelFriendRequestSchema as CancelFriendRequestSchema,
   createInviteSchema as CreateInviteSchema,
   deleteAccountSchema as DeleteAccountSchema,
   deleteGroupSchema as DeleteGroupSchema,
@@ -69,4 +71,6 @@ export {
   recomputeGroupBalancesSchema as RecomputeGroupBalancesSchema,
   redeemInviteSchema as RedeemInviteSchema,
   removeMemberSchema as RemoveMemberSchema,
+  respondToFriendRequestSchema as RespondToFriendRequestSchema,
+  sendFriendRequestSchema as SendFriendRequestSchema,
 } from '@splitsutra/core';

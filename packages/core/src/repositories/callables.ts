@@ -2,7 +2,7 @@
  * The callable Cloud Functions seam.
  *
  * Anything a client is not allowed to write directly — joining a group, leaving one, removing
- * a member, creating a friendship, repairing balances — is a callable, because each of those
+ * a member, answering a friend request, repairing balances — is a callable, because each of those
  * has a precondition that only the server can check atomically (Article III/IV). Rules deny
  * the direct write; this module is the door that is actually open.
  *
@@ -22,7 +22,7 @@
  * with a generic apology.
  *
  * @see docs/06-cloud-functions.md — the inventory and each function's contract
- * @see firebase/functions/src/index.ts — the twelve deployed names
+ * @see firebase/functions/src/index.ts — the deployed names
  */
 
 import { httpsCallable } from 'firebase/functions';
@@ -37,7 +37,7 @@ import { getFunctionsClient } from '../firebase/index.js';
  * contract — they change together or the call 404s at runtime with `functions/not-found`.
  */
 export const CALLABLE = {
-  addFriend: 'addFriend',
+  cancelFriendRequest: 'cancelFriendRequest',
   createInvite: 'createInvite',
   deleteAccount: 'deleteAccount',
   deleteGroup: 'deleteGroup',
@@ -45,6 +45,8 @@ export const CALLABLE = {
   recomputeGroupBalances: 'recomputeGroupBalances',
   redeemInvite: 'redeemInvite',
   removeMember: 'removeMember',
+  respondToFriendRequest: 'respondToFriendRequest',
+  sendFriendRequest: 'sendFriendRequest',
 } as const;
 
 /** One of the deployed callable names. */

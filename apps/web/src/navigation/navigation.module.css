@@ -96,6 +96,49 @@
   font-size: var(--splitsutra-font-size-xl);
 }
 
+/* The icon and its badge share a positioning context. A wrapper rather than positioning the
+   badge against `.tab` itself, because `.tab` is the 44x44 target and a badge pinned to its
+   corner drifts away from the glyph as the tab widens. */
+.tabIconWrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* The pending-request count.
+
+   `aria-hidden` in the markup: the count is already inside the tab's accessible name
+   ("Friends, 2 pending requests"), and announcing it twice is worse than not at all.
+
+   Colour is not the only signal — the number is the signal, and it is also in the accessible
+   name (phase-04 §6). The fill exists to draw the eye, not to carry the meaning. */
+.tabBadge {
+  position: absolute;
+  /* Nudged off the glyph's top-right. `100%` would sit it fully outside and clip against the
+     tab bar's top edge on a short tab. */
+  inset-block-start: -25%;
+  inset-inline-start: 60%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Derived from tokens rather than a magic 20px (phase-04 §5): one xs glyph plus an sm of
+     breathing room on each side. Falls out at 20px and rescales with the type scale. */
+  min-inline-size: calc(var(--splitsutra-font-size-xs) + var(--splitsutra-space-sm));
+  block-size: calc(var(--splitsutra-font-size-xs) + var(--splitsutra-space-sm));
+  padding-inline: var(--splitsutra-space-xs);
+
+  border-radius: var(--splitsutra-radius-pill);
+  background: var(--splitsutra-color-danger);
+  color: var(--splitsutra-color-text-inverse);
+
+  font-size: var(--splitsutra-font-size-xs);
+  font-weight: var(--splitsutra-font-weight-bold);
+  line-height: 1;
+  /* Tabular figures so "9+" and "2" occupy the same width and the badge does not resize. */
+  font-variant-numeric: tabular-nums;
+}
+
 .tabLabel {
   font-size: var(--splitsutra-font-size-xs);
   font-weight: var(--splitsutra-font-weight-medium);

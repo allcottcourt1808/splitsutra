@@ -30,6 +30,11 @@ rules_version = '2';
 //          clients; joins go exclusively through the redeemInvite callable
 // T5  Enumerates usernames/ to harvest emails and phone numbers
 //       -> /usernames/{key}  allow list: if false   (get-by-hash only)
+// T5b Sends unsolicited friend requests to harvest names, or to harass
+//       -> friendRequests/ is Function-written; sendFriendRequest refuses to write
+//          over a 'declined' document, so a refusal is final rather than rate-limited.
+//          The lookup still resolves only through usernames/ and never widens the
+//          {uid, displayName, photoURL} projection.
 // T6  Assigns a split to a non-member
 //       -> LAYER 1 (here):  participantIds.hasOnly(group.memberIds)
 //       -> LAYER 2 (real):  onExpenseWritten checks every splits[].uid AND every
@@ -218,6 +223,45 @@ service cloud.firestore {
         allow read: if isSelf(uid);
         allow write: if false;
       }
+    }
+
+    // =========================================================================
+    // friendRequests/{requestId} — the consent step in front of a friendship
+    // =========================================================================
+    // Doc ID is `${fromUid}__${toUid}`, so a pair-direction has exactly one document
+    // and a duplicate request is impossible by construction. docs/03 §"friendRequests".
+    //
+    // WHY THIS COLLECTION EXISTS. A friendship IS a group (D2). Before it, addFriend
+    // created that group and both friends/ documents outright, so anyone who knew your
+    // email could put themselves in a shared group with you and you had no way to
+    // refuse. The write is now split either side of the recipient's answer.
+    //
+    // WHY `list` IS OPEN HERE AND DENIED ON usernames/. These are not the same risk.
+    // usernames/ is keyed by sha256 of a contact detail, so a list would hand over every
+    // user's email and phone (T5). A friendRequests list is evaluated per candidate
+    // document against the two uids stored INSIDE it, so it returns only documents the
+    // caller is already a party to — a query that does not filter on toUid or fromUid
+    // simply fails. There is nothing to harvest: you cannot reach a request you are not
+    // in, and the requests you are in name only people who already contacted you or
+    // whom you already contacted.
+    //
+    // Costs nothing per candidate, unlike the isMember() problem documented on groups/
+    // below: resource.data is the document already being evaluated, not an exists() that
+    // spends one of the ten document-access calls.
+    match /friendRequests/{requestId} {
+      allow get, list: if isSignedIn()
+                       && (resource.data.fromUid == request.auth.uid
+                           || resource.data.toUid == request.auth.uid);
+
+      // Function-only, and not negotiable. Accepting a request creates a group, two
+      // member documents and two users/{x}/friends/{y} documents that carry
+      // balanceMinor, across two different users — T2 and T4 in one write, and not
+      // something rules can express atomically anyway (Article III).
+      //
+      // It is also what makes consent mean anything: a client that could write here
+      // could write its own request straight to 'accepted'.
+      allow write: if false;   // sendFriendRequest / respondToFriendRequest /
+                               // cancelFriendRequest
     }
 
     // =========================================================================

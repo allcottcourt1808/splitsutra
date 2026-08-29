@@ -39,15 +39,19 @@ export const createInviteSchema = z.object({
 export type CreateInviteInput = z.infer<typeof createInviteSchema>;
 
 /**
- * `addFriend` — look a person up by email or phone.
+ * The identifier half of a friend lookup — exactly one of email or phone.
  *
- * Exactly one identifier, never both and never neither. Expressed as a refinement rather than
- * a union so the error message says which rule was broken.
+ * Expressed as a refinement rather than a union so the error message says which rule was
+ * broken. Shared by {@link sendFriendRequestSchema} and by any future lookup that resolves a
+ * contact, because the normalisation contract below applies to all of them equally.
  *
- * The lookup itself goes through the hashed `usernameIndex` collection — the raw identifier is
- * never queried against `users`, so this cannot be used to enumerate the user table.
+ * 🔴 **This schema is not what normalises the value for the lookup.** It trims and lowercases
+ * for UX, but the `usernames/{key}` document ID was derived by `onUserProfileWritten` using
+ * `firebase/functions/src/lib/identity.ts`. The Function re-normalises with those functions
+ * before hashing; a normalisation that disagrees by one character produces a different sha256
+ * and every lookup misses silently, with no error anywhere.
  */
-export const addFriendSchema = z
+export const friendLookupSchema = z
   .object({
     email: z.string().trim().toLowerCase().email().optional(),
     phoneNumber: z
@@ -60,7 +64,61 @@ export const addFriendSchema = z
     (v) => (v.email === undefined) !== (v.phoneNumber === undefined),
     'Provide exactly one of email or phoneNumber',
   );
-export type AddFriendInput = z.infer<typeof addFriendSchema>;
+export type FriendLookupInput = z.infer<typeof friendLookupSchema>;
+
+/**
+ * `sendFriendRequest` — resolve a contact by email or phone and ask them to be friends.
+ *
+ * Replaces the old `addFriend`, which created the friendship outright. The lookup is unchanged:
+ * it goes through the hashed `usernames/` index, so the raw identifier is never queried against
+ * `users` and this cannot be used to enumerate the user table (T5).
+ *
+ * What changed is what happens after a successful resolve — a `pending` request rather than a
+ * group and two friend documents. See `types/friendRequest.ts` for why.
+ */
+export const sendFriendRequestSchema = friendLookupSchema;
+export type SendFriendRequestInput = z.infer<typeof sendFriendRequestSchema>;
+
+/**
+ * A `friendRequests/{id}` document ID: `${fromUid}__${toUid}`.
+ *
+ * Validated by shape rather than by parsing out the two halves. A UID is opaque to us — Firebase
+ * documents it as up to 128 characters with no guaranteed alphabet — so splitting on the
+ * separator and asserting two valid UIDs would be inventing a constraint. The Function checks
+ * the thing that actually matters: that the caller is the party allowed to act on the document
+ * it names.
+ */
+export const friendRequestIdSchema = z
+  .string()
+  .min(3)
+  .max(300)
+  .includes('__', { message: 'Not a friend-request ID' });
+
+/**
+ * `respondToFriendRequest` — the recipient accepts or declines.
+ *
+ * `accept` is a required boolean rather than two separate callables: the authorization check,
+ * the state-machine guard and the "is this still pending?" read are identical for both answers,
+ * and splitting them would duplicate all three. It is not optional — a missing field defaulting
+ * to either answer is a mis-tap that cannot be undone.
+ */
+export const respondToFriendRequestSchema = z.object({
+  requestId: friendRequestIdSchema,
+  accept: z.boolean(),
+});
+export type RespondToFriendRequestInput = z.infer<typeof respondToFriendRequestSchema>;
+
+/**
+ * `cancelFriendRequest` — the **sender** withdraws a request they have not had an answer to.
+ *
+ * Separate from `respondToFriendRequest` because the authorization is the mirror image
+ * (`fromUid` rather than `toUid`), and because the resulting state differs: `cancelled` can be
+ * re-sent, `declined` cannot.
+ */
+export const cancelFriendRequestSchema = z.object({
+  requestId: friendRequestIdSchema,
+});
+export type CancelFriendRequestInput = z.infer<typeof cancelFriendRequestSchema>;
 
 /** `removeMember` — admin-only; the Function enforces that, not this schema. */
 export const removeMemberSchema = z.object({

@@ -27,11 +27,13 @@ import {
 import { getDb } from '../firebase/index.js';
 import {
   friendConverter,
+  friendRequestConverter,
   groupConverter,
   groupMemberConverter,
   userConverter,
   usernameIndexConverter,
   type Friend,
+  type FriendRequest,
   type Group,
   type GroupMember,
   type User,
@@ -49,6 +51,7 @@ export const COLLECTION = {
   users: 'users',
   usernames: 'usernames',
   friends: 'friends',
+  friendRequests: 'friendRequests',
   groups: 'groups',
   members: 'members',
 } as const;
@@ -85,6 +88,28 @@ export function friendDoc(uid: string, friendUid: string): DocumentReference<Fri
   return doc(getDb(), COLLECTION.users, uid, COLLECTION.friends, friendUid).withConverter(
     friendConverter,
   );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * friendRequests/
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * `friendRequests` — the root collection. Function-written; both parties may read.
+ *
+ * Top-level rather than a subcollection under the recipient, because BOTH parties need to read
+ * a request: the recipient to answer it, the sender to see that it is still outstanding. Rules
+ * allow a `users/{uid}` read only where `isSelf(uid)`, so a subcollection would have made the
+ * sender's own outbox unreadable to them and forced a second, mirrored document to exist purely
+ * so it could be read — two documents to keep in step for one fact.
+ */
+export function friendRequestsCollection(): CollectionReference<FriendRequest> {
+  return collection(getDb(), COLLECTION.friendRequests).withConverter(friendRequestConverter);
+}
+
+/** `friendRequests/{requestId}`. Build the id with `friendRequestId(fromUid, toUid)`. */
+export function friendRequestDoc(requestId: string): DocumentReference<FriendRequest> {
+  return doc(getDb(), COLLECTION.friendRequests, requestId).withConverter(friendRequestConverter);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
