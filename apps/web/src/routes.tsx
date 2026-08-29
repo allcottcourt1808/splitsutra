@@ -5,6 +5,22 @@
  * `ROUTE_PATTERNS`, and mapping over that object's keys means a screen added there without a
  * route here is impossible — the two cannot drift, because there is only one list.
  *
+ * ## The shape
+ *
+ * ```
+ * /                      → redirect to the default tab
+ * <RedirectIfAuthed>     → /login only                    (AC-A1.6)
+ * <RequireAuth>          → everything else                (AC-A1.5)
+ *    ├── /invite/:token  → no tab bar
+ *    └── <AppShell>      → the tabbed app
+ * *                      → redirect to the default tab
+ * ```
+ *
+ * Both guards are **layout routes**, so membership is structural: a screen is inside
+ * `<RequireAuth>` or outside it, and which one is visible in the shape of this file rather
+ * than in a wrapper somebody has to remember to write. See `auth/AuthGuards.tsx` for why the
+ * guard waits on a third state instead of treating "no user yet" as "signed out".
+ *
  * ## Which routes sit inside the shell
  *
  * `<AppShell>` supplies the phone column and the tab bar, so anything rendered inside it is
@@ -18,16 +34,25 @@
  * Everything else is inside, which is also why the list is an exclusion set rather than an
  * inclusion one: a new screen defaults to being part of the app, and opting out is the
  * decision that has to be made explicitly.
+ *
+ * 🔴 `JoinGroup` is outside the **shell** but inside the **auth guard**. AC-A1.5 is "any route
+ * other than `/login`", with no carve-out, and AC-B3.3 spells out what an invite is supposed to
+ * do while logged out: route to sign-in, then complete the join. The guard stashes
+ * `/invite/:token` on the way past, so that is exactly what happens.
  */
 
 import type { ComponentType } from 'react';
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 
+import { RedirectIfAuthed, RequireAuth } from './auth/AuthGuards';
 import { AppShell } from './navigation/AppShell';
 import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
+import { AccountScreen } from './screens/AccountScreen';
 import { AddFriendScreen } from './screens/AddFriendScreen';
+import { EditProfileScreen } from './screens/EditProfileScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
 import { PendingScreen } from './screens/PendingScreen';
+import { SignInScreen } from './screens/SignInScreen';
 
 /** Rendered without the tab bar. See the note above before adding to this. */
 const OUTSIDE_SHELL: ReadonlySet<ScreenName> = new Set<ScreenName>(['SignIn', 'JoinGroup']);
@@ -42,8 +67,11 @@ const screenNames = Object.keys(ROUTE_PATTERNS) as ScreenName[];
  * takes `PendingScreen` with it — see the TODO in that file.
  */
 const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
+  SignIn: SignInScreen,
   FriendList: FriendsScreen,
   AddFriend: AddFriendScreen,
+  Account: AccountScreen,
+  EditProfile: EditProfileScreen,
 };
 
 const routeFor = (name: ScreenName): RouteObject => {
@@ -54,16 +82,47 @@ const routeFor = (name: ScreenName): RouteObject => {
   };
 };
 
+/** Guarded, no tab bar — `JoinGroup` today, and anything else that opts out of the shell. */
+const outsideShell = screenNames.filter((name) => OUTSIDE_SHELL.has(name) && name !== 'SignIn');
+
+/**
+ * Stable ids for the three pathless layout routes.
+ *
+ * Named rather than anonymous because "which layout wraps this URL?" is now a real question
+ * with three possible answers, and `matchRoutes` reports a pathless route only as
+ * `path === undefined`. Before the guards existed there was exactly one pathless route and
+ * that was enough to identify it; with three, a test asserting "renders inside the shell"
+ * would pass for a screen wrapped only by a guard.
+ */
+export const ROUTE_IDS = {
+  shell: 'app-shell',
+  requireAuth: 'require-auth',
+  redirectIfAuthed: 'redirect-if-authed',
+} as const;
+
 export const router = createBrowserRouter([
   // `/` is not a screen — it is a redirect into the default tab, so a bare visit to the
-  // origin lands somewhere real instead of on the catch-all.
+  // origin lands somewhere real instead of on the catch-all. It passes through the guard on
+  // the way, so a signed-out visitor still ends up at `/login`.
   { path: '/', element: <Navigate to={paths.GroupList()} replace /> },
 
-  ...screenNames.filter((name) => OUTSIDE_SHELL.has(name)).map(routeFor),
+  {
+    id: ROUTE_IDS.redirectIfAuthed,
+    element: <RedirectIfAuthed />,
+    children: [routeFor('SignIn')],
+  },
 
   {
-    element: <AppShell />,
-    children: screenNames.filter((name) => !OUTSIDE_SHELL.has(name)).map(routeFor),
+    id: ROUTE_IDS.requireAuth,
+    element: <RequireAuth />,
+    children: [
+      ...outsideShell.map(routeFor),
+      {
+        id: ROUTE_IDS.shell,
+        element: <AppShell />,
+        children: screenNames.filter((name) => !OUTSIDE_SHELL.has(name)).map(routeFor),
+      },
+    ],
   },
 
   // Unknown URL. Redirects rather than rendering a 404 screen: hosting rewrites every path

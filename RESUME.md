@@ -1,6 +1,6 @@
 # Resume here
 
-**Last updated:** 2026-08-29. Project: **SplitSutra**.
+**Last updated:** 2026-08-28. Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
@@ -257,6 +257,47 @@ cannot overwrite on a re-run, which breaks idempotency.
 Everything else current: vite 8, vitest 4, eslint 10, zod 4, firebase 12, firebase-admin 14,
 firebase-functions 7, dependency-cruiser 18, react-router 8.
 
+## 🔑 Auth is wired (branch `feat/auth-wiring`)
+
+The app now initialises Firebase at startup and guards its routes. What is on that branch:
+
+- **`platform/startup.ts`** — tokens → platform adapter → `initFirebase`, in that order,
+  returning a result instead of throwing so a missing `.env.local` renders
+  `SetupRequiredScreen` naming the variables rather than a blank white page.
+- **🔴 A real collision, fixed.** `apps/web/src/auth/firebaseAuth.ts` called `getAuth()` while
+  core's `initFirebase()` calls `initializeAuth()` on the same app. The second throws
+  `auth/already-initialized`, so whichever ran first won and the loser failed at runtime —
+  order-dependent on imports and on which screen you landed on, invisible to typecheck and to
+  every test. Resolved by deleting the web app's half; that file now holds only the DOM-bound
+  credential flows.
+- **⚠️ `popupRedirectResolver: browserPopupRedirectResolver`** must be passed to
+  `initFirebase`. `initializeAuth` is the only entry point that takes a persistence strategy,
+  but unlike `getAuth` it installs no popup resolver — without it Google sign-in fails with
+  `auth/operation-not-supported-in-this-environment` and nothing earlier complains.
+- **`auth/AuthGuards.tsx`** — `<RequireAuth>` / `<RedirectIfAuthed>` as layout routes.
+- **`SignInScreen`** (email + password with a sign-up switch, Google popup, phone OTP),
+  **`AccountScreen`** (summary + sign out), **`EditProfileScreen`** (name + searchable
+  currency picker over all 157).
+- `useEmulators()` in `firebaseEnv.ts` renamed to **`emulatorsEnabled()`** —
+  `react-hooks/rules-of-hooks` matches on the `use` prefix alone and called it a hook.
+
+🔴 **The flash of the login screen comes from collapsing three states into two.** `useAuth`
+reports `loading: true / user: null` — "nobody knows yet" — for the first tick of every hard
+refresh, while Firebase rehydrates from persistence. A guard that redirects then has already
+destroyed the destination by the time the answer arrives.
+
+The destination rides in `location.state`, not `?next=`, and is `safeDestination()`-checked:
+`//evil.example` and `/\evil.example` both start with `/` and both resolve to another origin.
+
+⚠️ **Not yet driven by hand.** Confirmed: boots against the emulator suite with no
+`auth/already-initialized`, and `/groups` redirects to `/login` signed out. Actually signing in
+through each of the three forms is still an unticked box in phase-03 §8, along with the rules
+tests and E2E **E1**.
+
+📄 `apps/web/.env.local` exists locally (gitignored) pointing at the emulators with project id
+`demo-splitsutra` — the `demo-` prefix forces the SDK offline, so this build cannot reach a
+real project even if `VITE_USE_EMULATORS` were wrong.
+
 ## Next session, in order
 
 1. **Merge [#20](https://github.com/allcottcourt1808/splitsutra/pull/20)** — friend requests.
@@ -293,13 +334,9 @@ outstanding in the repo.
 
 2. **Wire the web app to core** — this is what makes #20 actually run. The Friends screens
    render today but no call reaches a backend.
-3. **Details for that wiring** — `initFirebase` in `main.tsx`, shrink `firebaseAuth.ts` to the
-   sign-in calls only, add the route guards, and build a real `SignIn` screen. One PR; items 1
-   and 2 of "Still missing".
-   ⚠️ **Copy `apps/web/.env.example` to `.env.local` first.** Nothing reads the Firebase config
-   today, which is the only reason the app boots without it; `initFirebase(readFirebaseConfig())`
-   throws hard on a missing value, so the first symptom will be a blank screen that looks like
-   the wiring broke.
+3. ~~**Details for that wiring**~~ — done on `feat/auth-wiring`; see the section above.
+   What is left of it: sign in through each of the three forms against the emulator by hand,
+   and the phase-03 §8 tests.
 4. **Screens**, replacing `PendingScreen` one route at a time.
 5. **Rules tests** (`firebase/tests/rules/`), then `e2e/specs/`. Independent of 2 and 3 — a
    good parallel track.

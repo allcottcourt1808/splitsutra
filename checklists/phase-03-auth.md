@@ -74,18 +74,35 @@ it, not the other way round.
 
 ## 4. Route guarding
 
-- [ ] 🔴 `<RequireAuth>` wrapper → redirect to `/login` (AC-A1.5)
-- [ ] 🔴 `<RedirectIfAuthed>` on `/login` → `/groups` (AC-A1.6)
-- [ ] 🔴 A real loading state while auth resolves — **not a flash of the login screen**,
+- [x] 🔴 `<RequireAuth>` wrapper → redirect to `/login` (AC-A1.5)
+- [x] 🔴 `<RedirectIfAuthed>` on `/login` → `/groups` (AC-A1.6)
+- [x] 🔴 A real loading state while auth resolves — **not a flash of the login screen**,
       which is the most common bug in this area
-- [ ] 🟡 Preserve the intended destination through login (deep link to `/invite/:token`
+- [x] 🟡 Preserve the intended destination through login (deep link to `/invite/:token`
       must survive, AC-B3.3)
+
+> Both guards are **layout routes** in `apps/web/src/routes.tsx`, so membership is structural
+> rather than a wrapper somebody has to remember: a screen is nested under `<RequireAuth>` or it
+> is not, and `routes.test.tsx` asserts that every URL except `/login` is.
+>
+> 🔴 The flash comes from collapsing `useAuth`'s **three** states into two. `loading: true` with
+> `user: null` means "nobody knows yet", and it is what every hard refresh looks like for its
+> first tick while Firebase rehydrates from persistence. A guard that redirects then has already
+> destroyed the destination by the time the answer arrives.
+>
+> The destination rides in `location.state`, not a `?next=` query parameter — an invite path
+> carries a token, and a query parameter is editable, shareable and logged by anything that
+> records URLs. It is `safeDestination()`-checked before use: `//evil.example` and
+> `/\evil.example` both start with `/` and both resolve to another origin, so a
+> `startsWith('/')` check turns our own sign-in into an open redirector.
 
 ## 5. Profile screens
 
-- [ ] 🟡 `/account` — profile summary, default currency, sign out
-- [ ] 🟡 `/account/profile` — edit display name (1–50 chars, trimmed, AC-A2.1)
-- [ ] 🟡 Currency picker from the fixed list (AC-A2.2)
+- [x] 🟡 `/account` — profile summary, default currency, sign out
+- [x] 🟡 `/account/profile` — edit display name (1–50 chars, trimmed, AC-A2.1)
+- [x] 🟡 Currency picker from the fixed list (AC-A2.2) — a filter field over a list, not a
+      `<select>`: 157 entries in a phone's scroll wheel has no search, and the list is built
+      from `CURRENCIES` in core, never from `Intl.supportedValuesOf`
 - [ ] 🟢 Avatar upload — **deferred**, requires Storage. Use initials avatars for now.
 
 ## 6. Cloud Function: `onUserProfileWritten`
@@ -98,7 +115,14 @@ it, not the other way round.
 
 ## 7. Sign out & account deletion
 
-- [ ] 🟡 Sign out clears state and routes to `/login` (AC-A3.1)
+- [x] 🟡 Sign out clears state and routes to `/login` (AC-A3.1)
+
+> `AccountScreen` calls `signOut()` and does **not** navigate. `<RequireAuth>` is watching the
+> session, so clearing it un-renders every guarded route and the redirect happens for free. A
+> `navigate()` there would be a second path to the same place that could disagree with the
+> first, and it would race the session listener — on a slow tick the router lands on `/login`
+> while the user is still technically signed in, and `<RedirectIfAuthed>` bounces them back.
+
 - [ ] 🟢 `deleteAccount` callable — blocks on non-zero balances (AC-A3.2), anonymises the
       profile (AC-A3.3). **Can slip to Phase 10** if time is tight; nothing depends on it.
 
@@ -116,9 +140,13 @@ it, not the other way round.
 
 ## Exit criteria
 
-- [ ] All three providers sign in successfully against the emulator
+- [ ] All three providers sign in successfully against the emulator — **not yet driven by
+      hand.** What is confirmed: the app boots against the emulator suite with no
+      `auth/already-initialized`, and `/groups` redirects to `/login` for a signed-out
+      visitor. Signing in through each of the three forms is still an unticked box
 - [ ] A `users/{uid}` document appears on first sign-in and is not duplicated on the second
 - [ ] Session survives a hard refresh (AC-A1.7)
-- [ ] Route guards work in both directions with no login-screen flash
-- [ ] `firebaseui` appears in exactly one file — confirmed by `pnpm depcruise`
+- [x] Route guards work in both directions with no login-screen flash
+- [x] `firebaseui` appears in **no** file — it was dropped (§2), and `no-firebaseui-or-compat`
+      in `.dependency-cruiser.cjs` is now a blanket ban rather than a carve-out
 - [ ] `pnpm verify` green
