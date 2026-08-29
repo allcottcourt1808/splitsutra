@@ -75,12 +75,17 @@ import {
   type SplitAllocation,
 } from '../../../packages/core/dist/domain/index.js';
 
+/**
+ * The ONE currency formatter (Article VI). `utils` is a leaf barrel like the two above —
+ * no zustand, no React — so importing it here costs nothing a seed script should not pay.
+ */
+import { formatMoney } from '../../../packages/core/dist/utils/index.js';
+
 import {
   activitySchema,
   commentSchema,
   expenseSchema,
   friendSchema,
-  getMinorUnitScale,
   groupMemberSchema,
   groupSchema,
   inviteSchema,
@@ -969,23 +974,26 @@ function usernameKey(normalizedIdentifier: string): string {
  * ────────────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Minor units → a readable amount, using core's **hardcoded** exponent table.
+ * Minor units → a readable amount, through core's `formatMoney` and nothing else.
  *
- * Never `Intl`: ICU data varies between runtimes and a trimmed Hermes build on
- * React Native reports the wrong exponent, at which point every amount is wrong by
- * 100× in both directions with no error anywhere. At exponent 0 the integer is
- * already the amount — `JPY 58000`, never `JPY 580.00`, which is the whole point of
- * seeding a JPY group.
+ * 🔴 Article VI: one implementation of the money math, and formatting is part of it. This
+ * function used to divide by an exponent scale itself — a second implementation, written
+ * before `formatMoney` moved down into core, and the first thing a second implementation
+ * produces is a summary that disagrees with what the app renders for the same document.
+ *
+ * Core's formatter is also the one that gets JPY right: the exponent comes from a hardcoded
+ * ISO 4217 table, never from `Intl`, because a trimmed Hermes ICU build reports the wrong
+ * one and every amount is then wrong by 100× in both directions with no error anywhere. At
+ * exponent 0 the integer already is the amount — `¥58,000`, never `¥580.00`, which is the
+ * whole point of seeding a JPY group.
  */
 export function formatMinor(amountMinor: number, currency: CurrencyCode): string {
-  const scale = getMinorUnitScale(currency);
-  if (scale === 1) return `${currency} ${String(amountMinor)}`;
-
-  const sign = amountMinor < 0 ? '-' : '';
-  const absolute = Math.abs(amountMinor);
-  const major = Math.trunc(absolute / scale);
-  const minor = String(absolute % scale).padStart(String(scale).length - 1, '0');
-  return `${sign}${currency} ${String(major)}.${minor}`;
+  // `number`, not `MinorUnits`, because that is what `computeBalances` returns: `BalanceMap`
+  // is deliberately unbranded so callers can write `balances[uid] ?? 0` (domain/balances.ts).
+  // `toMinorUnits` is therefore doing real work here rather than satisfying the compiler — it
+  // throws on anything that is not a whole minor-unit amount in range, which is the assertion
+  // you want between a folded ledger and a printed number (Article I).
+  return formatMoney(toMinorUnits(amountMinor), currency);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *

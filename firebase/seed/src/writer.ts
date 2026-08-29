@@ -263,7 +263,9 @@ export function formatSummary(target: SeedTarget, report: SeedReport): string {
   lines.push('');
   lines.push('  Groups');
   for (const group of report.groups) {
-    const tags = [group.type, group.currency];
+    // Annotated: inference narrows this to GroupType | CurrencyCode from the two seed
+    // values, and the note pushed below is neither of those — it is display text.
+    const tags: string[] = [group.type, group.currency];
     if (group.isImplicit) tags.push('implicit 1:1 — hidden from the group list');
     lines.push('');
     lines.push(`    ${group.name}  [${tags.join(' · ')}]`);
