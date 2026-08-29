@@ -19,23 +19,35 @@
 
 import {
   collection,
+  collectionGroup,
   doc,
+  query,
+  where,
   type CollectionReference,
   type DocumentReference,
+  type Query,
 } from 'firebase/firestore';
 
 import { getDb } from '../firebase/index.js';
 import {
+  activityConverter,
+  commentConverter,
+  expenseConverter,
   friendConverter,
   friendRequestConverter,
   groupConverter,
   groupMemberConverter,
+  settlementConverter,
   userConverter,
   usernameIndexConverter,
+  type Activity,
+  type Comment,
+  type Expense,
   type Friend,
   type FriendRequest,
   type Group,
   type GroupMember,
+  type Settlement,
   type User,
   type UsernameIndex,
 } from '../types/index.js';
@@ -54,6 +66,10 @@ export const COLLECTION = {
   friendRequests: 'friendRequests',
   groups: 'groups',
   members: 'members',
+  expenses: 'expenses',
+  settlements: 'settlements',
+  comments: 'comments',
+  activity: 'activity',
 } as const;
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
@@ -142,5 +158,108 @@ export function membersCollection(groupId: string): CollectionReference<GroupMem
 export function memberDoc(groupId: string, uid: string): DocumentReference<GroupMember> {
   return doc(getDb(), COLLECTION.groups, groupId, COLLECTION.members, uid).withConverter(
     groupMemberConverter,
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * groups/{groupId}/expenses/
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** `groups/{groupId}/expenses`. */
+export function expensesCollection(groupId: string): CollectionReference<Expense> {
+  return collection(getDb(), COLLECTION.groups, groupId, COLLECTION.expenses).withConverter(
+    expenseConverter,
+  );
+}
+
+/** `groups/{groupId}/expenses/{expenseId}`. */
+export function expenseDoc(groupId: string, expenseId: string): DocumentReference<Expense> {
+  return doc(getDb(), COLLECTION.groups, groupId, COLLECTION.expenses, expenseId).withConverter(
+    expenseConverter,
+  );
+}
+
+/**
+ * Every expense the user participates in, across groups.
+ *
+ * 🔴 The `participantIds` constraint is not optional. The `/{path=**}/expenses/{eid}` rule
+ * allows a collection-group read only where the caller is in `participantIds`, and Firestore
+ * accepts a query only when the rule is satisfiable from the query's own constraints — drop
+ * the `where` and the whole query is denied. Baked in here so no caller can get it wrong.
+ */
+export function participatingExpensesQuery(uid: string): Query<Expense> {
+  return query(
+    collectionGroup(getDb(), COLLECTION.expenses).withConverter(expenseConverter),
+    where('participantIds', 'array-contains', uid),
+  );
+}
+
+/** `groups/{groupId}/expenses/{expenseId}/comments`. */
+export function commentsCollection(
+  groupId: string,
+  expenseId: string,
+): CollectionReference<Comment> {
+  return collection(
+    getDb(),
+    COLLECTION.groups,
+    groupId,
+    COLLECTION.expenses,
+    expenseId,
+    COLLECTION.comments,
+  ).withConverter(commentConverter);
+}
+
+/** `groups/{groupId}/expenses/{expenseId}/comments/{commentId}`. */
+export function commentDoc(
+  groupId: string,
+  expenseId: string,
+  commentId: string,
+): DocumentReference<Comment> {
+  return doc(
+    getDb(),
+    COLLECTION.groups,
+    groupId,
+    COLLECTION.expenses,
+    expenseId,
+    COLLECTION.comments,
+    commentId,
+  ).withConverter(commentConverter);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * groups/{groupId}/settlements/  ·  groups/{groupId}/activity/
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** `groups/{groupId}/settlements`. */
+export function settlementsCollection(groupId: string): CollectionReference<Settlement> {
+  return collection(getDb(), COLLECTION.groups, groupId, COLLECTION.settlements).withConverter(
+    settlementConverter,
+  );
+}
+
+/** `groups/{groupId}/settlements/{settlementId}`. */
+export function settlementDoc(
+  groupId: string,
+  settlementId: string,
+): DocumentReference<Settlement> {
+  return doc(
+    getDb(),
+    COLLECTION.groups,
+    groupId,
+    COLLECTION.settlements,
+    settlementId,
+  ).withConverter(settlementConverter);
+}
+
+/**
+ * `groups/{groupId}/activity` — read-only to clients (threat T8).
+ *
+ * There is no collection-group rule for `activity`, so a cross-group feed is one query per
+ * group, merged client-side. That is deliberate; see checklists/phase-08 §"The N-query
+ * problem" before replacing it with a `users/{uid}/feed` mirror.
+ */
+export function activityCollection(groupId: string): CollectionReference<Activity> {
+  return collection(getDb(), COLLECTION.groups, groupId, COLLECTION.activity).withConverter(
+    activityConverter,
   );
 }

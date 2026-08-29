@@ -47,3 +47,5 @@ export * from './useFriend.js';
  * IS the notification, and it clears itself on every device the moment it is answered.
  */
 export * from './useFriendRequests.js';
+export * from './useActivity.js';
+export * from './useComments.js';
