@@ -170,8 +170,8 @@ Two things remain true from the original drop, and are now accepted costs rather
 
 ## 8. Tests
 
-- [ ] 🔴 Rules test: a user cannot write another user's profile
-- [ ] 🔴 Rules test: `list` on `usernames` is denied (threat T5)
+- [x] 🔴 Rules test: a user cannot write another user's profile — covered by firebase/tests/rules/users.test.ts
+- [x] 🔴 Rules test: `list` on `usernames` is denied (threat T5) — covered by firebase/tests/rules/usernames.test.ts
 - [ ] 🟡 Integration: `onUserProfileWritten` creates the right index entries
 - [ ] 🟡 E2E **E1**: sign up with email → profile created → lands on `/groups`
 - [ ] 🟡 Manual: real Google sign-in on a device
