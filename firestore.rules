@@ -140,10 +140,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/groups/$(groupId)).data;
     }
 
-    function groupCurrency(groupId) {
-      return groupData(groupId).currency;
-    }
-
     // fields that changed between the existing and incoming doc
     function changed(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
