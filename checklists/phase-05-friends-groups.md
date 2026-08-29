@@ -93,11 +93,11 @@ Covers **Epic B** and **Epic C**.
 
 ## 9. Tests
 
-- [ ] 🔴 Rules: non-member cannot read a group (T1)
-- [ ] 🔴 Rules: client cannot write a member doc (T2, T4)
-- [ ] 🔴 Rules: `list` on `usernames` denied (T5)
-- [ ] 🔴 Rules: client cannot change `group.currency` (T10)
-- [ ] 🔴 Rules: **positive** cases — a member _can_ read the group and update its name
+- [x] 🔴 Rules: non-member cannot read a group (T1) — covered by firebase/tests/rules/groups.test.ts
+- [x] 🔴 Rules: client cannot write a member doc (T2, T4) — covered by firebase/tests/rules/groups.test.ts
+- [x] 🔴 Rules: `list` on `usernames` denied (T5) — covered by firebase/tests/rules/usernames.test.ts
+- [x] 🔴 Rules: client cannot change `group.currency` (T10) — covered by firebase/tests/rules/groups.test.ts
+- [x] 🔴 Rules: **positive** cases — a member _can_ read the group and update its name — covered by firebase/tests/rules/groups.test.ts
 - [ ] 🟡 Integration: accepting a request is idempotent and writes both sides
 - [ ] 🟡 Integration: `redeemInvite` rejects expired/used tokens; double-redeem succeeds
 - [ ] 🟡 Integration: `leaveGroup` refuses at non-zero balance
