@@ -1,18 +1,34 @@
 /**
  * `@splitsutra/core` hooks barrel — React hooks over the repositories.
  *
- * Skeleton only. Hooks live in core rather than in `apps/web` because React itself runs on React
- * Native: a hook here is ~95% portable, while the same logic inside a screen is not
+ * Hooks live in core rather than in `apps/web` because React itself runs on React Native: a
+ * hook here is ~95% portable, while the same logic inside a screen is not
  * (docs/11-mobile-port.md). `react` is an optional peer dependency of this package; `react-dom`
- * and `react-native` are forbidden (Article II).
+ * and `react-native` are forbidden (Article II, enforced by `core-is-platform-agnostic`).
  *
  * A hook may import repositories, domain, and types. It must never call Firestore directly.
  *
- * What lands here:
- * - **Phase 03** — `useAuth.ts` — checklists/phase-03-auth.md.
+ * 🔴 Like `../repositories/index.ts`, this is **not** re-exported from the package root barrel.
+ * It reaches Firebase through the repositories, and it imports `react` — neither of which
+ * belongs in the path of a Cloud Function that imports `@splitsutra/core` for the split engine.
+ * Consumers reach it through the `@splitsutra/core/hooks` subpath declared in `package.json`.
+ *
+ * What lands here next:
  * - **Phases 05–08** — the subscription hooks over each repository (`useGroups`, `useGroup`,
  *   `useExpenses`, `useBalances`, `useActivity`).
  */
 
-// populated in Phase 03
-export {};
+/**
+ * The session state machine — plain TypeScript, no React, and where the tests are.
+ *
+ * Exported because route guards and other non-component callers legitimately need
+ * `getAuthState()` outside the tree, and because `resetAuthStore()` is how a test starts from
+ * a known session.
+ */
+export * from './authStore.js';
+
+/** `useAuth()` — `{ user, profile, loading, error, signOut }` (phase-03 §1). */
+export * from './useAuth.js';
+
+/** `useProfile()` — the same profile, with a `loading` that accounts for the document. */
+export * from './useProfile.js';
