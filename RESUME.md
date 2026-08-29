@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#18 merged. One PR open (#19). `main` is green.
+## State: PRs #1–#19 merged. One PR open (#20). `main` is green.
 
 `main` carries the workspace, the core domain, the design system, the navigation shell, the
 Firestore rules and triggers, all twelve Cloud Functions, and — new since the last
@@ -259,14 +259,47 @@ firebase-functions 7, dependency-cruiser 18, react-router 8.
 
 ## Next session, in order
 
-1. **Merge #19** (the cascade fix).
-2. **Wire the web app to core** — `initFirebase` in `main.tsx`, shrink `firebaseAuth.ts` to the
+1. **Merge [#20](https://github.com/allcottcourt1808/splitsutra/pull/20)** — friend requests.
+
+### What #20 changed, and why it is a spec revision rather than a feature
+
+Adding a friend was **unilateral**: `addFriend` resolved a contact and immediately created the
+implicit group and both friend docs. `AC-B1.4` said so in as many words. But a friendship IS a
+group (D2), so anyone who knew your email could put themselves in a shared group with you and
+you had no way to refuse.
+
+Now: `sendFriendRequest` (lookup, writes one `pending` doc) → `respondToFriendRequest`
+(accept creates the friendship in one transaction, decline does not) → `cancelFriendRequest`
+(sender withdraws). `friendRequests/{fromUid}__{toUid}`, a derived id, so a duplicate request is
+impossible by construction and the reciprocal check is a `get` rather than a query.
+
+🔴 **A decline is terminal, not rate-limited.** Consent creates an unsolicited-message surface
+the old flow did not have. The escape hatch that makes that safe: the recipient can add the
+sender themselves, which auto-accepts — a mis-tap is one tap to undo, a real refusal is
+permanent. `cancelled` (sender withdrew) is not a refusal and can be re-sent.
+
+🔴 **The notification is the request.** docs/03 defers a `notifications` collection with push
+and this needed none — `useFriendRequests().incoming` is a live subscription, so it appears
+without a refresh and clears on every device the moment it is answered. `incomingCount` badges
+the Friends tab, folded into the accessible name ("Friends, 2 pending requests").
+
+`addFriend` was **removed, not renamed** — a teardown, correctly: its contract changed. Nothing
+referenced it and nothing is deployed, so nothing broke.
+
+⚠️ **Still owed for #20:** the three callables have **no tests**, and `firebase/tests/rules/` is
+still empty — so decline-is-terminal, the mutual auto-accept, and the accept transaction are
+unverified against an emulator. `docs/09` lists them; they are the highest-value tests
+outstanding in the repo.
+
+2. **Wire the web app to core** — this is what makes #20 actually run. The Friends screens
+   render today but no call reaches a backend.
+3. **Details for that wiring** — `initFirebase` in `main.tsx`, shrink `firebaseAuth.ts` to the
    sign-in calls only, add the route guards, and build a real `SignIn` screen. One PR; items 1
    and 2 of "Still missing".
    ⚠️ **Copy `apps/web/.env.example` to `.env.local` first.** Nothing reads the Firebase config
    today, which is the only reason the app boots without it; `initFirebase(readFirebaseConfig())`
    throws hard on a missing value, so the first symptom will be a blank screen that looks like
    the wiring broke.
-3. **Screens**, replacing `PendingScreen` one route at a time.
-4. **Rules tests** (`firebase/tests/rules/`), then `e2e/specs/`. Independent of 2 and 3 — a
+4. **Screens**, replacing `PendingScreen` one route at a time.
+5. **Rules tests** (`firebase/tests/rules/`), then `e2e/specs/`. Independent of 2 and 3 — a
    good parallel track.
