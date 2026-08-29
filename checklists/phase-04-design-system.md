@@ -41,6 +41,25 @@ this phase are paid back with interest in Phase 12.
 - [ ] 🟡 `<Chip>`, `<EmptyState>`, `<Skeleton>`, `<Toast>`
 - [ ] 🟢 A `/dev/components` gallery route to eyeball every state at once
 
+> 🔴 **Every primitive that merges a caller's `className` goes in `@layer primitives`.
+> Consumer rules stay unlayered.** The layer order is declared once at the top of
+> `apps/web/src/styles/reset.css`, and `styles/__tests__/cascadeLayers.test.tsx` holds it.
+>
+> This is not a style preference. A primitive's base class and the class a caller passes it
+> land on the same element with identical specificity, so before layers the cascade fell
+> back to **source order — which is CSS-module import order, something nobody chose**.
+> `layout.module.css` happened to load last, so `.stack` beat every class ever passed to a
+> `<Stack>`. Measured on the running app: **41 declarations silently dropped.** The tab bar
+> put its icons beside the labels so every label wrapped mid-word, the active tab was the
+> same colour as the inactive ones, the raised Add button lost its pill and its fill, and
+> every empty state was top-aligned with no gap and no padding.
+>
+> None of it was visible to a test — happy-dom applies no stylesheet and computes no layout —
+> and none of it was a mistake in any individual rule.
+>
+> ⚠️ Watch the **shorthand/longhand** trap too: `.stack` declares `padding`, which overrides
+> a consumer's `padding-block`/`padding-inline` even though the property names differ.
+
 ## 3. App shell & navigation
 
 - [ ] 🔴 `apps/web/src/navigation/routes.ts` — **one typed route table**, the full set from
