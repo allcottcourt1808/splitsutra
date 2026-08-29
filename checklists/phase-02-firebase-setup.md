@@ -78,14 +78,36 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
 
 ## 7. Seed script 🟡 _30 minutes now, saved hundreds of times later_
 
-- [ ] 🟡 `firebase/seed.ts` creating:
-  - 3 test users (with known credentials for E2E)
-  - 2 groups — one multi-member trip, one implicit 1:1 friend group
-  - ~10 expenses spanning **all four** split methods, including awkward
-    remainder cases ($100 / 3, 33.33% thrice)
-  - 1 settlement
-- [ ] 🟡 `pnpm seed` runs it against the emulator
+- [x] 🟡 `firebase/seed.ts` creating — more than asked for, because the awkward cases are
+      the ones worth having:
+  - **5** test users (shared password, printed by the run; emulator-only, and the writer
+    refuses to create them at all against a real project)
+  - **5** groups — a home group, two trips (one in JPY, one in EUR), and two implicit 1:1
+    friend groups, one of them deliberately empty
+  - **10** expenses spanning **all four** split methods, including the remainder cases
+  - **2** settlements
+- [x] 🟡 `pnpm seed` runs it against the emulator:
+      `firebase emulators:exec --only firestore,auth --project demo-splitsutra "pnpm seed"`
+      → 76 documents across 10 collections, every group zero-sum.
 - [ ] 🟢 A `pnpm reset` that wipes and reseeds
+
+> 🔴 **`--only firestore,auth`. Never with `functions`.** The seed writes its own derived
+> state — member balances (folded with the same `computeBalances` the Function calls, so a
+> later recompute converges on these numbers rather than correcting them), the activity
+> feed, comment counters, the `usernames` index. With the triggers running as well they
+> append a _second_ copy of the feed under CloudEvent-derived `evt_*` ids the script cannot
+> predict, so it cannot overwrite them on a re-run and the whole thing stops being
+> idempotent.
+
+> Re-running is safe and was verified: two runs in one emulator session wrote the same 76
+> documents and reported `0 created, 5 refreshed` for Auth. Every id is deterministic and
+> every write is a `set()` without `merge`, so a field removed from the fixture actually
+> disappears instead of lingering.
+
+> 🔴 The guard has now been **run**, not just asserted: `pnpm seed --project prod` resolves
+> the `.firebaserc` alias to `splitsutra-prod` and refuses, and `--allow-real-project` does
+> not get past it. Bare `pnpm seed` also refuses — the `.firebaserc` default is `splitsutra-dev`,
+> which is not `demo-*`.
 
 ---
 
@@ -97,4 +119,5 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
 - [ ] All three sign-in providers enabled; test phone numbers configured in dev
 - [ ] `firebase emulators:start` runs clean and the web app talks to it
 - [ ] Deny-all rules deploy successfully to dev
-- [ ] `pnpm seed` populates the emulator with usable data
+- [x] `pnpm seed` populates the emulator with usable data — verified against
+      `demo-splitsutra`, twice in one session to prove idempotency
