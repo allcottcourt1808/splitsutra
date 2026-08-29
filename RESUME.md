@@ -1,28 +1,78 @@
 # Resume here
 
-**Last updated:** 2026-08-28. Project: **SplitSutra**.
+**Last updated:** 2026-08-29. Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#19 merged. One PR open (#20). `main` is green.
+## State: PRs #1–#22 merged. Two PRs open (#23, #24). `main` is at `8b4efc8`.
 
 `main` carries the workspace, the core domain, the design system, the navigation shell, the
-Firestore rules and triggers, all twelve Cloud Functions, and — new since the last
-checkpoint — **the auth data layer, the hooks that unblock screens, a seed script that
-actually runs, and a design system whose styles actually reach the page**.
+Firestore rules and triggers, all twelve Cloud Functions, the auth data layer, the hooks that
+unblock screens, a seed script that actually runs, a design system whose styles actually reach
+the page, and — new since the last checkpoint — **friend requests (#20), Firebase Auth wired
+into the web app with route guards (#21), and `/login` rendering through FirebaseUI (#22)**.
 
-Verified on the #19 branch, and in a real browser against both `pnpm dev` and a production
-`vite build` + `vite preview`:
+⚠️ The last full gate measurement was taken on the **#19** branch and has **not been re-run
+since #20–#22 landed**, so treat these numbers as stale rather than current:
 `typecheck` (both resolvers) · `lint` · `depcruise` (188 modules, 519 deps) · `format:check` ·
-**287 tests** (194 unit + 93 component).
+287 tests (194 unit + 93 component). Re-measure before quoting a count anywhere.
 
-### The one open PR
+### The two open PRs
 
-| PR                                                            | What                                      | Ready?          |
-| ------------------------------------------------------------- | ----------------------------------------- | --------------- |
-| [#19](https://github.com/allcottcourt1808/splitsutra/pull/19) | CSS cascade layers — 41 dead declarations | ✅ **merge it** |
+| PR                                                            | Branch                  | What                                                |
+| ------------------------------------------------------------- | ----------------------- | --------------------------------------------------- |
+| [#24](https://github.com/allcottcourt1808/splitsutra/pull/24) | `test/firestore-rules`  | Security Rules tests — every `allow`, pass and fail |
+| [#23](https://github.com/allcottcourt1808/splitsutra/pull/23) | `feat/add-shadcn-theme` | docs: shadcn theme setup instructions               |
 
-Based on `main` directly, like every other branch here.
+Both based on `main` directly, like every other branch here.
+
+### 🧪 What #24 adds — the rules tests that were owed since #20
+
+Commit `85ce8f5`, **8 files under `firebase/tests/rules/`** plus a `helpers.ts` and
+`firebase/tests/tsconfig.json`, covering all 37 `allow` statements in `firestore.rules` with
+both denial **and** positive cases:
+
+| File                      | Covers                                                            |
+| ------------------------- | ----------------------------------------------------------------- |
+| `groups.test.ts`          | group get/list/create/update/delete + the `members` subcollection |
+| `users.test.ts`           | profile CRUD, `ownsClaimedIdentity`, `users/{uid}/friends`        |
+| `usernames.test.ts`       | get, the **T5** `list` denials, write                             |
+| `expenses.test.ts`        | create invariants, update, Article V no-hard-delete               |
+| `settlements.test.ts`     | create invariants, update, delete                                 |
+| `comments.test.ts`        | read, create, update, delete                                      |
+| `friendRequests.test.ts`  | get, list, write                                                  |
+| `collectionGroup.test.ts` | the constrained expenses query, `activity`, `invites`             |
+
+**224 test cases** — 220 literal `it(` calls, four more because `collectionGroup.test.ts`
+generates one per subcollection in a `for` loop. Reported passing on the branch; **not re-run
+in this session**, so verify against the emulator before treating that as current.
+
+🔴 **#24 is still OPEN, so `firebase/tests/rules/` does NOT exist on `main` or on any branch
+cut from it.** Read the files with `git show test/firestore-rules:firebase/tests/rules/<f>.ts`
+until it merges. The checklist boxes in `checklists/phase-03-auth.md` §8 and
+`checklists/phase-05-friends-groups.md` §9 are ticked against those tests with a
+`— covered by ...` note naming the file.
+
+⚠️ One thing #24 deliberately does **not** catch: `expenses.test.ts` asserts that a **forged
+checksum is accepted** by the rules. That is correct — layer 2 (`onExpenseWritten`) is what
+catches it, and no rules test can. Do not "fix" that test.
+
+### Current branch: `feat/friend-detail`
+
+⚠️ **Uncommitted work in progress by other agents — `feat/friend-detail` is still at `8b4efc8`,
+byte-identical to `main` with zero commits ahead.** Everything below is working-tree only:
+
+- `packages/core/src/hooks/useFriend.ts` (new, 51 lines) — one friendship, or `null` once
+  resolved as not-a-friend. Exported from the `hooks` barrel.
+- `apps/web/src/screens/FriendDetailScreen.tsx` (new, 146 lines) and its component test
+  `apps/web/src/screens/__tests__/FriendDetailScreen.test.tsx`.
+- `apps/web/src/routes.tsx` — wires `FriendDetail` into the route table. The pattern
+  `/friends/:uid` was already declared in `navigation/paths.ts`.
+
+🔴 **None of it is verified from here.** This checkpoint did not run `pnpm verify`, did not read
+those files for correctness, and did not commit them — they were landing on disk while this doc
+was being written. Confirm the state yourself before building on it; the count of files above
+may already be stale.
 
 ### 🔴 What #19 found: the design system was not reaching the page
 
@@ -221,9 +271,15 @@ PATH, and/or `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
    survive login (AC-B3.3).
 3. **Screens.** Every route still renders `PendingScreen`. Delete that file when the last one
    lands. No longer blocked on core — the hooks are on `main` now.
-4. **No rules tests or integration tests.** `firebase/tests/rules/` does not exist and the
-   emulator-backed suites are still commented out in `.github/workflows/ci.yml`. Independent of
-   everything above, so it can be done in parallel.
+4. **Rules tests exist but are not merged; integration tests do not exist at all.**
+   The **harness is already on `main`** — `vitest.config.ts` defines both the `rules` and
+   `integration` projects, and `pnpm test:rules` / `pnpm test:integration` each start their own
+   emulator (`demo-rules`, `demo-integration`). What is missing is the files.
+   `firebase/tests/rules/` is written and waiting in **#24** — merge it and that half is closed.
+   🔴 **`firebase/tests/integration/` still does not exist**, so `pnpm test:integration` matches
+   zero files and nothing exercises a callable against the emulator: `redeemInvite`, accepting a
+   friend request, and `leaveGroup` are all unverified. The emulator-backed suites are also still
+   commented out in `.github/workflows/ci.yml` — merging #24 does not by itself make CI run them.
 5. **`e2e/specs/` does not exist**, so `pnpm test:e2e` finds nothing. Playwright and its
    Chromium are installed and ready.
 6. **Hosting serves nothing** until a build output reaches CI; `apps/web/dist` is local-only.
@@ -257,7 +313,7 @@ cannot overwrite on a re-run, which breaks idempotency.
 Everything else current: vite 8, vitest 4, eslint 10, zod 4, firebase 12, firebase-admin 14,
 firebase-functions 7, dependency-cruiser 18, react-router 8.
 
-## 🔑 Auth is wired (branch `feat/auth-wiring`)
+## 🔑 Auth is wired (merged as #21; `/login` then rewritten by #22)
 
 The app now initialises Firebase at startup and guards its routes. What is on that branch:
 
@@ -275,7 +331,13 @@ The app now initialises Firebase at startup and guards its routes. What is on th
   but unlike `getAuth` it installs no popup resolver — without it Google sign-in fails with
   `auth/operation-not-supported-in-this-environment` and nothing earlier complains.
 - **`auth/AuthGuards.tsx`** — `<RequireAuth>` / `<RedirectIfAuthed>` as layout routes.
-- **`SignInScreen`** (email + password with a sign-up switch, Google popup, phone OTP),
+- ⚠️ **`SignInScreen`'s hand-built forms are gone** — #22 replaced them with the FirebaseUI
+  widget, which owns login and signup for all three providers. The compat bridge is the trick:
+  `firebase.initializeApp(config)` resolves to the same `[DEFAULT]` app core already created,
+  so the widget and the app share one session and `authStore` still runs `upsertUserProfile`.
+  This reversed `checklists/phase-03-auth.md` §2, which had said "DROPPED — do not build this";
+  the original reasoning is kept in a `<details>` block there because it was outweighed, not
+  wrong. Also on the branch:
   **`AccountScreen`** (summary + sign out), **`EditProfileScreen`** (name + searchable
   currency picker over all 157).
 - `useEmulators()` in `firebaseEnv.ts` renamed to **`emulatorsEnabled()`** —
@@ -289,10 +351,15 @@ destroyed the destination by the time the answer arrives.
 The destination rides in `location.state`, not `?next=`, and is `safeDestination()`-checked:
 `//evil.example` and `/\evil.example` both start with `/` and both resolve to another origin.
 
-⚠️ **Not yet driven by hand.** Confirmed: boots against the emulator suite with no
-`auth/already-initialized`, and `/groups` redirects to `/login` signed out. Actually signing in
-through each of the three forms is still an unticked box in phase-03 §8, along with the rules
-tests and E2E **E1**.
+⚠️ **Partly driven by hand.** Confirmed: boots against the emulator suite with no
+`auth/already-initialized`, `/groups` redirects to `/login` signed out, and per phase-03's exit
+criteria **email/password sign-up and sign-in were driven end to end** against the emulator —
+one `users/{uid}` written, not duplicated on a second sign-in, session survives a hard refresh.
+
+Still unticked in phase-03 §8: **Google on a real device** (needs a real consent screen) and
+**phone OTP with a real number** (the emulator sends no SMS), the `onUserProfileWritten`
+integration test, and E2E **E1**. The two rules-test boxes in that section are now ticked
+against #24.
 
 📄 `apps/web/.env.local` exists locally (gitignored) pointing at the emulators with project id
 `demo-splitsutra` — the `demo-` prefix forces the SDK offline, so this build cannot reach a
@@ -300,9 +367,14 @@ real project even if `VITE_USE_EMULATORS` were wrong.
 
 ## Next session, in order
 
-1. **Merge [#20](https://github.com/allcottcourt1808/splitsutra/pull/20)** — friend requests.
+1. **Merge [#24](https://github.com/allcottcourt1808/splitsutra/pull/24)** — the rules tests.
+   It is the oldest outstanding debt in the repo and it blocks nothing, so it should go first.
+   Then decide on [#23](https://github.com/allcottcourt1808/splitsutra/pull/23) (shadcn theme
+   docs), which is unrelated to everything else here.
 
 ### What #20 changed, and why it is a spec revision rather than a feature
+
+_(#20 is merged. Kept because the reasoning below is the current spec, not a changelog entry.)_
 
 Adding a friend was **unilateral**: `addFriend` resolved a contact and immediately created the
 implicit group and both friend docs. `AC-B1.4` said so in as many words. But a friendship IS a
@@ -327,16 +399,23 @@ the Friends tab, folded into the accessible name ("Friends, 2 pending requests")
 `addFriend` was **removed, not renamed** — a teardown, correctly: its contract changed. Nothing
 referenced it and nothing is deployed, so nothing broke.
 
-⚠️ **Still owed for #20:** the three callables have **no tests**, and `firebase/tests/rules/` is
-still empty — so decline-is-terminal, the mutual auto-accept, and the accept transaction are
-unverified against an emulator. `docs/09` lists them; they are the highest-value tests
-outstanding in the repo.
+⚠️ **Still owed for #20:** the three callables have **no tests**. #24 covers the
+`friendRequests` _rules_ (`friendRequests.test.ts` — get, list, write), but rules tests cannot
+reach a callable, so **decline-is-terminal, the mutual auto-accept, and the accept transaction
+remain unverified against an emulator**. Those need `firebase/tests/integration/`, which does
+not exist. `docs/09` lists them; they are now the highest-value tests outstanding in the repo.
 
 2. **Wire the web app to core** — this is what makes #20 actually run. The Friends screens
    render today but no call reaches a backend.
-3. ~~**Details for that wiring**~~ — done on `feat/auth-wiring`; see the section above.
-   What is left of it: sign in through each of the three forms against the emulator by hand,
-   and the phase-03 §8 tests.
-4. **Screens**, replacing `PendingScreen` one route at a time.
-5. **Rules tests** (`firebase/tests/rules/`), then `e2e/specs/`. Independent of 2 and 3 — a
-   good parallel track.
+3. ~~**Details for that wiring**~~ — merged as #21/#22; see the auth section above. What is
+   left of it: Google on a real device and phone OTP with a real number, both manual.
+4. **Screens**, replacing `PendingScreen` one route at a time. `/friends/:uid` and `useFriend`
+   are the ones currently being worked — see the `feat/friend-detail` section above; they are
+   in the working tree, uncommitted and unverified.
+5. 🔴 **`firebase/tests/integration/`** — the real gap now that #24 exists. `redeemInvite`
+   (expired/used/double-redeem), accepting a friend request (idempotent, writes both sides),
+   `leaveGroup` at a non-zero balance. These are the items left unticked in phase-05 §9 and
+   phase-03 §8 precisely because no rules test can reach a callable.
+6. **`e2e/specs/`**, which still does not exist. Independent of 2–4 — a good parallel track.
+7. **Uncomment the emulator-backed suites in `.github/workflows/ci.yml`** once 5 exists,
+   otherwise none of this runs in CI.

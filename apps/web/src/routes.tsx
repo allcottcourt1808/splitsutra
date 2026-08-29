@@ -50,6 +50,7 @@ import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
 import { AccountScreen } from './screens/AccountScreen';
 import { AddFriendScreen } from './screens/AddFriendScreen';
 import { EditProfileScreen } from './screens/EditProfileScreen';
+import { FriendDetailScreen } from './screens/FriendDetailScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
 import { PendingScreen } from './screens/PendingScreen';
 import { SignInScreen } from './screens/SignInScreen';
@@ -69,6 +70,7 @@ const screenNames = Object.keys(ROUTE_PATTERNS) as ScreenName[];
 const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
   SignIn: SignInScreen,
   FriendList: FriendsScreen,
+  FriendDetail: FriendDetailScreen,
   AddFriend: AddFriendScreen,
   Account: AccountScreen,
   EditProfile: EditProfileScreen,
