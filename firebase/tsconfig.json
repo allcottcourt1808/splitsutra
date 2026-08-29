@@ -1,0 +1,40 @@
+{
+  // The seed script's typecheck config — `firebase/seed.ts` and everything under
+  // `firebase/seed/src/`.
+  //
+  // ── WHY THIS FILE HAD TO EXIST ───────────────────────────────────────────────────────────
+  // `firebase/seed/` is not a workspace package (`pnpm-workspace.yaml` lists only
+  // `firebase/functions` under this directory), so `pnpm -r --if-present typecheck` never
+  // reached it and no tsconfig `include` covered it either. Two thousand lines of script that
+  // builds money records were checked by nothing at all — the root `typecheck` script now
+  // chains `typecheck:seed`, which is this config.
+  //
+  // ── WHY NodeNext, NOT THE BASE CONFIG'S `bundler` ────────────────────────────────────────
+  // `pnpm seed` is `tsx firebase/seed.ts` — real Node, no bundler. `bundler` resolution would
+  // happily accept specifiers Node then refuses at runtime, which is the exact failure mode
+  // `packages/core/tsconfig.build.json` documents at length after it shipped for real. The
+  // compiler that checks this code uses the resolver that will run it.
+  //
+  // That is also what makes the `.js` extensions here load-bearing rather than decorative:
+  // `./seed/src/guard.js` is how NodeNext (and tsx) find `guard.ts`.
+  //
+  // ── `types: ["node"]` ────────────────────────────────────────────────────────────────────
+  // Unlike `packages/core`, this IS platform code. It reads `process.env`, hashes with
+  // `node:crypto` and reads `.firebaserc` off disk. `@types/node` comes from the workspace
+  // root, which is where the `tsx` that runs this script lives too.
+  //
+  // `firebase/functions` keeps its own self-contained config and is excluded here — it has a
+  // different runtime (Cloud Functions Gen 2), a different `outDir`, and its own build.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+  },
+  "include": ["seed.ts", "seed/src/**/*.ts"],
+  "exclude": ["node_modules", "functions", "tests"],
+}

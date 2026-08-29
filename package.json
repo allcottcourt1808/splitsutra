@@ -13,7 +13,9 @@
   "scripts": {
     "dev": "pnpm --filter @splitsutra/web dev",
     "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "//typecheck": "firebase/seed is not a workspace package, so `pnpm -r` never reached it and nothing typechecked 2k lines of script that builds money records. typecheck:seed builds core first because firebase/seed/src/dataset.ts imports packages/core/dist by relative path and tsc needs the .d.ts files that only the build emits — same reason, and same fix, as firebase/functions declaring build:core rather than trusting topological ordering.",
+    "typecheck": "pnpm -r --if-present typecheck && pnpm typecheck:seed",
+    "typecheck:seed": "pnpm --filter @splitsutra/core build && tsc -p firebase/tsconfig.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
