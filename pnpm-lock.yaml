@@ -136,15 +136,19 @@ importers:
       firebase:
         specifier: ^12.18.0
         version: 12.18.0
-      react:
-        specifier: ^19.0.0
-        version: 19.2.8
       zod:
         specifier: ^4.4.3
         version: 4.4.3
       zustand:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
 
 packages:
 
