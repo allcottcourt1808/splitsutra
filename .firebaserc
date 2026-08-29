@@ -14,11 +14,19 @@
     "protection to the second.",
     "",
     "Both projects are on the free Spark plan and STAY there until Phase 11 (docs/18 §1).",
-    "Nothing before Phase 11 touches a cloud resource — Phases 00-10 run on the local emulator",
-    "suite, which needs a 'demo-' project id and never reads this file.",
+    "The projects and their Firestore databases now exist, but hold no data: day-to-day work",
+    "still runs on the local emulator suite, which needs a 'demo-' project id and never reads",
+    "this file. Toggle apps/web/.env.local VITE_USE_EMULATORS to switch.",
     "",
-    "Firestore databases are not created yet, so Resource Location ID is unset on both.",
-    "When they are: us-central1, Native mode, single-region (Q4) — permanent, not changeable."
+    "Firestore (default) databases exist in BOTH projects: us-central1, Native mode, Standard",
+    "edition, created 2026-08-29. That location is permanent and cannot be changed (Q4).",
+    "",
+    "Both start with closed rules. firestore.rules in this repo is the real boundary and has",
+    "not been deployed to either project yet.",
+    "",
+    "The project-level Resource Location ID still reads [Not specified] in projects:list. That",
+    "is the default location for Storage and Hosting, NOT the Firestore location — it is set",
+    "separately, when the first Storage bucket is created."
   ],
   "projects": {
     "default": "splitsutra-dev-eac96",
