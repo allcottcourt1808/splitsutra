@@ -38,6 +38,9 @@ importers:
       fast-check:
         specifier: ^4.9.0
         version: 4.9.0
+      firebase:
+        specifier: ^12.18.0
+        version: 12.18.0
       firebase-tools:
         specifier: ^15.28.1
         version: 15.28.1(@types/node@24.13.3)
