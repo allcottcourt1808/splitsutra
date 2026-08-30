@@ -146,7 +146,12 @@ export function CreateGroupScreen() {
 
         <Stack gap="sm">
           <Text weight="semibold">Type</Text>
-          <SegmentedControl label="Group type" options={TYPES} value={type} onValueChange={setType} />
+          <SegmentedControl
+            label="Group type"
+            options={TYPES}
+            value={type}
+            onValueChange={setType}
+          />
         </Stack>
 
         <Stack gap="sm">

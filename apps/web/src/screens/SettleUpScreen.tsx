@@ -67,7 +67,7 @@ export function SettleUpScreen() {
   const navigate = useNavigate();
 
   const { user } = useAuth();
-  const { group } = useGroup(groupId);
+  const { group, loading: groupLoading } = useGroup(groupId);
   const { activeMembers, loading, error } = useGroupBalances(groupId);
 
   const prefillFrom = search.get('from');
@@ -114,13 +114,9 @@ export function SettleUpScreen() {
     amount ??
     (currency === null || suggestedMinor === 0
       ? ''
-      : formatMoney(suggestedMinor as MinorUnits, currency, 'en-US').replace(
-          /[^\d.]/g,
-          '',
-        ));
+      : formatMoney(suggestedMinor as MinorUnits, currency, 'en-US').replace(/[^\d.]/g, ''));
 
-  const amountMinor =
-    currency === null ? null : parseAmountToMinor(amountText, currency);
+  const amountMinor = currency === null ? null : parseAmountToMinor(amountText, currency);
 
   const parsedDay = parseDay(day);
 
@@ -136,8 +132,7 @@ export function SettleUpScreen() {
   // AC-E2.6 — a warning, not a block. Overpaying is a real thing people do, and the ledger
   // handles it; refusing it outright would be the app telling someone their own payment did
   // not happen.
-  const overpaying =
-    amountMinor !== null && outstandingMinor > 0 && amountMinor > outstandingMinor;
+  const overpaying = amountMinor !== null && outstandingMinor > 0 && amountMinor > outstandingMinor;
 
   const canSave =
     user !== null &&
@@ -197,7 +192,7 @@ export function SettleUpScreen() {
     />
   );
 
-  if (loading) {
+  if (loading || groupLoading) {
     return (
       <Screen header={header}>
         <Text tone="secondary">Loading…</Text>
@@ -215,7 +210,22 @@ export function SettleUpScreen() {
     );
   }
 
-  if (activeMembers.length < 2 || currency === null) {
+  // A late group document is handled by the loading gate above, so reaching here with no
+  // currency means the group really is gone — not that it is still in flight.
+  if (currency === null) {
+    return (
+      <Screen header={header}>
+        <EmptyState
+          glyph="🔍"
+          title="Group not found"
+          body="It may have been deleted, or you may no longer be a member."
+          action={<Button to={paths.GroupList()}>Back to groups</Button>}
+        />
+      </Screen>
+    );
+  }
+
+  if (activeMembers.length < 2) {
     return (
       <Screen header={header}>
         <EmptyState
@@ -250,7 +260,9 @@ export function SettleUpScreen() {
               keyExtractor={(member) => member.uid}
               renderItem={(member) => (
                 <ListRow
-                  title={member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName}
+                  title={
+                    member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
+                  }
                   subtitle={member.uid === fromUid ? 'Paying' : undefined}
                   leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
                   chevron={false}
@@ -280,7 +292,9 @@ export function SettleUpScreen() {
               keyExtractor={(member) => member.uid}
               renderItem={(member) => (
                 <ListRow
-                  title={member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName}
+                  title={
+                    member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
+                  }
                   subtitle={member.uid === toUid ? 'Receiving' : undefined}
                   leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
                   chevron={false}

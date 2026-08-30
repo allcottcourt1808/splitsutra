@@ -51,6 +51,8 @@ vi.mock('@splitsutra/core/hooks', () => ({
     loading: false,
     error: null,
   }),
+  useGroups: () => ({ groups: [], loading: false, error: null }),
+  useMyGroupBalances: () => ({ balances: {}, loading: false, error: null }),
 }));
 
 const routes = router.routes as RouteObject[];

@@ -26,7 +26,9 @@ export default defineConfig({
           root: './apps/web',
           environment: 'happy-dom',
           setupFiles: ['./src/test-setup.ts'],
-          include: ['src/**/__tests__/**/*.test.tsx'],
+          // Both extensions: the `unit` project is rooted at packages/core, so a `.test.ts`
+          // under apps/web was previously collected by neither project and never ran.
+          include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
         },
       },
       {

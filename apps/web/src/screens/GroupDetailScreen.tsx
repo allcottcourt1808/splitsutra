@@ -153,8 +153,8 @@ export function GroupDetailScreen() {
           </Text>
           <Card>
             <Text variant="caption" tone="secondary">
-              Expenses and recorded payments in {group.name} appear here, newest first, once you
-              add one.
+              Expenses and recorded payments in {group.name} appear here, newest first, once you add
+              one.
             </Text>
           </Card>
         </Stack>

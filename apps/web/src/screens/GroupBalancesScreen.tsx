@@ -63,7 +63,7 @@ export function GroupBalancesScreen() {
   const { gid } = useParams();
   const groupId = gid ?? '';
 
-  const { group } = useGroup(groupId);
+  const { group, loading: groupLoading } = useGroup(groupId);
   const { members, balances, settled, loading, error } = useGroupBalances(groupId);
 
   /**
@@ -88,7 +88,9 @@ export function GroupBalancesScreen() {
 
   const header = <ScreenHeader title="Balances" backTo={paths.GroupDetail({ gid: groupId })} />;
 
-  if (loading) {
+  // Currency lives on the group document, which is a separate subscription from the members.
+  // Rendering before it lands gives amountless rows, indistinguishable from settled.
+  if (loading || groupLoading) {
     return (
       <Screen header={header}>
         <Text tone="secondary">Loading…</Text>
@@ -162,9 +164,8 @@ export function GroupBalancesScreen() {
                   {`Instead of ${String(owing)} ${owing === 1 ? 'payment' : 'payments'}, settle up in ${String(transfers.length)}.`}
                 </Text>
                 <Text variant="caption" tone="secondary">
-                  Amounts owed do not change — only who pays whom. You might be asked to pay
-                  someone you never borrowed from directly; that clears the same debt in fewer
-                  steps.
+                  Amounts owed do not change — only who pays whom. You might be asked to pay someone
+                  you never borrowed from directly; that clears the same debt in fewer steps.
                 </Text>
               </Stack>
             </Card>

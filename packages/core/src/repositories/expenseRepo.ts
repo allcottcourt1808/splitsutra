@@ -26,7 +26,6 @@
 
 import {
   Timestamp,
-  deleteDoc,
   doc,
   limit as limitTo,
   orderBy,
@@ -52,7 +51,6 @@ import {
   isCurrencyCode,
   isValidAmount,
   sumMinor,
-  type Comment,
   type CurrencyCode,
   type Expense,
   type ExpenseCategory,
@@ -62,14 +60,9 @@ import {
   type Payer,
   type Split,
 } from '../types/index.js';
-import {
-  commentsCollection,
-  expenseDoc,
-  expensesCollection,
-  groupsCollection,
-  membersCollection,
-  participatingExpensesQuery,
-} from './refs.js';
+import { addComment, type CommentAuthor } from './commentRepo.js';
+import { watchActiveMembers, watchGroupsForUser } from './groupRepo.js';
+import { expenseDoc, expensesCollection, participatingExpensesQuery } from './refs.js';
 import { watchDoc, watchQuery, type OnError, type OnNext, type Unsubscribe } from './subscribe.js';
 
 /** Default page size for an expense list. docs/07: 25 per page. */
@@ -408,34 +401,28 @@ export function watchMyExpenses(
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
- * The comment thread — ADR-11's other half
- * ────────────────────────────────────────────────────────────────────────────────────────── */
+ * The comment thread — ADR-11's other half, implemented in `commentRepo.ts`
+ * ────────────────────────────────────────────────────────────────────────────────────────── *
+ * 🔴 Nothing below touches Firestore. The thread is one implementation, in `commentRepo.ts`
+ * (Article VI); these are the names the expense screens import, pointed at it.
+ *
+ * There is still no `updateComment` anywhere — `allow update: if false` (AC-D4.4, threat T12) —
+ * and `deleteExpenseComment` is still the hard delete `firestore.rules` describes, because it is
+ * now literally `deleteComment`.
+ */
 
-/** Flat and chronological, oldest first (AC-D4.5). */
-export function watchExpenseComments(
-  groupId: string,
-  expenseId: string,
-  onNext: OnNext<readonly Comment[]>,
-  onError: OnError,
-): Unsubscribe {
-  return watchQuery(
-    query(commentsCollection(groupId, expenseId), orderBy('createdAt', 'asc')),
-    onNext,
-    onError,
-  );
-}
+/** Flat and chronological, oldest first (AC-D4.5). See `commentRepo.watchComments`. */
+export { watchComments as watchExpenseComments } from './commentRepo.js';
 
-/** The author's name and photo are denormalized at post time, so the thread needs no joins. */
-export interface CommentAuthor {
-  readonly uid: string;
-  readonly displayName: string;
-  readonly photoURL: string | null;
-}
+/** Remove your own comment (AC-D4.3). See `commentRepo.deleteComment`. */
+export { deleteComment as deleteExpenseComment } from './commentRepo.js';
 
 /**
- * Post one comment. `createdAt` is `serverTimestamp()` — the rule pins it to `request.time`.
+ * Post one comment and return its id.
  *
- * There is no `updateComment`: comments are non-editable by design (AC-D4.4, threat T12).
+ * The author snapshot and the text arrive separately here and together in `addComment`; this
+ * joins them. Every check — the 1–500 length guard that produces the message the composer shows,
+ * the `displayName` / `photoURL` parses, `createdAt == request.time` (threat T7) — happens there.
  */
 export async function addExpenseComment(
   groupId: string,
@@ -443,71 +430,35 @@ export async function addExpenseComment(
   author: CommentAuthor,
   text: string,
 ): Promise<string> {
-  const trimmed = text.trim();
-  if (trimmed.length < 1 || trimmed.length > 500) {
-    throw new DomainError('INVALID_AMOUNT', 'A comment must be 1 to 500 characters.');
-  }
-
-  const reference = doc(commentsCollection(groupId, expenseId));
-  await setDoc(reference, {
-    id: reference.id,
-    uid: author.uid,
-    displayName: author.displayName,
-    photoURL: author.photoURL,
-    text: trimmed,
-    createdAt: serverTimestamp(),
-    deletedAt: null,
-  });
-  return reference.id;
-}
-
-/**
- * Remove your own comment (AC-D4.3).
- *
- * ⚠️ A hard delete, and deliberately so: `allow update: if false` on this subcollection means a
- * `deletedAt` tombstone is not writable today. `firestore.rules` documents that contradiction
- * with phase-08 and the narrow rule that would resolve it; this follows the rule as it stands
- * rather than inventing a third behaviour.
- */
-export async function deleteExpenseComment(
-  groupId: string,
-  expenseId: string,
-  commentId: string,
-): Promise<void> {
-  await deleteDoc(doc(commentsCollection(groupId, expenseId), commentId));
+  return addComment(groupId, expenseId, { ...author, text });
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
- * Composer context
+ * Composer context — implemented in `groupRepo.ts`
  * ────────────────────────────────────────────────────────────────────────────────────────── *
- * ⚠️ The Add Expense form needs the group it is writing into and that group's members: the
- * currency the amount is denominated in, who can be a payer, and who can be a participant.
- * Both reads are group-shaped and belong in `groupRepo.ts`, which does not exist yet and is not
- * this file's to create. They are named for the screen that needs them so that consolidating
- * them later is a rename and a delete, not a merge.
+ * The Add Expense form needs the group it is writing into and that group's members: the currency
+ * the amount is denominated in, who can be a payer, and who can be a participant. Both reads are
+ * group-shaped, and `groupRepo.ts` now exists and owns them. These two keep the names the
+ * composer imports; neither holds a query (Article VI).
  */
 
-/** Groups the signed-in user may add an expense to. Ordered by most recent activity. */
+/**
+ * Groups the signed-in user may add an expense to, most recently active first.
+ *
+ * `includeImplicit: true`: a hidden 1:1 friend group (D2) is a group you may add an expense to —
+ * D2 hides implicit groups from the **Groups tab**, not from the picker that would otherwise make
+ * a second friend expense unreachable from the Add tab. Page size is `MY_GROUPS_PAGE_SIZE`, which
+ * is the 50 this function used to hardcode and the 50 docs/03 §Query patterns specifies.
+ *
+ * The `memberIds array-contains` shape is not incidental: the group `list` rule is written
+ * against `memberIds` precisely so a 50-group list does not blow the 20-access-call budget.
+ */
 export function watchExpenseGroups(
   uid: string,
   onNext: OnNext<readonly Group[]>,
   onError: OnError,
 ): Unsubscribe {
-  // `memberIds array-contains` rather than a member-doc `exists()`: the group `list` rule is
-  // written against `memberIds` precisely so a 50-group list does not blow the 20-access-call
-  // budget. Index: `memberIds` CONTAINS + `lastActivityAt` DESC.
-  return watchQuery(
-    query(
-      groupsCollection(),
-      where('memberIds', 'array-contains', uid),
-      orderBy('lastActivityAt', 'desc'),
-      limitTo(50),
-    ),
-    (groups) => {
-      onNext(groups.filter((group) => group.deletedAt === null));
-    },
-    onError,
-  );
+  return watchGroupsForUser(uid, onNext, onError, { includeImplicit: true });
 }
 
 /**
@@ -521,17 +472,5 @@ export function watchExpenseMembers(
   onNext: OnNext<readonly GroupMember[]>,
   onError: OnError,
 ): Unsubscribe {
-  return watchQuery(
-    membersCollection(groupId),
-    (members) => {
-      onNext(
-        members
-          .filter((member) => member.leftAt === null)
-          .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }),
-          ),
-      );
-    },
-    onError,
-  );
+  return watchActiveMembers(groupId, onNext, onError);
 }

@@ -141,7 +141,7 @@ export function GroupsScreen() {
                       )}
                       {line.oweMinor > 0 && (
                         <Money
-                          minorUnits={(-line.oweMinor) as MinorUnits}
+                          minorUnits={-line.oweMinor as MinorUnits}
                           currency={line.currency}
                           tone="negative"
                           label="You owe"

@@ -52,6 +52,7 @@ import { ActivityScreen } from './screens/ActivityScreen';
 import { AddExpenseScreen } from './screens/AddExpenseScreen';
 import { AddFriendScreen } from './screens/AddFriendScreen';
 import { CreateGroupScreen } from './screens/CreateGroupScreen';
+import { EditExpenseScreen } from './screens/EditExpenseScreen';
 import { EditProfileScreen } from './screens/EditProfileScreen';
 import { ExpenseDetailScreen } from './screens/ExpenseDetailScreen';
 import { FriendDetailScreen } from './screens/FriendDetailScreen';
@@ -89,6 +90,7 @@ const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
   SettleUp: SettleUpScreen,
   AddExpense: AddExpenseScreen,
   ExpenseDetail: ExpenseDetailScreen,
+  EditExpense: EditExpenseScreen,
   FriendList: FriendsScreen,
   FriendDetail: FriendDetailScreen,
   AddFriend: AddFriendScreen,

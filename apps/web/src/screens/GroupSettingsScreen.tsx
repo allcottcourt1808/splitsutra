@@ -96,7 +96,9 @@ export function GroupSettingsScreen() {
     }
   }
 
-  const header = <ScreenHeader title="Group settings" backTo={paths.GroupDetail({ gid: groupId })} />;
+  const header = (
+    <ScreenHeader title="Group settings" backTo={paths.GroupDetail({ gid: groupId })} />
+  );
 
   if (loading) {
     return (

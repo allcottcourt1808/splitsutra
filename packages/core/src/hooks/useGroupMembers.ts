@@ -97,7 +97,7 @@ export interface UseGroupBalancesResult extends UseGroupMembersResult {
   readonly balances: readonly Balance[];
   /** The signed-in user's net balance, or `0` when they are not a member. */
   readonly myBalanceMinor: number;
-  /** `true` when every balance in the group is zero — the "all settled up" state. */
+  /** `true` when there is at least one balance and every one is zero — "all settled up". */
   readonly settled: boolean;
 }
 
@@ -115,7 +115,9 @@ export function useGroupBalances(groupId: string): UseGroupBalancesResult {
       ...result,
       balances,
       myBalanceMinor: me?.balanceMinor ?? 0,
-      settled: balances.every((balance) => balance.balanceMinor === 0),
+      // `balances.length > 0` guard: [].every() is true, so without it a group whose member
+      // fan-out has not landed yet asserts that nobody owes anybody anything.
+      settled: balances.length > 0 && balances.every((balance) => balance.balanceMinor === 0),
     };
   }, [result, members, me]);
 }

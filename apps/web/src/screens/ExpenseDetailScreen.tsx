@@ -354,9 +354,7 @@ export function ExpenseDetailScreen() {
               renderItem={(comment) => (
                 <ListRow
                   title={comment.uid === selfUid ? 'You' : comment.displayName}
-                  subtitle={
-                    comment.deletedAt === null ? comment.text : 'This comment was deleted.'
-                  }
+                  subtitle={comment.deletedAt === null ? comment.text : 'This comment was deleted.'}
                   leading={<Avatar name={comment.displayName} photoURL={comment.photoURL} />}
                   trailing={
                     <Text variant="caption" tone="secondary">

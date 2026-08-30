@@ -105,7 +105,11 @@ export function useComposerMembers(groupId: string | null): UseGroupMembersResul
  * An expense stores participant uids only; the names come from the member documents, which are
  * a denormalized snapshot maintained by Cloud Functions.
  */
-export function nameOf(members: readonly GroupMember[], uid: string, selfUid: string | null): string {
+export function nameOf(
+  members: readonly GroupMember[],
+  uid: string,
+  selfUid: string | null,
+): string {
   if (uid === selfUid) return 'You';
   return members.find((member) => member.uid === uid)?.displayName ?? 'Someone who left';
 }

@@ -170,10 +170,16 @@ let groupId = 'g1';
 let expenseId = 'e1';
 
 const lastExpense = (): Channel<Expense | null> => expenseChannels[expenseChannels.length - 1]!;
-const lastComments = (): Channel<readonly Comment[]> => commentChannels[commentChannels.length - 1]!;
+const lastComments = (): Channel<readonly Comment[]> =>
+  commentChannels[commentChannels.length - 1]!;
 
 function record<T>(into: Channel<T>[]) {
-  return (gid: string, eid: string, onNext: (value: T) => void, onError: (error: Error) => void) => {
+  return (
+    gid: string,
+    eid: string,
+    onNext: (value: T) => void,
+    onError: (error: Error) => void,
+  ) => {
     const unsubscribe = vi.fn();
     into.push({ groupId: gid, expenseId: eid, emit: onNext, fail: onError, unsubscribe });
     return unsubscribe;

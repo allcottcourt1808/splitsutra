@@ -341,6 +341,7 @@ export function ExpenseForm({
                   participant={participant}
                   method={state.splitMethod}
                   name={nameOf(participant.uid)}
+                  isSelf={participant.uid === selfUid}
                   photoURL={photoOf(participant.uid)}
                   currency={currency}
                   allocation={allocationFor(participant.uid)}
@@ -405,6 +406,8 @@ interface SplitRowProps {
   readonly participant: ParticipantState;
   readonly method: SplitMethod;
   readonly name: string;
+  /** Drives "You owe" / "Your share" — `name` is already "You", which reads wrong appended. */
+  readonly isSelf: boolean;
   readonly photoURL: string | null;
   readonly currency: CurrencyCode;
   readonly allocation: MinorUnits | null;
@@ -421,6 +424,7 @@ function SplitRow({
   participant,
   method,
   name,
+  isSelf,
   photoURL,
   currency,
   allocation,
@@ -449,7 +453,7 @@ function SplitRow({
 
       {included && method === 'exact' && (
         <Input
-          label={`${name} owes`}
+          label={isSelf ? 'You owe' : `${name} owes`}
           value={participant.exactInput}
           onValueChange={(value) => {
             onChange({ exactInput: value });
@@ -461,7 +465,7 @@ function SplitRow({
 
       {included && method === 'percent' && (
         <Input
-          label={`${name}'s share`}
+          label={isSelf ? 'Your share' : `${name}'s share`}
           value={participant.percentInput}
           onValueChange={(value) => {
             onChange({ percentInput: value });

@@ -16,6 +16,15 @@
  * `where('deletedAt','==',null)` to the query would need two more indexes to serve one screen,
  * so both are applied to the result instead. The page is capped at {@link MY_GROUPS_PAGE_SIZE},
  * which bounds what that costs.
+ *
+ * ## This file owns the "my groups" query, and there is only one of it
+ *
+ * Article VI. {@link watchGroupsForUser} is the single `memberIds array-contains` subscription in
+ * the product; the Groups tab, the activity feed and the Add Expense picker are three option sets
+ * over it, not three queries. `activityRepo.watchActivityGroups` and
+ * `expenseRepo.watchExpenseGroups` are thin calls into it and hold no query of their own.
+ * The same holds for membership: {@link watchMembers} is the only `members` subscription, and
+ * {@link watchActiveMembers} is a filter over it.
  */
 
 import {
@@ -70,24 +79,71 @@ function isVisibleGroup(group: Group): boolean {
   return !group.isImplicit && group.deletedAt === null;
 }
 
+/** The two axes on which the callers of {@link watchGroupsForUser} legitimately differ. */
+export interface WatchGroupsOptions {
+  /**
+   * Include the hidden 1:1 friend groups (ADR-06 / D2). Default `false` — D2's "remembering to
+   * filter `isImplicit` out of the group list".
+   *
+   * The activity feed and the Add Expense picker pass `true`: AC-F1.1 lists "group **and friend**
+   * events", and a friend group is a group you may add an expense to. It is only the Groups tab
+   * that must not present every friendship as a group the user never created.
+   */
+  readonly includeImplicit?: boolean | undefined;
+  /**
+   * Order by `lastActivityAt` desc and stop at this many groups (docs/03 §Query patterns), or
+   * `null` for every group the user is in, unordered.
+   *
+   * `null` is not a shortcut: the activity feed must cover **every** group the user is currently
+   * in (AC-F1.4), which a 50-group page cannot promise, and it needs no ordering because its rows
+   * are re-sorted after the per-group merge. Unordered, the query is served by the automatic
+   * single-field index; ordered, by the declared `memberIds` CONTAINS + `lastActivityAt` DESC
+   * composite index. There is no third shape, and adding one means adding an index.
+   */
+  readonly pageSize?: number | null | undefined;
+}
+
+/**
+ * 🔴 The one "groups I am in" subscription. Everything that lists a user's groups comes here.
+ *
+ * `deletedAt` is always dropped client-side — a soft-deleted group belongs on no screen, and
+ * `where('deletedAt','==',null)` beside the `array-contains` would cost a composite index per
+ * caller for a handful of documents.
+ */
+export function watchGroupsForUser(
+  uid: string,
+  onNext: OnNext<readonly Group[]>,
+  onError: OnError,
+  options: WatchGroupsOptions = {},
+): Unsubscribe {
+  const { includeImplicit = false, pageSize = MY_GROUPS_PAGE_SIZE } = options;
+
+  const membership = query(groupsCollection(), where('memberIds', 'array-contains', uid));
+  const scoped =
+    pageSize === null
+      ? membership
+      : query(membership, orderBy('lastActivityAt', 'desc'), limit(pageSize));
+
+  return watchQuery(
+    scoped,
+    (groups) => {
+      onNext(
+        groups.filter((group) =>
+          includeImplicit ? group.deletedAt === null : isVisibleGroup(group),
+        ),
+      );
+    },
+    onError,
+  );
+}
+
 /** The signed-in user's groups, most recently active first. Implicit and deleted ones removed. */
 export function watchMyGroups(
   uid: string,
   onNext: OnNext<readonly Group[]>,
   onError: OnError,
 ): Unsubscribe {
-  return watchQuery(
-    query(
-      groupsCollection(),
-      where('memberIds', 'array-contains', uid),
-      orderBy('lastActivityAt', 'desc'),
-      limit(MY_GROUPS_PAGE_SIZE),
-    ),
-    (groups) => {
-      onNext(groups.filter(isVisibleGroup));
-    },
-    onError,
-  );
+  return watchGroupsForUser(uid, onNext, onError);
 }
 
 /** Subscribe to one group. Emits `null` when it does not exist or the caller cannot read it. */
@@ -122,6 +178,30 @@ export function watchMembers(
     membersCollection(groupId),
     (members) => {
       onNext([...members].sort(byMembership));
+    },
+    onError,
+  );
+}
+
+/**
+ * Only the people still in the group, ordered by display name — who an expense or a settlement
+ * may name.
+ *
+ * A filter over {@link watchMembers} rather than a second query: `members` is capped at 50
+ * documents (Q2) and `allow write: if false` makes it read-only in every direction, so the
+ * subscription is the same one either way and the difference is which rows the caller wants.
+ * `byMembership` already places current members before departed ones, so the filtered list is
+ * exactly name order.
+ */
+export function watchActiveMembers(
+  groupId: string,
+  onNext: OnNext<readonly GroupMember[]>,
+  onError: OnError,
+): Unsubscribe {
+  return watchMembers(
+    groupId,
+    (members) => {
+      onNext(members.filter((member) => member.leftAt === null));
     },
     onError,
   );

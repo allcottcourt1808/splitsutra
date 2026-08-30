@@ -9,7 +9,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { watchExpense, watchExpenseComments } from '../repositories/expenseRepo.js';
-import type { Comment, Expense } from '../types/index.js';
+import type { Expense } from '../types/index.js';
+import { useCommentThread, type CommentThreadState } from './commentThread.js';
 
 /** What {@link useExpense} returns. */
 export interface UseExpenseResult {
@@ -54,49 +55,19 @@ export function useExpense(groupId: string, expenseId: string): UseExpenseResult
   );
 }
 
-/** What {@link useExpenseComments} returns. */
-export interface UseExpenseCommentsResult {
-  /** The thread, oldest first. Flat — there are no nested replies (AC-D4.5). */
-  readonly comments: readonly Comment[];
-  readonly loading: boolean;
-  readonly error: Error | null;
-}
+/**
+ * What {@link useExpenseComments} returns — the thread, oldest first. Flat: there are no nested
+ * replies (AC-D4.5).
+ */
+export type UseExpenseCommentsResult = CommentThreadState;
 
-/** Empty thread with a stable identity, so an unsubscribed render does not re-render callers. */
-const NO_COMMENTS: readonly Comment[] = [];
-
-export function useExpenseComments(
-  groupId: string,
-  expenseId: string,
-): UseExpenseCommentsResult {
-  const [comments, setComments] = useState<readonly Comment[]>(NO_COMMENTS);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    if (groupId === '' || expenseId === '') {
-      setComments(NO_COMMENTS);
-      setReady(true);
-      setError(null);
-      return;
-    }
-
-    setReady(false);
-    setError(null);
-
-    return watchExpenseComments(
-      groupId,
-      expenseId,
-      (next) => {
-        setComments(next);
-        setReady(true);
-      },
-      setError,
-    );
-  }, [groupId, expenseId]);
-
-  return useMemo(
-    () => ({ comments, loading: !ready && error === null, error }),
-    [comments, ready, error],
-  );
+/**
+ * The thread for one expense.
+ *
+ * The same hook as `useComments()`, over the same subscription: `watchExpenseComments` is
+ * `commentRepo.watchComments` under the name the expense screens import, and the body is the one
+ * in `commentThread.ts` (Article VI).
+ */
+export function useExpenseComments(groupId: string, expenseId: string): UseExpenseCommentsResult {
+  return useCommentThread(watchExpenseComments, groupId, expenseId);
 }

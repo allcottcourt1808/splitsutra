@@ -232,7 +232,8 @@ export function formStateFromExpense(
       uid,
       included: true,
       exactInput: formatAmountInput(split.amountMinor, expense.currency),
-      percentInput: expense.splitMethod === 'percent' ? formatPercentInput(split.rawValue ?? 0) : '',
+      percentInput:
+        expense.splitMethod === 'percent' ? formatPercentInput(split.rawValue ?? 0) : '',
       shares: expense.splitMethod === 'shares' ? (split.rawValue ?? 0) : 1,
     };
   });
@@ -340,7 +341,10 @@ function buildSplit(
         }));
         return { split: { method: 'percent', percentages }, error: null };
       } catch (cause: unknown) {
-        return { split: null, error: cause instanceof Error ? cause.message : 'Invalid percentage.' };
+        return {
+          split: null,
+          error: cause instanceof Error ? cause.message : 'Invalid percentage.',
+        };
       }
     }
 
@@ -371,7 +375,8 @@ function buildFooter(
   if (state.splitMethod === 'exact' && split?.method === 'exact') {
     const assigned = sumMinor(split.amounts.map((entry) => entry.amountMinor));
     const remaining = (amountMinor ?? 0) - assigned;
-    if (remaining === 0) return { amounts: [], text: `All assigned · ${peopleLabel}`, danger: false };
+    if (remaining === 0)
+      return { amounts: [], text: `All assigned · ${peopleLabel}`, danger: false };
     return {
       amounts: [Math.abs(remaining) as MinorUnits],
       text: remaining > 0 ? 'left to assign' : 'over-assigned',
@@ -382,7 +387,8 @@ function buildFooter(
   if (state.splitMethod === 'percent' && split?.method === 'percent') {
     const assigned = split.percentages.reduce((sum, entry) => sum + entry.bps, 0);
     const remaining = TOTAL_BPS - assigned;
-    if (remaining === 0) return { amounts: [], text: `100% assigned · ${peopleLabel}`, danger: false };
+    if (remaining === 0)
+      return { amounts: [], text: `100% assigned · ${peopleLabel}`, danger: false };
     return {
       amounts: [],
       text:
@@ -462,10 +468,7 @@ function buildPayers(
  * do not reach 100%, exact amounts that do not sum, every share left at zero — is caught and
  * turned into `splitError`, because those are all things a user is in the middle of fixing.
  */
-export function deriveExpenseForm(
-  state: ExpenseFormState,
-  options: DeriveOptions,
-): FormDerivation {
+export function deriveExpenseForm(state: ExpenseFormState, options: DeriveOptions): FormDerivation {
   const { currency, expenseId, today } = options;
 
   const amountMinor = tryParseAmountInput(state.amountInput, currency);

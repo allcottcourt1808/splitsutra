@@ -80,10 +80,7 @@ export function AddExpenseScreen() {
     );
   }, [members, groupId, selfUid]);
 
-  const expenseId = useMemo(
-    () => (groupId === null ? '' : newExpenseId(groupId)),
-    [groupId],
-  );
+  const expenseId = useMemo(() => (groupId === null ? '' : newExpenseId(groupId)), [groupId]);
 
   const derivation = useMemo(
     () => deriveExpenseForm(state, { currency, expenseId, today: new Date() }),

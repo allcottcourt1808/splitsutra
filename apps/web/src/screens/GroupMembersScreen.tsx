@@ -199,7 +199,9 @@ export function GroupMembersScreen() {
               <Stack gap="xs">
                 <ListRow
                   title={isMe ? `${member.displayName} (you)` : member.displayName}
-                  subtitle={departed ? 'Left this group' : member.role === 'admin' ? 'Admin' : undefined}
+                  subtitle={
+                    departed ? 'Left this group' : member.role === 'admin' ? 'Admin' : undefined
+                  }
                   leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
                   chevron={false}
                   muted={departed}
