@@ -1,50 +1,56 @@
 # Resume here
 
-**Last updated:** 2026-08-29 (evening). Project: **SplitSutra**.
+**Last updated:** 2026-08-29 (late). Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:Users
 eethcodingsplitsutra`.
 
-## State: PRs #1–#30 merged except #23. `main` is at `375326f`.
+## State: PRs #1–#31 merged except #23. Activity tab is on `main`.
 
-Three PRs open: **#23** (pre-existing shadcn docs), **#31** (Activity tab, ready), **#32**
-(Groups + Add tabs, 🔴 draft, interrupted).
+**#32 is open, ready for review, gate green** — the Groups and Add tabs, end to end.
+**#23** (shadcn docs) is still open and should probably become an ADR instead; see below.
 
-### Where the tabs stand
+### The five tabs
 
-`TABS` in `apps/web/src/navigation/paths.ts` declares five: Groups · Friends · **Add** ·
-Activity · Account.
+| Tab      | State                                  |
+| -------- | -------------------------------------- |
+| Groups   | ✅ in #32 — 7 screens, 90 screen tests |
+| Friends  | ✅ shipped (#20, #21, #25)             |
+| Add      | ✅ in #32 — Add/Detail/Edit, 105 tests |
+| Activity | ✅ merged (#31)                        |
+| Account  | ✅ shipped                             |
 
-| Tab      | State                                                                |
-| -------- | -------------------------------------------------------------------- |
-| Friends  | ✅ shipped (#20, #21, #25)                                           |
-| Account  | ✅ shipped                                                           |
-| Activity | ✅ complete on `feat/tab-activity` → **#31**, full gate green        |
-| Groups   | 🔴 interrupted on `wip/tabs-groups-expenses` → **#32**, not gated    |
-| Add      | 🔴 interrupted on the same branch, `EditExpenseScreen` never written |
+Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
+format:check · **636 tests across 40 files**.
 
-### 🔴 Pick up here
-
-**#32 is unfinished and ungated.** Missing: `EditExpenseScreen`; **every screen test for
-both tabs** (Article X unmet); the barrel + `routes.tsx` wiring, so `/groups` and
-`/expense` still render `PendingScreen`. `SettleUpScreen.tsx` was mid-write when the agent
-was stopped and may be truncated — **read it before trusting it.** Also: `activityRepo`
-and `groupRepo` both query `groups` by `memberIds`; collapse to one.
-
-The stack is `main` ← #31 ← #32. Merging a stack too fast is what cost 1,673 lines
-previously: merge #31, wait for GitHub to retarget #32 onto `main`, confirm its base and
-diff, and only then touch it.
-
-### 🔴 Two open decisions, neither mine to make
+### 🔴 Open decisions, none of them mine
 
 1. **Comment tombstones are impossible under the current rules.** Phase-08 wants a "comment
    deleted" marker; the rules set `allow update: if false` (T12) while `delete` is a hard
    delete. Both cannot hold, and it cuts against Article V. Documented in `deleteComment`.
-2. **Console-only Firebase Auth setup (phase-02 §3) is still entirely undone**, and it is the
+2. **AC-E3.4 counts the wrong quantity** — `owing` counts debtors, not payments. The test
+   pins the current string so a change fails loudly.
+3. **Two delete affordances for an expense** — the detail screen's 5-second undo and a
+   two-step confirm on the edit screen. Pick one.
+4. **shadcn (#23)** — recommended against: Article IX is tokens-only and `docs/11` prices
+   component reuse at 0%, so anything DOM-bound is discarded at Phase 12. Fold the doc into
+   `docs/12-decisions.md` as a rejected option and close the PR.
+5. **Console-only Firebase Auth setup (phase-02 §3) is still entirely undone**, and it is the
    part that costs money: the three providers, authorized domains, and 🔴 the **US-only SMS
    region policy + 50/day quota**. `apps/web/.env.local` still has
-   `VITE_USE_EMULATORS=false`, so phone sign-in sends real SMS at real cost right now. Flip
-   it to `true` for day-to-day work.
+   `VITE_USE_EMULATORS=false`, so phone sign-in sends real SMS at real cost right now.
+
+### Smaller things owed
+
+- `canEdit` is duplicated between `ExpenseDetailScreen` and `EditExpenseScreen`; it
+  restates a Security Rule and belongs in core beside it.
+- `SettleUp` prefill round-trips through a formatted string instead of inverting
+  `parseAmountToMinor` — safe only because the locale is hardcoded `en-US`.
+- A successful `leaveGroup` leaves you on the members screen with the button still live.
+- `apps/web/package.json` still depends on `firebaseui`, which its own notes say was dropped.
+- `firebase/tests/integration/` still does not exist; `pnpm test:integration` matches zero files.
+- No pre-commit hook: gitleaks is referenced in docs/09, docs/10, docs/20 and two checklists,
+  but `.husky/` holds only `_`. Nothing mechanically enforces the no-service-account-key rule.
 
 ---
 
