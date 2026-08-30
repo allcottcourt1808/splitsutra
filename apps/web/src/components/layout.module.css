@@ -62,7 +62,15 @@
     align-items: var(--stack-align, stretch);
     justify-content: var(--stack-justify, flex-start);
     padding: var(--stack-padding, 0);
-    flex: var(--stack-flex, 0 1 auto);
+    /* 🔴 `0 0 auto`, NOT the flexbox default `0 1 auto`. Scrolling lives on `.screenBody` and
+     nowhere else, so everything inside it must size to its content and let that one scroller
+     scroll. A shrinkable Stack does the opposite: paired with the `min-height: 0` below it
+     collapses under its own content, the scroller's `scrollHeight` never exceeds its
+     `clientHeight`, and the overflow is silently unreachable instead of scrolled to. That is a
+     content-eating bug, not a layout preference — the currency picker lost its last three rows
+     to it with no scrollbar to hint anything was missing. A caller that genuinely wants to
+     shrink says so with `<Stack flex="…">`. */
+    flex: var(--stack-flex, 0 0 auto);
     min-height: 0;
     min-width: 0;
   }
@@ -87,6 +95,10 @@
     border: 1px solid var(--splitsutra-color-border);
     border-radius: var(--splitsutra-radius-lg);
     padding: var(--splitsutra-space-lg);
+    /* Same reason as `.stack` above, and it bites harder here: `.cardFlush` sets
+     `overflow: hidden` to clip its rows to the corner radius, so a shrunk card does not merely
+     overflow — it CLIPS, with no scrollbar anywhere to say so. */
+    flex: 0 0 auto;
     min-width: 0;
   }
 
