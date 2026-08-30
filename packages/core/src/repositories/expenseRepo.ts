@@ -106,11 +106,7 @@ export interface ExpenseDraft {
  * Split preview — the same call the write makes
  * ────────────────────────────────────────────────────────────────────────────────────────── */
 
-function toSplitInput(
-  split: SplitDraft,
-  totalMinor: MinorUnits,
-  tieBreakSeed: string,
-): SplitInput {
+function toSplitInput(split: SplitDraft, totalMinor: MinorUnits, tieBreakSeed: string): SplitInput {
   switch (split.method) {
     case 'equal':
       return { method: 'equal', totalMinor, uids: split.uids, tieBreakSeed };
@@ -299,10 +295,12 @@ export async function updateExpense(
   draft: ExpenseDraft,
   updatedBy: string,
 ): Promise<void> {
-  const { id: _id, groupId: _groupId, currency: _currency, ...patch } = expenseBody(
-    { ...draft, groupId },
-    expenseId,
-  );
+  const {
+    id: _id,
+    groupId: _groupId,
+    currency: _currency,
+    ...patch
+  } = expenseBody({ ...draft, groupId }, expenseId);
 
   await updateDoc(expenseDoc(groupId, expenseId), {
     ...patch,

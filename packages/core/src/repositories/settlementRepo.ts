@@ -18,7 +18,17 @@
  * `deletedAt`, and the same Function reverses its effect on the next recompute (AC-E2.5).
  */
 
-import { Timestamp, doc, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import {
+  Timestamp,
+  doc,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 
 import {
   getExponent,
@@ -122,10 +132,7 @@ export interface CreateSettlementInput {
  * with a message that names the field rather than arriving as a flat permission-denied. Article
  * IV: that parse is UX; Rules re-check all of it, and the Function re-checks it again.
  */
-export async function createSettlement(
-  uid: string,
-  input: CreateSettlementInput,
-): Promise<string> {
+export async function createSettlement(uid: string, input: CreateSettlementInput): Promise<string> {
   const amountMinor = settlementBaseSchema.shape.amountMinor.parse(input.amountMinor);
   const currency = settlementBaseSchema.shape.currency.parse(input.currency);
   const note = settlementBaseSchema.shape.note.parse(input.note ?? null);
