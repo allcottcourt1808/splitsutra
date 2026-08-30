@@ -38,6 +38,15 @@ export * from './friendRepo.js';
 /* ── `friendRequests/{id}` — the consent step, and the in-app notification it doubles as. ──── */
 export * from './friendRequestRepo.js';
 
+/* ── `groups` + `groups/{gid}/members` — the group list, detail, and the callable seams. ─── */
+export * from './groupRepo.js';
+
+/* ── `groups/{gid}/expenses` — drafts, the checksum invariants, and soft delete. ──────────── */
+export * from './expenseRepo.js';
+
+/* ── `groups/{gid}/settlements` — recording a payment between two members. ────────────────── */
+export * from './settlementRepo.js';
+
 /* ── `groups/{gid}/activity` — read-only (T8). One query per group; see activityRepo. ───── */
 export * from './activityRepo.js';
 

@@ -1,30 +1,61 @@
 # Resume here
 
-**Last updated:** 2026-08-29. Project: **SplitSutra**.
+**Last updated:** 2026-08-29 (late). Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
-Checkout: `C:\Users\neeth\coding\splitsutra`.
+Checkout: `C:Users
+eethcodingsplitsutra`.
 
-## State: PRs #1–#22 merged. Two PRs open (#23, #24). `main` is at `8b4efc8`.
+## State: PRs #1–#31 merged except #23. Activity tab is on `main`.
 
-`main` carries the workspace, the core domain, the design system, the navigation shell, the
-Firestore rules and triggers, all twelve Cloud Functions, the auth data layer, the hooks that
-unblock screens, a seed script that actually runs, a design system whose styles actually reach
-the page, and — new since the last checkpoint — **friend requests (#20), Firebase Auth wired
-into the web app with route guards (#21), and `/login` rendering through FirebaseUI (#22)**.
+**#32 is open, ready for review, gate green** — the Groups and Add tabs, end to end.
+**#23** (shadcn docs) is still open and should probably become an ADR instead; see below.
 
-⚠️ The last full gate measurement was taken on the **#19** branch and has **not been re-run
-since #20–#22 landed**, so treat these numbers as stale rather than current:
-`typecheck` (both resolvers) · `lint` · `depcruise` (188 modules, 519 deps) · `format:check` ·
-287 tests (194 unit + 93 component). Re-measure before quoting a count anywhere.
+### The five tabs
 
-### The two open PRs
+| Tab      | State                                  |
+| -------- | -------------------------------------- |
+| Groups   | ✅ in #32 — 7 screens, 90 screen tests |
+| Friends  | ✅ shipped (#20, #21, #25)             |
+| Add      | ✅ in #32 — Add/Detail/Edit, 105 tests |
+| Activity | ✅ merged (#31)                        |
+| Account  | ✅ shipped                             |
 
-| PR                                                            | Branch                  | What                                                |
-| ------------------------------------------------------------- | ----------------------- | --------------------------------------------------- |
-| [#24](https://github.com/allcottcourt1808/splitsutra/pull/24) | `test/firestore-rules`  | Security Rules tests — every `allow`, pass and fail |
-| [#23](https://github.com/allcottcourt1808/splitsutra/pull/23) | `feat/add-shadcn-theme` | docs: shadcn theme setup instructions               |
+Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
+format:check · **636 tests across 40 files**.
 
-Both based on `main` directly, like every other branch here.
+### 🔴 Open decisions, none of them mine
+
+1. **Comment tombstones are impossible under the current rules.** Phase-08 wants a "comment
+   deleted" marker; the rules set `allow update: if false` (T12) while `delete` is a hard
+   delete. Both cannot hold, and it cuts against Article V. Documented in `deleteComment`.
+2. **AC-E3.4 counts the wrong quantity** — `owing` counts debtors, not payments. The test
+   pins the current string so a change fails loudly.
+3. **Two delete affordances for an expense** — the detail screen's 5-second undo and a
+   two-step confirm on the edit screen. Pick one.
+4. **shadcn (#23)** — recommended against: Article IX is tokens-only and `docs/11` prices
+   component reuse at 0%, so anything DOM-bound is discarded at Phase 12. Fold the doc into
+   `docs/12-decisions.md` as a rejected option and close the PR.
+5. **Console-only Firebase Auth setup (phase-02 §3) is still entirely undone**, and it is the
+   part that costs money: the three providers, authorized domains, and 🔴 the **US-only SMS
+   region policy + 50/day quota**. `apps/web/.env.local` still has
+   `VITE_USE_EMULATORS=false`, so phone sign-in sends real SMS at real cost right now.
+
+### Smaller things owed
+
+- `canEdit` is duplicated between `ExpenseDetailScreen` and `EditExpenseScreen`; it
+  restates a Security Rule and belongs in core beside it.
+- `SettleUp` prefill round-trips through a formatted string instead of inverting
+  `parseAmountToMinor` — safe only because the locale is hardcoded `en-US`.
+- A successful `leaveGroup` leaves you on the members screen with the button still live.
+- `apps/web/package.json` still depends on `firebaseui`, which its own notes say was dropped.
+- `firebase/tests/integration/` still does not exist; `pnpm test:integration` matches zero files.
+- No pre-commit hook: gitleaks is referenced in docs/09, docs/10, docs/20 and two checklists,
+  but `.husky/` holds only `_`. Nothing mechanically enforces the no-service-account-key rule.
+
+---
+
+<details>
+<summary>Older checkpoint notes</summary>
 
 ### 🧪 What #24 adds — the rules tests that were owed since #20
 
@@ -419,3 +450,5 @@ not exist. `docs/09` lists them; they are now the highest-value tests outstandin
 6. **`e2e/specs/`**, which still does not exist. Independent of 2–4 — a good parallel track.
 7. **Uncomment the emulator-backed suites in `.github/workflows/ci.yml`** once 5 exists,
    otherwise none of this runs in CI.
+
+</details>

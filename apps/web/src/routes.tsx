@@ -49,11 +49,21 @@ import { AppShell } from './navigation/AppShell';
 import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
 import { AccountScreen } from './screens/AccountScreen';
 import { ActivityScreen } from './screens/ActivityScreen';
+import { AddExpenseScreen } from './screens/AddExpenseScreen';
 import { AddFriendScreen } from './screens/AddFriendScreen';
+import { CreateGroupScreen } from './screens/CreateGroupScreen';
+import { EditExpenseScreen } from './screens/EditExpenseScreen';
 import { EditProfileScreen } from './screens/EditProfileScreen';
+import { ExpenseDetailScreen } from './screens/ExpenseDetailScreen';
 import { FriendDetailScreen } from './screens/FriendDetailScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
+import { GroupBalancesScreen } from './screens/GroupBalancesScreen';
+import { GroupDetailScreen } from './screens/GroupDetailScreen';
+import { GroupMembersScreen } from './screens/GroupMembersScreen';
+import { GroupSettingsScreen } from './screens/GroupSettingsScreen';
+import { GroupsScreen } from './screens/GroupsScreen';
 import { PendingScreen } from './screens/PendingScreen';
+import { SettleUpScreen } from './screens/SettleUpScreen';
 import { SignInScreen } from './screens/SignInScreen';
 
 /** Rendered without the tab bar. See the note above before adding to this. */
@@ -71,6 +81,16 @@ const screenNames = Object.keys(ROUTE_PATTERNS) as ScreenName[];
 const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
   SignIn: SignInScreen,
   ActivityFeed: ActivityScreen,
+  GroupList: GroupsScreen,
+  CreateGroup: CreateGroupScreen,
+  GroupDetail: GroupDetailScreen,
+  GroupMembers: GroupMembersScreen,
+  GroupSettings: GroupSettingsScreen,
+  GroupBalances: GroupBalancesScreen,
+  SettleUp: SettleUpScreen,
+  AddExpense: AddExpenseScreen,
+  ExpenseDetail: ExpenseDetailScreen,
+  EditExpense: EditExpenseScreen,
   FriendList: FriendsScreen,
   FriendDetail: FriendDetailScreen,
   AddFriend: AddFriendScreen,

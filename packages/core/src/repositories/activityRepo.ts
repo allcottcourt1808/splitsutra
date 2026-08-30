@@ -16,10 +16,11 @@
  * The merge itself lives in `hooks/useActivity.ts`, which owns the N subscriptions.
  */
 
-import { limit, orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query } from 'firebase/firestore';
 
 import type { Activity, Group } from '../types/index.js';
-import { activityCollection, groupsCollection } from './refs.js';
+import { watchGroupsForUser } from './groupRepo.js';
+import { activityCollection } from './refs.js';
 import { watchQuery, type OnError, type OnNext, type Unsubscribe } from './subscribe.js';
 
 /** Entries per page (AC-F1.3), applied **per group** before the client-side merge. */
@@ -28,27 +29,25 @@ export const ACTIVITY_PAGE_SIZE = 25;
 /**
  * The groups whose feeds make up the user's activity, live.
  *
- * Queried here rather than reused from `groupRepo` because the feed's needs differ: it wants
- * every group the user is in — implicit friend groups included, since a 1:1 expense is activity
- * too — and it needs no ordering, so it stays on the automatic single-field index.
+ * 🔴 Not a query — `groupRepo.watchGroupsForUser` owns the only `memberIds array-contains`
+ * subscription there is (Article VI). This names the two options the feed differs on:
  *
- * Soft-deleted groups are dropped client-side rather than with a `where('deletedAt', '==', null)`
- * that would cost a composite index for a handful of documents (AC-F1.4: only groups the user is
- * currently in — leaving a group removes the uid from `memberIds`, so the query itself handles
- * that half).
+ * - `includeImplicit: true` — a 1:1 friend expense is activity too, and AC-F1.1 says the feed
+ *   lists "group **and friend** events". Only the Groups tab hides implicit groups (D2).
+ * - `pageSize: null` — every group the user is currently in (AC-F1.4), not the first 50, and
+ *   unordered because the rows are re-sorted after the per-group merge anyway.
+ *
+ * Soft-deleted groups are dropped there, client-side, rather than with a
+ * `where('deletedAt', '==', null)` that would cost a composite index for a handful of documents.
+ * Leaving a group removes the uid from `memberIds`, so the query itself handles the other half
+ * of AC-F1.4.
  */
 export function watchActivityGroups(
   uid: string,
   onNext: OnNext<readonly Group[]>,
   onError: OnError,
 ): Unsubscribe {
-  return watchQuery(
-    query(groupsCollection(), where('memberIds', 'array-contains', uid)),
-    (groups) => {
-      onNext(groups.filter((group) => group.deletedAt === null));
-    },
-    onError,
-  );
+  return watchGroupsForUser(uid, onNext, onError, { includeImplicit: true, pageSize: null });
 }
 
 /**
