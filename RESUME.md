@@ -21,7 +21,24 @@ eethcodingsplitsutra`.
 | Account  | ✅ shipped                             |
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
-format:check · **636 tests across 40 files**.
+format:check · **639 tests across 40 files**.
+
+### 2026-08-29 — currency picker + a design-system clipping bug
+
+- New-group currency default is **USD** already: `draftCurrency ?? profile.defaultCurrency ?? DEFAULT_CURRENCY`,
+  and `DEFAULT_CURRENCY` is USD. The profile field is fully wired (EditProfile writes it, Account
+  shows it), so it is asked once, not per group. No change was needed there.
+- The picker on `CreateGroupScreen` is now **collapsed by default** — a summary row that expands on
+  tap and collapses again on pick. AC-C1.1s "fixed at creation" warning stays visible in both states.
+- 🔴 **Found and fixed a content-eating layout bug in the design system.** `.stack` and `.card`
+  defaulted to `flex: 0 1 auto`; combined with `min-height: 0` and `.cardFlush { overflow: hidden }`
+  they collapsed under their own content, so `.screenBody.scrollHeight` never exceeded its
+  `clientHeight` and the overflow was **unreachable rather than scrolled to** — the currency list
+  lost JPY and CNY with no scrollbar to hint at it. Both are now `flex: 0 0 auto`; `<Stack flex>`
+  remains the opt-in for shrinking. Verified in the browser: card 410.6px vs list 409px, not
+  clipped, screenBody 902 > 711, all 8 rows reachable.
+- ⚠️ **happy-dom computes no layout, so no test can catch a regression of this.** Other screens were
+  not visually re-checked after the CSS change; the gate is green but it is blind here.
 
 ### 🔴 Open decisions, none of them mine
 
