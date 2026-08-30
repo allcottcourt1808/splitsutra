@@ -46,6 +46,7 @@ import {
   groupTypeSchema,
   leaveGroupSchema,
   recomputeGroupBalancesSchema,
+  redeemInviteSchema,
   removeMemberSchema,
   // Type-only: referenced solely as `typeof SELECTABLE_GROUP_TYPES` to derive CreatableGroupType.
   type SELECTABLE_GROUP_TYPES,
@@ -56,6 +57,7 @@ import {
   type GroupMember,
   type LeaveGroupInput,
   type RecomputeGroupBalancesInput,
+  type RedeemInviteInput,
   type RemoveMemberInput,
 } from '../types/index.js';
 import { CALLABLE, callFunction } from './callables.js';
@@ -402,4 +404,41 @@ export interface CreateInviteResult {
 export async function createInvite(input: CreateInviteInput): Promise<CreateInviteResult> {
   const payload = createInviteSchema.parse(input);
   return callFunction<CreateInviteInput, CreateInviteResult>(CALLABLE.createInvite, payload);
+}
+
+/**
+ * What `redeemInvite` answers with.
+ *
+ * `groupName` comes back from the Function because the client has no other way to learn it:
+ * `invites/{id}` denies every client read, and the caller is not yet a member of the group, so
+ * `groups/{gid}` denies them too. Until the join commits there is nothing about the group this
+ * device is allowed to know.
+ */
+export interface RedeemInviteResult {
+  readonly groupId: string;
+  readonly groupName: string;
+  /**
+   * `true` when the caller was already an active member and nothing changed.
+   *
+   * 🔴 A success, not an error — docs/06 is explicit that double-tapping join must not fail.
+   * The screen still needs to tell the two apart, because "You joined X" is a lie when nothing
+   * happened, so it is reported rather than flattened away.
+   */
+  readonly alreadyMember: boolean;
+}
+
+/**
+ * Join a group by invite token (AC-B3.4) — the only path by which anybody becomes a member.
+ *
+ * Rules cannot authorise this: the caller cannot add themselves to `groups/{gid}/members` (T4)
+ * and cannot read the group to check the invite in the first place. So every authorisation
+ * decision lives in the Function, and the token is the entire credential.
+ *
+ * The schema parse here is the same one the Function runs, and it earns its place: a malformed
+ * token fails on this device instead of spending a callable invocation and a Firestore query to
+ * be told the same thing.
+ */
+export async function redeemInvite(input: RedeemInviteInput): Promise<RedeemInviteResult> {
+  const payload = redeemInviteSchema.parse(input);
+  return callFunction<RedeemInviteInput, RedeemInviteResult>(CALLABLE.redeemInvite, payload);
 }

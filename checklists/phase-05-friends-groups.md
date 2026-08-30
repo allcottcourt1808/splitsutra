@@ -80,16 +80,35 @@ Covers **Epic B** and **Epic C**.
 
 ## 8. Invites
 
-- [ ] 🟡 `createInvite` callable — 128-bit random token, 14-day expiry (AC-B3.1)
-- [ ] 🔴 `invites` rules: **no client read or write at all** — fully mediated by callables
-- [ ] 🟡 `redeemInvite` callable, per [../docs/06-cloud-functions.md](../docs/06-cloud-functions.md):
+- [x] ✅ 🟡 `createInvite` callable — 128-bit random token, 14-day expiry (AC-B3.1)
+- [x] ✅ 🔴 `invites` rules: **no client read or write at all** — fully mediated by callables
+- [x] ✅ 🟡 `redeemInvite` callable, per [../docs/06-cloud-functions.md](../docs/06-cloud-functions.md):
       not-found → used/revoked → expired → **already a member returns success
       (idempotent)** → member cap → transactional join
-- [ ] 🟡 `/invite/:token` screen showing group name before joining, working logged-out then
-      resuming after sign-in (AC-B3.3)
-- [ ] 🟡 Web Share API with clipboard fallback (AC-B3.2) — **via the `PlatformAdapter`**,
+- [x] ✅ 🟡 `/invite/:token` screen, working logged-out then resuming after sign-in (AC-B3.3) —
+      `apps/web/src/screens/JoinGroupScreen.tsx`. The logged-out half needs nothing here:
+      `JoinGroup` sits inside `<RequireAuth>`, which stashes the path and replays it after
+      sign-in.
+- [x] ✅ 🟡 Web Share API with clipboard fallback (AC-B3.2) — **via the `PlatformAdapter`**,
       not `navigator.share` directly
-- [ ] 🟡 Distinct error messages per failure case (AC-B3.5)
+- [x] ✅ 🟡 Distinct error messages per failure case (AC-B3.5) — the four statuses `redeemInvite`
+      throws deliberately are shown verbatim; every other `FirebaseError` is replaced, because
+      an undeployed Function rejects with the message `internal [0]` and passing that through
+      put a raw status code on screen.
+
+> 🔴 **"showing group name before joining" was dropped, and the checklist was the thing that
+> was wrong.** It cannot be built: `firestore.rules` denies every client read of
+> `invites/{id}` — "a readable invite collection would leak group names and let tokens be
+> brute-forced offline" — and the caller is not a member yet, so `groups/{gid}` denies them
+> too. A `peekInvite` callable would trade that security property for one line of copy, and
+> putting the name in the URL is worse, because a query parameter is forgeable: a link could
+> claim any group name while adding you to a stranger's group. The name is returned by the
+> join, where the server vouches for it. Article IV — if a change violates the boundary, the
+> change is wrong.
+
+> ⚠️ **None of §8 is exercised end to end yet.** `createInvite` and `redeemInvite` are not
+> deployed, so both paths fail at the callable. The screens, the wrapper and the rules are in;
+> the round trip is unverified until Functions deploy or the emulators run.
 
 ## 9. Tests
 

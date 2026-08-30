@@ -62,7 +62,7 @@ import { GroupDetailScreen } from './screens/GroupDetailScreen';
 import { GroupMembersScreen } from './screens/GroupMembersScreen';
 import { GroupSettingsScreen } from './screens/GroupSettingsScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
-import { PendingScreen } from './screens/PendingScreen';
+import { JoinGroupScreen } from './screens/JoinGroupScreen';
 import { SettleUpScreen } from './screens/SettleUpScreen';
 import { SignInScreen } from './screens/SignInScreen';
 
@@ -72,14 +72,19 @@ const OUTSIDE_SHELL: ReadonlySet<ScreenName> = new Set<ScreenName>(['SignIn', 'J
 const screenNames = Object.keys(ROUTE_PATTERNS) as ScreenName[];
 
 /**
- * The screens that actually exist. Everything else still renders `<PendingScreen>`, which is
- * what lets the route table stay complete while the screens land one at a time.
+ * Every screen, bound to its pattern.
  *
- * Deleting an entry from here is how a screen is un-shipped, and the last entry to be added
- * takes `PendingScreen` with it — see the TODO in that file.
+ * 🔴 The type is a **total** `Record`, which is what finally makes `paths.ts`'s claim true: "a
+ * missing screen is a compile error". It was `Partial` while the screens landed one at a time,
+ * with the gaps rendering a `PendingScreen` placeholder — `JoinGroup` was the last of them, so
+ * that file is gone and the hole it covered is now closed by the compiler instead.
+ *
+ * Adding a pattern to `ROUTE_PATTERNS` without a screen here no longer ships a "not built yet"
+ * page; it fails to build, which is the right moment to find out.
  */
-const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
+const SCREENS: Record<ScreenName, ComponentType> = {
   SignIn: SignInScreen,
+  JoinGroup: JoinGroupScreen,
   ActivityFeed: ActivityScreen,
   GroupList: GroupsScreen,
   CreateGroup: CreateGroupScreen,
@@ -100,10 +105,7 @@ const SCREENS: Partial<Record<ScreenName, ComponentType>> = {
 
 const routeFor = (name: ScreenName): RouteObject => {
   const Screen = SCREENS[name];
-  return {
-    path: ROUTE_PATTERNS[name],
-    element: Screen === undefined ? <PendingScreen screen={name} /> : <Screen />,
-  };
+  return { path: ROUTE_PATTERNS[name], element: <Screen /> };
 };
 
 /** Guarded, no tab bar — `JoinGroup` today, and anything else that opts out of the shell. */
