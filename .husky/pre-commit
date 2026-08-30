@@ -1,0 +1,4 @@
+# Order matters. lint-staged rewrites files (eslint --fix, prettier --write) and re-stages
+# them, so the scan has to run afterwards to see what is actually about to be committed.
+pnpm lint-staged
+node scripts/scan-secrets.mjs

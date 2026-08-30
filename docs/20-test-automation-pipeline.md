@@ -272,12 +272,19 @@ preview channel), but they aren't required.
 > consecutive commits.** If it isn't, that's a signal to fix the suite before launching,
 > not to skip the check.
 
-> **One exception worth considering:** secret scanning (`gitleaks`). A committed
-> service-account key is **permanently in git history** and gives full database access
-> bypassing all Security Rules — irreversible in a way a failing test never is. It's
-> already planned as a _pre-commit hook_ (local, Phase 01), so this is covered without a
-> CI gate. Mentioning it only because "don't enforce anything yet" and "don't leak a
-> credential" are different categories of risk. Your call.
+> **One exception worth considering:** secret scanning. A committed service-account key is
+> **permanently in git history** and gives full database access bypassing all Security
+> Rules — irreversible in a way a failing test never is. It's already planned as a
+> _pre-commit hook_ (local, Phase 01), so this is covered without a CI gate. Mentioning it
+> only because "don't enforce anything yet" and "don't leak a credential" are different
+> categories of risk. Your call.
+>
+> **Resolved:** the hook is `.husky/pre-commit` → `scripts/scan-secrets.mjs`, not `gitleaks`
+> (see checklists/phase-01-foundation.md for why). CI runs only the scanner's `--self-test`,
+> not a scan of the repo — the commit is the right place to stop a credential, because by
+> the time CI sees it the object already exists in a pushed branch and rotation is the only
+> remedy. ⚠️ The residual hole is `--no-verify`, which no local hook can close. Closing it
+> needs a server-side scan; that is a Phase 10 item, alongside the full-history sweep.
 
 ### Stage 2 — Enforced (at v1.0, Phase 11) 🔴
 
