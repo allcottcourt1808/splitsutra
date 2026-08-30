@@ -1,13 +1,12 @@
 # Resume here
 
-**Last updated:** 2026-08-29 (late). Project: **SplitSutra**.
+**Last updated:** 2026-08-30. Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
-Checkout: `C:Users
-eethcodingsplitsutra`.
+Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#31 merged except #23. Activity tab is on `main`.
+## State: PRs #1–#33 merged except #23. All four tabs are on `main`.
 
-**#32 is open, ready for review, gate green** — the Groups and Add tabs, end to end.
+**#32** (Groups + Add tabs) and **#33** (currency picker collapse + the flex fix) are merged.
 **#23** (shadcn docs) is still open and should probably become an ADR instead; see below.
 
 ### The five tabs
@@ -21,7 +20,7 @@ eethcodingsplitsutra`.
 | Account  | ✅ shipped                             |
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
-format:check · **639 tests across 40 files**.
+format:check · **650 tests across 42 files**.
 
 ### 2026-08-29 — currency picker + a design-system clipping bug
 
@@ -39,6 +38,45 @@ format:check · **639 tests across 40 files**.
   clipped, screenBody 902 > 711, all 8 rows reachable.
 - ⚠️ **happy-dom computes no layout, so no test can catch a regression of this.** Other screens were
   not visually re-checked after the CSS change; the gate is green but it is blind here.
+
+### 2026-08-30 — the same collapse on the profile screen, and the audit PR #33 could not do
+
+Three agents in parallel on disjoint files. All three landed; one needed correcting.
+
+**`EditProfileScreen` picker collapsed**, mirroring `CreateGroupScreen`. Deliberately WITHOUT
+the AC-C1.1 warning: a group's currency is immutable, `users/{uid}.defaultCurrency` is not, so
+copying that card across would have been a false statement. There is a test asserting the
+string is absent.
+
+🔴 **The helper copy on that screen was wrong twice.** It originally said the default is used
+"for new groups **and expenses**" — expenses take their currency from the group, not the
+profile. The replacement said it seeds "groups you create" and nothing else, which was also
+wrong: `sendFriendRequest.ts:185` and `respondToFriendRequest.ts:112` read `defaultCurrency`
+as `currencyHint` and pass it to `establishFriendship`, so it also fixes the currency of the
+implicit group behind a friendship — immutable under the same T10. If you send the request,
+YOUR default fixes that ledger. The copy now names both readers. **The mistake both times was
+grepping `apps/web` only; `defaultCurrency` has consumers in `firebase/functions`.**
+
+**A regression guard for the flex fix** — `apps/web/src/components/__tests__/layoutPrimitives.css.test.ts`.
+It reads `layout.module.css` as TEXT and pins four declarations: `.stack` fallback is `0 0 auto`,
+`.card` is `0 0 auto`, `.cardFlush` still clips, and `.screenBody` is the ONLY rule in the file
+with `overflow: auto|scroll`. It would NOT have caught the original bug — `0 1 auto` was valid
+CSS and only a browser could show it was wrong — it catches the second occurrence.
+
+**The browser audit came back clean, and is worth trusting further than a screenshot pass.**
+It A/B-tested the actual CSS delta live by injecting the old values _inside `@layer primitives`_
+so the cascade matched pre-fix exactly, then diffed `top/height/width` of every DOM node:
+`diffCount: 0` on all eight reachable screens at rest. Under synthetic 3× overflow the pre-fix
+build collapsed nine `.cardFlush` cards to **literally zero height** while they held 59px of
+content; post-fix, zero clipped. The feared opposite failure cannot occur: the change moved
+`flex-shrink` 1→0 and never touched `flex-grow`, and centring is a grow behaviour, so every
+`<Stack flex="1" justify="center">` is untouched.
+
+⚠️ **The real gap is data, not layout.** The signed-in account has no groups and no friends, so
+every list rendered empty and group detail / members / balances / settle-up / group settings /
+expense detail were never reachable at all. Those hold the longest lists. Creating one would
+have written to the live Firestore project. **Re-run the audit against the emulators with
+`VITE_USE_EMULATORS=true` and a seeded account** — that is the outstanding piece.
 
 ### 🔴 Open decisions, none of them mine
 
