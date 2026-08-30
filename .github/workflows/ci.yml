@@ -60,6 +60,11 @@ jobs:
       # six-minute E2E run.
       - run: pnpm typecheck
       - run: pnpm lint
+      # Verifies the pre-commit secret scanner's own rules, NOT the repo's contents — a
+      # credential has to be stopped at the commit, because once CI can see it the object is
+      # already pushed and rotation is the only remedy. What decays silently is the scanner
+      # itself: a regex edited into uselessness still exits 0 on every clean commit forever.
+      - run: node scripts/scan-secrets.mjs --self-test
       # Cheapest gate in the list, and it was missing. `.prettierignore` had no entry for
       # firebase/functions/lib/, so `pnpm format:check` passed or failed locally depending
       # on whether you happened to have built recently — and CI never ran it, so nothing

@@ -88,7 +88,11 @@ Write a script using the raw SDK — no UI — and confirm each of these **fails
 ## 7. Privacy & compliance
 
 - [ ] 🟡 Confirm no PII in URLs or query strings
-- [ ] 🟡 `gitleaks` clean across full git history, not just the working tree
+- [ ] 🟡 `gitleaks` clean across full git history, not just the working tree — still owed,
+      and `gitleaks` is right for _this_ job even though the pre-commit hook is not: a
+      one-off history sweep is installed once by one person, not by every clone. The hook
+      (`scripts/scan-secrets.mjs`) only ever saw commits made after it landed, and cannot
+      see past a `--no-verify`.
 - [ ] 🟡 Confirm no service-account JSON was ever committed
 - [ ] 🟡 Privacy policy and terms pages (required for Google sign-in branding, and for the
       app stores later)

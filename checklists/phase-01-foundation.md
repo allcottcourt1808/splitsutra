@@ -17,7 +17,13 @@ boundary is enforced by CI from day one.
       `.emulator-data/`, `.firebase/`, `*-firebase-adminsdk-*.json`, `coverage/`,
       `playwright-report/`, `.DS_Store`
 - [ ] 🔴 Commit the existing `docs/` and `checklists/` as the first commit
-- [ ] 🟡 `gitleaks` pre-commit hook (NFR-7) via husky
+- [x] ✅ 🟡 Secret-scanning pre-commit hook (NFR-7) via husky — `.husky/pre-commit` runs
+      `lint-staged` and then `scripts/scan-secrets.mjs`. Not `gitleaks`: that is a Go binary
+      every clone and CI image has to install first, and a hook that no-ops when the binary
+      is absent reads as coverage while catching nothing. The Node scanner needs no setup
+      and scans the **staged blob**, so it catches a key saved under an innocent filename or
+      force-added past `.gitignore`. `node scripts/scan-secrets.mjs --self-test` covers the
+      rules, including the false positives that would get the hook muted.
 - [ ] 🔴 **CI runs on every push and PR — advisory only, nothing blocks yet (Stage 1).**
       Reference: [../docs/20-test-automation-pipeline.md](../docs/20-test-automation-pipeline.md) §5a
   - [x] ✅ **Leave branch protection OFF until v1.0.** Through Phases 01–10 the codebase is

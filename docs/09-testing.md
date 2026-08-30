@@ -164,7 +164,7 @@ Also assert in E2E:
 | **Core purity** | `dependency-cruiser`                     | **NFR-10** — `core` must not import `react-dom`/DOM/`react-native` |
 | No float money  | custom ESLint rule                       | NFR-8 — bans `parseFloat` and `/` in `domain/money` paths          |
 | Bundle size     | `rollup-plugin-visualizer` + size budget | NFR-2 (350 KB gz)                                                  |
-| Secrets         | `gitleaks` pre-commit                    | NFR-7                                                              |
+| Secrets         | `scripts/scan-secrets.mjs` pre-commit    | NFR-7                                                              |
 | Perf            | Lighthouse CI                            | NFR-1                                                              |
 
 The dependency-cruiser rule is the one that silently saves Phase 12. Without it, a single

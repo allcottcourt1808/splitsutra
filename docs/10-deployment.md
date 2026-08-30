@@ -20,8 +20,12 @@ Target repo: `https://github.com/allcottcourt1808/splitsutra`
 `playwright-report/`.
 
 > The service-account JSON pattern matters. Committing a Firebase Admin key to a public
-> repo hands over full database access — it bypasses Security Rules entirely. Run
-> `gitleaks` as a pre-commit hook (NFR-7).
+> repo hands over full database access — it bypasses Security Rules entirely.
+>
+> ⚠️ But `.gitignore` matches **filenames**, so it stops that one naming convention and
+> nothing else — a key saved as `config.json`, pasted into a fixture, or force-added with
+> `git add -f` is invisible to it. The actual guard is `.husky/pre-commit`, which runs
+> `scripts/scan-secrets.mjs` over the **staged blob** and refuses the commit (NFR-7).
 
 ---
 

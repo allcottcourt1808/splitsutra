@@ -4,9 +4,10 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#33 merged except #23. All four tabs are on `main`.
+## State: PRs #1–#35 merged except #23. All four tabs are on `main`.
 
-**#32** (Groups + Add tabs) and **#33** (currency picker collapse + the flex fix) are merged.
+**#34** (profile currency picker + layout audit) and **#35** (Couple → Friends group type) are
+merged. **#36** is open — the pre-commit secret scan; see below.
 **#23** (shadcn docs) is still open and should probably become an ADR instead; see below.
 
 ### The five tabs
@@ -21,6 +22,43 @@ Checkout: `C:\Users\neeth\coding\splitsutra`.
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-08-30 — #35: `friend` did not belong in the rules allowlist
+
+`establishFriendship` writes the implicit 1:1 group through the **Admin SDK**, which does not
+consult Security Rules at all. So `'friend'` in the client group-create allowlist authorised
+nothing legitimate — it only let a client forge a group presenting as the hidden container
+behind a friendship. Dropped.
+
+The same reasoning caught the line next to it: `isImplicit is bool` was too loose. Implicit
+groups are **filtered out of the group list** (`groupRepo.ts:80`), so a client that can set the
+flag can create a group hidden from the person it belongs to. Now `== false`, which costs
+nothing — `createGroup` writes `false` unconditionally. Two rules tests added; 227 passing.
+
+🔴 **Still owed:** `couple` remains in `GROUP_TYPES` purely so old documents keep decoding.
+For a pre-launch app that history is probably not worth carrying — but deleting it is a
+**live-data** question, not a cleanup one: `parseDocument` throws on an unknown enum member,
+so one stored `couple` document takes down the whole `memberIds array-contains` group list,
+not just that group. Confirm nothing stores it first. Needs the emulator or a deploy.
+
+### 2026-08-30 — #36: the pre-commit hook that was never installed
+
+husky was installed, `prepare` ran it, `lint-staged` was configured — and `.husky/pre-commit`
+did not exist, so **neither had ever run on a commit**. `.gitignore` was the only guard, and it
+matches filenames: a service-account key saved as `config.json` or force-added with `git add -f`
+walked straight past it. Verified, then fixed.
+
+`.husky/pre-commit` now runs `lint-staged` (first — it rewrites and re-stages) then
+`scripts/scan-secrets.mjs`, which reads the **staged blob** (`git show :path`), not the working
+tree. Not gitleaks: a Go binary every clone must install, and a hook that no-ops when it is
+missing reads as coverage. phase-10's full-history sweep still wants gitleaks and still says so.
+
+⚠️ `--no-verify` bypasses all of it and no local hook can close that — needs a server-side scan,
+left as a Phase 10 item.
+
+The scanner exempts no file, including itself; its fixtures are string fragments so no rule
+matches its own source. That proved itself immediately — **three fixtures written as literals
+blocked the hook's own first commit.**
 
 ### 2026-08-29 — currency picker + a design-system clipping bug
 
@@ -104,8 +142,7 @@ have written to the live Firestore project. **Re-run the audit against the emula
 - A successful `leaveGroup` leaves you on the members screen with the button still live.
 - `apps/web/package.json` still depends on `firebaseui`, which its own notes say was dropped.
 - `firebase/tests/integration/` still does not exist; `pnpm test:integration` matches zero files.
-- No pre-commit hook: gitleaks is referenced in docs/09, docs/10, docs/20 and two checklists,
-  but `.husky/` holds only `_`. Nothing mechanically enforces the no-service-account-key rule.
+- ~~No pre-commit hook.~~ Done in #36.
 
 ---
 
