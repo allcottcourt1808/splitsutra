@@ -83,6 +83,21 @@ function currencies(container: HTMLElement): Element[] {
   return [...container.querySelectorAll('ul[aria-label="Currencies"] > li')];
 }
 
+/**
+ * The picker is collapsed on arrival, so every currency assertion has to open it first. The
+ * summary row's accessible name carries the current currency, hence the prefix match.
+ */
+async function openCurrencyPicker(container: HTMLElement): Promise<void> {
+  const row = [...container.querySelectorAll('button, a')].find((el) =>
+    (el.getAttribute('aria-label') ?? '').startsWith('Currency, '),
+  );
+  if (!(row instanceof HTMLElement)) throw new Error('No collapsed currency row to open');
+  await act(async () => {
+    row.click();
+    await Promise.resolve();
+  });
+}
+
 beforeEach(() => {
   state.user = { uid: 'u1' };
   state.profile = null;
@@ -112,8 +127,18 @@ describe('<CreateGroupScreen>', () => {
     expect(button(container, 'Create').disabled).toBe(true);
   });
 
-  it('offers the pinned common currencies until the search narrows them', () => {
+  it('keeps the currency list collapsed so the name and type fit on one screen', () => {
     const container = visit();
+
+    expect(currencies(container)).toHaveLength(0);
+    expect(container.querySelector('ul[aria-label="Currencies"]')).toBeNull();
+    // The choice is still stated, it just is not costing a screenful.
+    expect(container.textContent).toContain('USD — US Dollar');
+  });
+
+  it('offers the pinned common currencies until the search narrows them', async () => {
+    const container = visit();
+    await openCurrencyPicker(container);
 
     expect(currencies(container)).toHaveLength(8);
     expect(container.textContent).toContain('Showing the most common');
@@ -126,14 +151,30 @@ describe('<CreateGroupScreen>', () => {
     expect(narrowed[0]?.textContent).toContain('INR');
   });
 
-  it('says so when nothing matches, rather than showing an empty box', () => {
+  it('says so when nothing matches, rather than showing an empty box', async () => {
     const container = visit();
+    await openCurrencyPicker(container);
 
     type(field(container, 'Find a currency'), 'zzz');
 
     expect(currencies(container)).toHaveLength(0);
     expect(container.textContent).toContain('No currency matches');
     expect(container.textContent).toContain('Try the three-letter code');
+  });
+
+  it('closes without choosing, and forgets the search when it reopens', async () => {
+    const container = visit();
+    await openCurrencyPicker(container);
+
+    type(field(container, 'Find a currency'), 'zzz');
+    await press(container, 'Done');
+
+    expect(container.querySelector('ul[aria-label="Currencies"]')).toBeNull();
+    expect(container.textContent).toContain('USD — US Dollar');
+
+    await openCurrencyPicker(container);
+
+    expect(currencies(container)).toHaveLength(8);
   });
 
   it('🔴 states that the currency is fixed at creation (AC-C1.1)', () => {
@@ -143,16 +184,16 @@ describe('<CreateGroupScreen>', () => {
     expect(text).toContain('nothing is ever converted');
   });
 
-  it("starts from the profile's default currency", () => {
+  it("starts from the profile's default currency, so it is asked once, not per group", () => {
     state.profile = { uid: 'u1', defaultCurrency: 'INR' };
 
     const container = visit();
 
-    expect(container.textContent).toContain('INR · ₹');
+    expect(container.textContent).toContain('INR — Indian Rupee');
   });
 
-  it('falls back to the app default when the profile has not arrived', () => {
-    expect(visit().textContent).toContain('USD · $');
+  it('falls back to USD when the profile has not arrived', () => {
+    expect(visit().textContent).toContain('USD — US Dollar');
   });
 
   it('creates with the signed-in uid and only the fields Rules allow', async () => {
@@ -160,6 +201,7 @@ describe('<CreateGroupScreen>', () => {
 
     type(field(container, 'Group name'), '  Goa Trip  ');
     await press(container, 'Home');
+    await openCurrencyPicker(container);
     await press(container, 'Use Indian Rupee');
     await press(container, 'Create');
 
@@ -174,14 +216,23 @@ describe('<CreateGroupScreen>', () => {
     expect(Object.keys(input)).not.toContain('createdBy');
   });
 
-  it('marks the chosen currency as selected', async () => {
+  it('marks the chosen currency as selected while the list is open', async () => {
     const container = visit();
-    await press(container, 'Use Indian Rupee');
+    await openCurrencyPicker(container);
 
-    const selected = [...container.querySelectorAll('[aria-label="Indian Rupee, selected"]')];
+    const selected = [...container.querySelectorAll('[aria-label="US Dollar, selected"]')];
 
     expect(selected).toHaveLength(1);
-    expect(container.textContent).toContain('INR · ₹');
+  });
+
+  it('collapses back to the choice once one is picked', async () => {
+    const container = visit();
+    await openCurrencyPicker(container);
+    await press(container, 'Use Indian Rupee');
+
+    expect(container.querySelector('ul[aria-label="Currencies"]')).toBeNull();
+    expect(container.textContent).toContain('INR — Indian Rupee');
+    expect(container.textContent).toContain('recorded in INR');
   });
 
   it('lands on the new group once it is created', async () => {
