@@ -12,6 +12,12 @@
  * varies between runtimes and Hermes ships a trimmed table, so a currency present on web and
  * absent on mobile would be a group nobody on a phone could open (`types/currency.ts`).
  *
+ * It is nonetheless **collapsed by default**. The overwhelming majority of groups take the
+ * default currency, and an open list of eight rows plus a search field pushed the name field and
+ * the type control off a 390px screen — the two things every group actually has to set. Collapsed,
+ * the choice is still stated (the summary row names the currency, and the warning above it is
+ * always visible for AC-C1.1); it just costs one tap to change instead of a screenful to ignore.
+ *
  * The creator's `members/{uid}` document is written by `onGroupCreated`, not from here: a client
  * that could write a member document could write its own balance (Article III).
  */
@@ -82,12 +88,19 @@ export function CreateGroupScreen() {
   const [type, setType] = useState<CreatableGroupType>('trip');
   const [draftCurrency, setDraftCurrency] = useState<CurrencyCode | null>(null);
   const [query, setQuery] = useState('');
+  const [picking, setPicking] = useState(false);
   const [state, setState] = useState<SaveState>({ kind: 'idle' });
 
   const currency = draftCurrency ?? profile?.defaultCurrency ?? DEFAULT_CURRENCY;
   const results = useMemo(() => matchingCurrencies(query), [query]);
   const invalid = nameError(name);
   const canSave = user !== null && invalid === undefined && state.kind !== 'saving';
+
+  /** Closing resets the search so reopening starts from the pinned eight, not a stale needle. */
+  function closePicker(): void {
+    setPicking(false);
+    setQuery('');
+  }
 
   async function save(): Promise<void> {
     if (!canSave || user === null) return;
@@ -157,11 +170,15 @@ export function CreateGroupScreen() {
         <Stack gap="sm">
           <Row justify="between" align="baseline">
             <Text weight="semibold">Currency</Text>
-            <Text variant="caption" tone="secondary">
-              {currency} · {CURRENCIES[currency].symbol}
-            </Text>
+            {picking && (
+              <Button variant="ghost" onPress={closePicker}>
+                Done
+              </Button>
+            )}
           </Row>
 
+          {/* 🔴 AC-C1.1: stated whether or not the picker is open — it is the one thing about
+              this screen that cannot be undone afterwards. */}
           <Card>
             <Text variant="caption" tone="secondary">
               Pick carefully: a group&apos;s currency is fixed when it is created. Every expense in
@@ -169,55 +186,81 @@ export function CreateGroupScreen() {
             </Text>
           </Card>
 
-          <Input
-            label="Find a currency"
-            value={query}
-            onValueChange={setQuery}
-            type="search"
-            inputMode="search"
-            placeholder="USD, rupee, yen…"
-            helper={
-              query.trim().length === 0
-                ? 'Showing the most common. Type to search them all.'
-                : `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`
-            }
-          />
-
-          <Card flush>
-            <List
-              data={results}
-              aria-label="Currencies"
-              keyExtractor={(code) => code}
-              empty={
-                <Stack padding="md">
-                  <Text tone="secondary">
-                    No currency matches “{query.trim()}”. Try the three-letter code.
+          {!picking && (
+            <Card flush>
+              <ListRow
+                title={`${currency} — ${CURRENCIES[currency].name}`}
+                subtitle="Tap to use a different one."
+                trailing={
+                  <Text aria-hidden tone="secondary">
+                    {CURRENCIES[currency].symbol}
                   </Text>
-                </Stack>
+                }
+                label={`Currency, ${CURRENCIES[currency].name}. Change it`}
+                onPress={() => {
+                  setPicking(true);
+                }}
+              />
+            </Card>
+          )}
+
+          {picking && (
+            <Input
+              label="Find a currency"
+              value={query}
+              onValueChange={setQuery}
+              type="search"
+              inputMode="search"
+              placeholder="USD, rupee, yen…"
+              autoFocus
+              helper={
+                query.trim().length === 0
+                  ? 'Showing the most common. Type to search them all.'
+                  : `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`
               }
-              renderItem={(code) => (
-                <ListRow
-                  title={`${code} — ${CURRENCIES[code].name}`}
-                  subtitle={code === currency ? 'Selected' : undefined}
-                  chevron={false}
-                  trailing={
-                    <Text aria-hidden tone={code === currency ? 'primary' : 'secondary'}>
-                      {code === currency ? '✓' : CURRENCIES[code].symbol}
-                    </Text>
-                  }
-                  label={
-                    code === currency
-                      ? `${CURRENCIES[code].name}, selected`
-                      : `Use ${CURRENCIES[code].name}`
-                  }
-                  onPress={() => {
-                    setDraftCurrency(code);
-                    setState({ kind: 'idle' });
-                  }}
-                />
-              )}
             />
-          </Card>
+          )}
+
+          {picking && (
+            <Card flush>
+              <List
+                data={results}
+                aria-label="Currencies"
+                keyExtractor={(code) => code}
+                empty={
+                  <Stack padding="md">
+                    <Text tone="secondary">
+                      No currency matches “{query.trim()}”. Try the three-letter code.
+                    </Text>
+                  </Stack>
+                }
+                renderItem={(code) => (
+                  <ListRow
+                    title={`${code} — ${CURRENCIES[code].name}`}
+                    subtitle={code === currency ? 'Selected' : undefined}
+                    chevron={false}
+                    trailing={
+                      <Text aria-hidden tone={code === currency ? 'primary' : 'secondary'}>
+                        {code === currency ? '✓' : CURRENCIES[code].symbol}
+                      </Text>
+                    }
+                    label={
+                      code === currency
+                        ? `${CURRENCIES[code].name}, selected`
+                        : `Use ${CURRENCIES[code].name}`
+                    }
+                    onPress={() => {
+                      setDraftCurrency(code);
+                      setState({ kind: 'idle' });
+                      // Choosing is the whole reason the list is open; keeping it open after a
+                      // pick just re-hides the name field behind a list nobody is reading now.
+                      closePicker();
+                    }}
+                  />
+                )}
+              />
+            </Card>
+          )}
         </Stack>
 
         {state.kind === 'failed' && (
