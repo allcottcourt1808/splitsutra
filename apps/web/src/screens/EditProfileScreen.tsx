@@ -14,6 +14,17 @@
  * on mobile would be a group nobody on a phone could open. The table is the source of truth for
  * what exists; `Intl` is display only.
  *
+ * It is nonetheless **collapsed by default**. Almost nobody comes here to change the currency —
+ * they come to fix their name — and an open search field over eight rows pushed the display name
+ * field and the Save button off a 390px screen. Collapsed, the current default is still named on
+ * the summary row; changing it costs one tap instead of a screenful.
+ *
+ * Note this is *not* the group screen's situation: `users/{uid}.defaultCurrency` is freely
+ * editable and only ever seeds a group at the moment that group is created — an explicit one from
+ * `CreateGroupScreen`, or the implicit one a friendship carries, which the friend-request functions
+ * seed from the sender's profile. Those groups' currencies are the immutable ones (AC-C1.1 / T10);
+ * this field is not, so that warning belongs on `CreateGroupScreen` and would be false here.
+ *
  * ## Saving
  *
  * One write, through `updateUserProfile`, which parses the name with the same schema the read
@@ -89,6 +100,7 @@ export function EditProfileScreen() {
   const [draftName, setDraftName] = useState<string | null>(null);
   const [draftCurrency, setDraftCurrency] = useState<CurrencyCode | null>(null);
   const [query, setQuery] = useState('');
+  const [picking, setPicking] = useState(false);
   const [state, setState] = useState<SaveState>({ kind: 'idle' });
 
   const name = draftName ?? profile?.displayName ?? '';
@@ -108,6 +120,12 @@ export function EditProfileScreen() {
     changed &&
     invalid === undefined &&
     state.kind !== 'saving';
+
+  /** Closing resets the search so reopening starts from the pinned eight, not a stale needle. */
+  function closePicker(): void {
+    setPicking(false);
+    setQuery('');
+  }
 
   async function save(): Promise<void> {
     if (!canSave || user === null || profile === null) return;
@@ -180,67 +198,106 @@ export function EditProfileScreen() {
         <Stack gap="sm">
           <Row justify="between" align="baseline">
             <Text weight="semibold">Default currency</Text>
-            {currency !== null && (
-              <Text variant="caption" tone="secondary">
-                {currency} · {CURRENCIES[currency].symbol}
-              </Text>
+            {picking && (
+              <Button variant="ghost" onPress={closePicker}>
+                Done
+              </Button>
             )}
           </Row>
 
+          {/* Only ever a SEED, never a reinterpretation: this is read when a group is created
+              and at no point after, so changing it cannot move an amount that already exists.
+              Saying so is what stops it reading like the group-level choice, which really is
+              irreversible (AC-C1.1).
+
+              🔴 Two readers, not one. `CreateGroupScreen` seeds an explicit group from it, and
+              `sendFriendRequest` / `respondToFriendRequest` pass it to `establishFriendship` as
+              `currencyHint` for the implicit group behind a friendship — which is just as
+              immutable (T10). The copy therefore has to mention adding a friend; an earlier
+              draft said "groups you create" alone and was wrong about the second case. */}
           <Text variant="caption" tone="secondary">
-            Used for new groups and expenses. Existing amounts keep the currency they were recorded
-            in — nothing is ever converted.
+            Used as the starting currency for groups you create, and for the shared ledger when you
+            add a friend. Anything that already exists keeps the currency it was created with —
+            nothing is ever converted.
           </Text>
 
-          <Input
-            label="Find a currency"
-            value={query}
-            onValueChange={setQuery}
-            type="search"
-            inputMode="search"
-            placeholder="USD, rupee, yen…"
-            helper={
-              query.trim().length === 0
-                ? 'Showing the most common. Type to search all 157.'
-                : `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`
-            }
-          />
-
-          <Card flush>
-            <List
-              data={results}
-              aria-label="Currencies"
-              keyExtractor={(code) => code}
-              empty={
-                <Stack padding="md">
-                  <Text tone="secondary">
-                    No currency matches “{query.trim()}”. Try the three-letter code.
+          {/* No summary row until the profile arrives: there is no default to name yet, and a
+              row seeded from a placeholder would let a tap "change" something nobody set. */}
+          {!picking && currency !== null && (
+            <Card flush>
+              <ListRow
+                title={`${currency} — ${CURRENCIES[currency].name}`}
+                subtitle="Tap to use a different one."
+                trailing={
+                  <Text aria-hidden tone="secondary">
+                    {CURRENCIES[currency].symbol}
                   </Text>
-                </Stack>
+                }
+                label={`Currency, ${CURRENCIES[currency].name}. Change it`}
+                onPress={() => {
+                  setPicking(true);
+                }}
+              />
+            </Card>
+          )}
+
+          {picking && (
+            <Input
+              label="Find a currency"
+              value={query}
+              onValueChange={setQuery}
+              type="search"
+              inputMode="search"
+              placeholder="USD, rupee, yen…"
+              autoFocus
+              helper={
+                query.trim().length === 0
+                  ? 'Showing the most common. Type to search all 157.'
+                  : `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`
               }
-              renderItem={(code) => (
-                <ListRow
-                  title={`${code} — ${CURRENCIES[code].name}`}
-                  subtitle={code === currency ? 'Current default' : undefined}
-                  trailing={
-                    <Text aria-hidden tone={code === currency ? 'primary' : 'secondary'}>
-                      {code === currency ? '✓' : CURRENCIES[code].symbol}
-                    </Text>
-                  }
-                  chevron={false}
-                  label={
-                    code === currency
-                      ? `${CURRENCIES[code].name}, current default`
-                      : `Use ${CURRENCIES[code].name}`
-                  }
-                  onPress={() => {
-                    setDraftCurrency(code);
-                    setState({ kind: 'idle' });
-                  }}
-                />
-              )}
             />
-          </Card>
+          )}
+
+          {picking && (
+            <Card flush>
+              <List
+                data={results}
+                aria-label="Currencies"
+                keyExtractor={(code) => code}
+                empty={
+                  <Stack padding="md">
+                    <Text tone="secondary">
+                      No currency matches “{query.trim()}”. Try the three-letter code.
+                    </Text>
+                  </Stack>
+                }
+                renderItem={(code) => (
+                  <ListRow
+                    title={`${code} — ${CURRENCIES[code].name}`}
+                    subtitle={code === currency ? 'Current default' : undefined}
+                    trailing={
+                      <Text aria-hidden tone={code === currency ? 'primary' : 'secondary'}>
+                        {code === currency ? '✓' : CURRENCIES[code].symbol}
+                      </Text>
+                    }
+                    chevron={false}
+                    label={
+                      code === currency
+                        ? `${CURRENCIES[code].name}, current default`
+                        : `Use ${CURRENCIES[code].name}`
+                    }
+                    onPress={() => {
+                      setDraftCurrency(code);
+                      setState({ kind: 'idle' });
+                      // Picking is the only reason the list is open; leaving it open keeps the
+                      // name field and Save button off the screen for nothing.
+                      closePicker();
+                    }}
+                  />
+                )}
+              />
+            </Card>
+          )}
         </Stack>
       </Stack>
     </Screen>
