@@ -31,7 +31,7 @@
     "test:smoke": "playwright test --project smoke",
     "depcruise": "node scripts/depcruise.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm test:unit",
-    "emulators": "firebase emulators:start --import=./.emulator-data --export-on-exit",
+    "emulators": "node scripts/emulators.mjs",
     "seed": "tsx firebase/seed.ts",
     "prepare": "husky || exit 0"
   },
