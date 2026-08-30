@@ -4,10 +4,10 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#35 merged except #23. All four tabs are on `main`.
+## State: PRs #1–#36 merged except #23. Dev backend is DEPLOYED.
 
 **#34** (profile currency picker + layout audit) and **#35** (Couple → Friends group type) are
-merged. **#36** is open — the pre-commit secret scan; see below.
+merged. **#36** merged. **#37** (invite join screen) and **#38** (deploy fixes) are open.
 **#23** (shadcn docs) is still open and should probably become an ADR instead; see below.
 
 ### The five tabs
@@ -40,6 +40,43 @@ For a pre-launch app that history is probably not worth carrying — but deletin
 **live-data** question, not a cleanup one: `parseDocument` throws on an unknown enum member,
 so one stored `couple` document takes down the whole `memberIds array-contains` group list,
 not just that group. Confirm nothing stores it first. Needs the emulator or a deploy.
+
+### 2026-08-30 — dev is DEPLOYED and live (#38)
+
+🟢 **splitsutra-dev-eac96 now has rules, indexes and all 14 Cloud Functions deployed.**
+Project is on **Blaze**. This is the first time the app has had a working backend.
+
+Three real bugs were in the way, all found by actually deploying:
+
+1. **The functions predeploy compiled nothing and the deploy called it a success.**
+   `pnpm --filter @splitsutra/functions build` printed `No projects matched the filters`
+   and exited 0 — pnpm does that when a filter matches nothing — so firebase-tools
+   would have shipped whatever stale `lib/` existed. It fails only under the env
+   firebase-tools spawns hooks with; it works from bash, cmd, and inside the package.
+   Replaced by `scripts/build-functions.mjs`, which can actually fail.
+
+2. 🔴 **`"@splitsutra/core": "workspace:*"` made every function fail to build.**
+   `firebase deploy` uploads ONLY `firebase/functions`, and Cloud Build runs `npm install`
+   in it — no workspace, no packages/core, and npm does not know the `workspace:` protocol
+   (`EUNSUPPORTEDPROTOCOL`). Verified npm rejects it even from `devDependencies` under
+   `--omit=dev`, so it had to leave the manifest entirely. Core is now **inlined** into
+   `lib/index.js` by esbuild; tsc resolves it via a `paths` mapping, esbuild via an alias.
+   Safe because functions import only the root barrel, which excludes `./firebase` and
+   `./repositories` — so no client SDK reaches an Admin-SDK process.
+
+3. **`pnpm emulators` ran against the REAL dev project** — no `--project`, so it took
+   `default` from `.firebaserc`. Also raised `FUNCTIONS_DISCOVERY_TIMEOUT` to 60s; the 10s
+   default fails cold on Windows and the suite then comes up green with **zero functions
+   registered**, which looks like a permissions bug rather than a missing backend.
+
+⚠️ **Owed next:**
+
+- 🔴 **SMS region policy + 50/day quota (phase-02 §3) is STILL UNDONE, and Blaze is now on.**
+  Phone sign-in is live and unrestricted. This is the largest cost/abuse exposure on the
+  project by docs/18's own assessment. Do this first.
+- Groups created before this deploy will NOT self-heal — `onGroupCreated` is
+  `onDocumentCreated` and there is no backfill callable. A one-off repair script is owed.
+- Nothing on dev has been exercised end to end by a signed-in user yet.
 
 ### 2026-08-30 — #36: the pre-commit hook that was never installed
 

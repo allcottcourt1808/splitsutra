@@ -11,7 +11,7 @@
       "source": "firebase/functions",
       "codebase": "default",
       "runtime": "nodejs24",
-      "predeploy": ["pnpm --filter @splitsutra/functions build"],
+      "predeploy": ["node scripts/build-functions.mjs"],
       "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"]
     }
   ],
