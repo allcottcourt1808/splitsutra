@@ -23,15 +23,39 @@ import {
  * ────────────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * `friend` is the implicit two-person group behind a 1:1 friend expense (D2). It is hidden from
- * the group list; every other type is user-visible.
+ * Every type a stored group document may carry — the DECODE set, deliberately wider than the
+ * pick list below.
+ *
+ * 🔴 `friends` and `friend` are different things, one letter apart. `friend` (singular) is the
+ * implicit two-person group behind a 1:1 friend expense (D2): system-created, hidden from the
+ * group list, and never offerable. `friends` (plural) is an ordinary group someone chose that
+ * label for. TypeScript separates them; Security Rules and any raw string literal do not, so
+ * check which one you mean before typing either.
+ *
+ * 🔴 `couple` is RETIRED, not deleted, and must stay here. `groupConverter` runs every read
+ * through `parseDocument`, which THROWS on an unknown enum member — so removing a value that any
+ * stored document still carries does not degrade that one group, it throws while decoding the
+ * `memberIds array-contains` query and takes the whole group list down with it. Retiring a type
+ * is therefore a two-step job: drop it from the pick list now, and delete it here only once no
+ * document uses it.
  */
-export const GROUP_TYPES = ['trip', 'home', 'couple', 'other', 'friend'] as const;
+export const GROUP_TYPES = [
+  'trip',
+  'home',
+  'friends',
+  'other',
+  'friend',
+  // Retired — decodable, never offered. See above before deleting it.
+  'couple',
+] as const;
 export const groupTypeSchema = z.enum(GROUP_TYPES);
 export type GroupType = z.infer<typeof groupTypeSchema>;
 
-/** Group types a user may pick when creating a group — `friend` is created by the system only. */
-export const SELECTABLE_GROUP_TYPES = ['trip', 'home', 'couple', 'other'] as const;
+/**
+ * What the create and settings pickers offer, in display order. Narrower than {@link GROUP_TYPES}
+ * at both ends: `friend` is system-created, and `couple` is readable but no longer offerable.
+ */
+export const SELECTABLE_GROUP_TYPES = ['trip', 'home', 'friends', 'other'] as const;
 
 export const GROUP_ROLES = ['admin', 'member'] as const;
 export const groupRoleSchema = z.enum(GROUP_ROLES);

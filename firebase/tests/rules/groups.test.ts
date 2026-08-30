@@ -191,16 +191,37 @@ describe('groups — create', () => {
     await assertFails(setDoc(doc(db, `groups/${NEW_GROUP}`), newGroupDoc({ type: 'work' })));
   });
 
-  it('allows every type in the enum', async () => {
+  it('allows every creatable type', async () => {
     const db = as(env, ALICE).firestore();
-    for (const type of ['trip', 'home', 'couple', 'other', 'friend']) {
+    for (const type of ['trip', 'home', 'friends', 'other']) {
       await assertSucceeds(setDoc(doc(db, `groups/${type}_grp`), newGroupDoc({ type })));
     }
+  });
+
+  it('refuses to create a group under the retired couple type', async () => {
+    // `couple` still decodes, so a document carrying it keeps loading — but Rules must not
+    // let a new one in, or the pick list stops being the truth.
+    const db = as(env, ALICE).firestore();
+    await assertFails(setDoc(doc(db, 'groups/couple_grp'), newGroupDoc({ type: 'couple' })));
+  });
+
+  it('refuses to let a client create the implicit friend type', async () => {
+    // Only establishFriendship creates these, and it runs through the Admin SDK, which does
+    // not consult Rules at all. A client asking for one is forging a hidden group.
+    const db = as(env, ALICE).firestore();
+    await assertFails(setDoc(doc(db, 'groups/friend_grp'), newGroupDoc({ type: 'friend' })));
   });
 
   it('denies a non-boolean isImplicit', async () => {
     const db = as(env, ALICE).firestore();
     await assertFails(setDoc(doc(db, `groups/${NEW_GROUP}`), newGroupDoc({ isImplicit: 'false' })));
+  });
+
+  it('denies a client-created implicit group', async () => {
+    // Implicit groups are hidden from the group list. A client that could set this flag could
+    // hide a group from the person it belongs to.
+    const db = as(env, ALICE).firestore();
+    await assertFails(setDoc(doc(db, `groups/${NEW_GROUP}`), newGroupDoc({ isImplicit: true })));
   });
 
   it('denies a currency that is not three uppercase letters', async () => {

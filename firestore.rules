@@ -303,9 +303,14 @@ service cloud.firestore {
                     && request.resource.data.name is string
                     && request.resource.data.name.size() >= 1
                     && request.resource.data.name.size() <= 60
-                    && request.resource.data.type in
-                         ['trip', 'home', 'couple', 'other', 'friend']
-                    && request.resource.data.isImplicit is bool
+                    // Exactly SELECTABLE_GROUP_TYPES. 'friend' is deliberately absent: the
+                    // implicit 1:1 group behind a friendship is written by establishFriendship
+                    // through the Admin SDK, which bypasses Rules entirely, so listing it here
+                    // only lets a client forge one.
+                    && request.resource.data.type in ['trip', 'home', 'friends', 'other']
+                    // Not merely a bool. An implicit group is a hidden group (it is filtered
+                    // out of the group list), and only Functions ever create one.
+                    && request.resource.data.isImplicit == false
                     && isCurrencyCode(request.resource.data.currency)   // LAYER 1 of 2
                     && request.resource.data.createdAt == request.time         // T7
                     && request.resource.data.deletedAt == null;

@@ -32,14 +32,21 @@ import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
 
-/** One glyph per group type (phase-05 §4, 🟢 "Group photo/emoji per type"). */
+/**
+ * One glyph per group type (phase-05 §4, 🟢 "Group photo/emoji per type").
+ *
+ * Keyed by `GroupType`, not by the pick list, so a group created under the retired `couple` type
+ * still gets a glyph rather than an empty cell.
+ */
 const TYPE_GLYPH: Readonly<Record<GroupType, string>> = {
   trip: '🧳',
   home: '🏠',
-  couple: '💞',
+  friends: '👥',
   other: '📁',
-  // Never rendered here: implicit friend groups are filtered out of the list (D2).
+  // Never rendered here: implicit friend groups are filtered out of the list (D2). Note this is
+  // `friend`, the hidden 1:1 container — not `friends` above, which is a group someone chose.
   friend: '👤',
+  couple: '💞',
 };
 
 /** A currency, and the total owed to / owed by the user across the groups using it. */

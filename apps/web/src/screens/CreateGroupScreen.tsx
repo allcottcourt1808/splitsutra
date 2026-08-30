@@ -51,7 +51,7 @@ const NAME_MAX = 60;
 const TYPES = [
   { value: 'trip', label: 'Trip' },
   { value: 'home', label: 'Home' },
-  { value: 'couple', label: 'Couple' },
+  { value: 'friends', label: 'Friends' },
   { value: 'other', label: 'Other' },
 ] as const satisfies readonly { value: CreatableGroupType; label: string }[];
 

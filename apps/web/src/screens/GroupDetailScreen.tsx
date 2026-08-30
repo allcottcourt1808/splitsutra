@@ -26,12 +26,21 @@ import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
 
+/**
+ * Keyed by `GroupType`, so it covers the retired `couple` too — a group created before that type
+ * was dropped from the picker still has to render as something.
+ *
+ * `friends` and `friend` deliberately read the same. They differ structurally (one is a group
+ * someone created and labelled, the other is the hidden 1:1 container behind a friend expense),
+ * but that distinction is ours, not the reader's — both are "friends" to the person looking.
+ */
 const TYPE_LABEL: Readonly<Record<GroupType, string>> = {
   trip: 'Trip',
   home: 'Home',
-  couple: 'Couple',
+  friends: 'Friends',
   other: 'Group',
   friend: 'Friends',
+  couple: 'Couple',
 };
 
 export function GroupDetailScreen() {
