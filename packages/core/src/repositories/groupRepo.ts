@@ -47,12 +47,13 @@ import {
   leaveGroupSchema,
   recomputeGroupBalancesSchema,
   removeMemberSchema,
+  // Type-only: referenced solely as `typeof SELECTABLE_GROUP_TYPES` to derive CreatableGroupType.
+  type SELECTABLE_GROUP_TYPES,
   type CreateInviteInput,
   type CurrencyCode,
   type DeleteGroupInput,
   type Group,
   type GroupMember,
-  type GroupType,
   type LeaveGroupInput,
   type RecomputeGroupBalancesInput,
   type RemoveMemberInput,
@@ -226,8 +227,14 @@ export function watchMember(
  * Writes — direct
  * ────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** What a user may choose when creating a group. `friend` is created by the system only (D2). */
-export type CreatableGroupType = Exclude<GroupType, 'friend'>;
+/**
+ * What a user may choose when creating or editing a group.
+ *
+ * Derived from `SELECTABLE_GROUP_TYPES` rather than by excluding `friend` from `GroupType`:
+ * `GroupType` also carries the retired `couple`, which only exists so old documents still decode,
+ * and subtracting one system value from it would quietly let new code write `couple` again.
+ */
+export type CreatableGroupType = (typeof SELECTABLE_GROUP_TYPES)[number];
 
 export interface CreateGroupInput {
   /** 1–60 characters after trimming. */

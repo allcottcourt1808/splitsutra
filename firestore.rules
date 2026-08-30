@@ -303,8 +303,12 @@ service cloud.firestore {
                     && request.resource.data.name is string
                     && request.resource.data.name.size() >= 1
                     && request.resource.data.name.size() <= 60
+                    // Mirrors SELECTABLE_GROUP_TYPES + 'friend'. The retired 'couple' is absent
+                    // deliberately: existing documents keep decoding (the enum in core still
+                    // lists it), but nothing may create a new one. 'friends' (plural, a group
+                    // someone chose) is not 'friend' (the hidden 1:1 container) — both belong.
                     && request.resource.data.type in
-                         ['trip', 'home', 'couple', 'other', 'friend']
+                         ['trip', 'home', 'friends', 'other', 'friend']
                     && request.resource.data.isImplicit is bool
                     && isCurrencyCode(request.resource.data.currency)   // LAYER 1 of 2
                     && request.resource.data.createdAt == request.time         // T7

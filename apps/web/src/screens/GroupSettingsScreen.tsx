@@ -29,7 +29,7 @@ import {
   updateGroup,
   type CreatableGroupType,
 } from '@splitsutra/core/repositories';
-import { CURRENCIES } from '@splitsutra/core';
+import { CURRENCIES, SELECTABLE_GROUP_TYPES, type GroupType } from '@splitsutra/core';
 
 import { Button } from '../components/Button';
 import { Card, Row, Screen, Stack } from '../components/Layout';
@@ -45,7 +45,7 @@ const NAME_MAX = 60;
 const TYPES = [
   { value: 'trip', label: 'Trip' },
   { value: 'home', label: 'Home' },
-  { value: 'couple', label: 'Couple' },
+  { value: 'friends', label: 'Friends' },
   { value: 'other', label: 'Other' },
 ] as const satisfies readonly { value: CreatableGroupType; label: string }[];
 
@@ -53,6 +53,20 @@ const SIMPLIFY = [
   { value: 'off', label: 'Off' },
   { value: 'on', label: 'On' },
 ] as const;
+
+/**
+ * Which segment to highlight for a group whose stored type the picker does not offer — the
+ * implicit `friend` container, or the retired `couple`.
+ *
+ * Falls back to `Other` rather than leaving the control unselected, because an unselected
+ * segmented control reads as "nobody has set this yet" when the truth is "set to something we no
+ * longer offer". Nothing is written until the user actually picks, so the stored value survives
+ * until they choose to change it — the detail screen still names it correctly meanwhile.
+ */
+function offerable(type: GroupType): CreatableGroupType {
+  const offered: readonly GroupType[] = SELECTABLE_GROUP_TYPES;
+  return offered.includes(type) ? (type as CreatableGroupType) : 'other';
+}
 
 function nameError(value: string): string | undefined {
   const trimmed = value.trim();
@@ -171,7 +185,7 @@ export function GroupSettingsScreen() {
           <SegmentedControl
             label="Group type"
             options={TYPES}
-            value={group.type === 'friend' ? 'other' : group.type}
+            value={offerable(group.type)}
             onValueChange={(next) => {
               void run(
                 'type',

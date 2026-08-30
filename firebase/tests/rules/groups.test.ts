@@ -191,11 +191,18 @@ describe('groups — create', () => {
     await assertFails(setDoc(doc(db, `groups/${NEW_GROUP}`), newGroupDoc({ type: 'work' })));
   });
 
-  it('allows every type in the enum', async () => {
+  it('allows every creatable type', async () => {
     const db = as(env, ALICE).firestore();
-    for (const type of ['trip', 'home', 'couple', 'other', 'friend']) {
+    for (const type of ['trip', 'home', 'friends', 'other', 'friend']) {
       await assertSucceeds(setDoc(doc(db, `groups/${type}_grp`), newGroupDoc({ type })));
     }
+  });
+
+  it('refuses to create a group under the retired couple type', async () => {
+    // `couple` still decodes, so documents written before it was retired keep loading — but
+    // Rules must not let a new one in, or the pick list stops being the truth.
+    const db = as(env, ALICE).firestore();
+    await assertFails(setDoc(doc(db, 'groups/couple_grp'), newGroupDoc({ type: 'couple' })));
   });
 
   it('denies a non-boolean isImplicit', async () => {
