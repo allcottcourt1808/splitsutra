@@ -31,6 +31,15 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+
+    // @splitsutra/core is not a declared dependency — see "//no-core-dependency" in
+    // package.json — so there is no node_modules symlink for NodeNext to resolve the bare
+    // specifier through. It is mapped straight at core's emitted declarations instead, which
+    // is also why build-functions.mjs compiles core first: this file does not exist until it
+    // has. The runtime half of the same decision is the esbuild alias in that script.
+    "paths": {
+      "@splitsutra/core": ["../../packages/core/dist/index.d.ts"],
+    },
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "lib"],

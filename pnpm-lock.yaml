@@ -117,9 +117,6 @@ importers:
 
   firebase/functions:
     dependencies:
-      '@splitsutra/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       firebase-admin:
         specifier: ^14.3.0
         version: 14.3.0(@firebase/app-compat@0.5.17)(@firebase/app@0.16.1)
@@ -133,6 +130,9 @@ importers:
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

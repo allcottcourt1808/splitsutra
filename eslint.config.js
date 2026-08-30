@@ -133,6 +133,9 @@ export default tseslint.config(
       globals: {
         process: 'readonly',
         console: 'readonly',
+        // Resolving a path relative to the script itself needs `new URL(..., import.meta.url)`,
+        // which is the only portable way to do it in an ESM file that may be spawned from any cwd.
+        URL: 'readonly',
       },
     },
     rules: {

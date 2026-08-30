@@ -27,10 +27,20 @@
  * same reason (see CLAUDE.md, "Two resolvers").
  */
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
+
+/**
+ * Resolved from inside `firebase/functions`, not from here. pnpm's strict layout only puts a
+ * package under the `node_modules` of whichever workspace project declares it, and esbuild is a
+ * devDependency of the functions package — so resolving it relative to `scripts/` finds nothing.
+ */
+const requireFromFunctions = createRequire(
+  new URL('../firebase/functions/package.json', import.meta.url),
+);
 
 /**
  * Resolved rather than assumed to be on `PATH`. `tsc` reaches the shell via a `node_modules/.bin`
@@ -61,5 +71,83 @@ for (const [name, project] of PROJECTS) {
     process.exit(result.status ?? 1);
   }
 }
+
+/* ── Inline @splitsutra/core ─────────────────────────────────────────────────────────────── */
+
+/**
+ * 🔴 WHY THE OUTPUT IS BUNDLED, AND A DEPLOY FAILS WITHOUT IT:
+ *
+ * `firebase deploy` uploads **only** `firebase/functions` and Cloud Build then runs `npm install`
+ * inside it. There is no workspace up there and no `packages/core`, so the manifest's
+ * `"@splitsutra/core": "workspace:*"` is a protocol npm has never heard of:
+ *
+ *     npm error code EUNSUPPORTEDPROTOCOL
+ *     npm error Unsupported URL Type "workspace:": workspace:*
+ *
+ * — and all 14 functions fail to build. Hit against the real dev project.
+ *
+ * So core is inlined here instead of shipped as a dependency. Only the **root barrel** is
+ * imported by `firebase/functions` (all 16 import sites), and that barrel deliberately excludes
+ * `./firebase`, `./repositories`, `./hooks` and `./stores` — see CLAUDE.md — so nothing drags the
+ * client Firestore SDK into a process running the Admin SDK. That exclusion is what makes
+ * bundling safe rather than a way to smuggle the wrong SDK into Functions.
+ *
+ * Everything npm genuinely installs on the server stays external. Bundling `firebase-functions`
+ * in particular would break deployment outright: the CLI discovers the exported functions by
+ * loading this file and reading the SDK's own registry, which only works when the SDK is the
+ * same instance the runtime later loads.
+ */
+const ENTRY = 'firebase/functions/lib/index.js';
+const BUNDLE = 'firebase/functions/lib/index.bundle.js';
+
+/** Core's compiled root barrel, written by the first tsc pass above. */
+const CORE_ENTRY = fileURLToPath(new URL('../packages/core/dist/index.js', import.meta.url));
+
+if (!existsSync(CORE_ENTRY)) {
+  console.error('build-functions: %s missing — core did not emit. Not deploying.', CORE_ENTRY);
+  process.exit(1);
+}
+
+const manifest = JSON.parse(readFileSync('firebase/functions/package.json', 'utf8'));
+
+// Read from the manifest rather than listed literally: whatever npm installs up there must not
+// also be baked in here, and a dependency added later would otherwise be silently duplicated.
+const external = Object.keys(manifest.dependencies ?? {}).filter(
+  (name) => name !== '@splitsutra/core',
+);
+
+console.log('build-functions: bundling core into %s (external: %s)', ENTRY, external.join(', '));
+
+const bundle = spawnSync(
+  process.execPath,
+  [
+    requireFromFunctions.resolve('esbuild/bin/esbuild'),
+    ENTRY,
+    '--bundle',
+    '--platform=node',
+    '--format=esm',
+    '--target=node24',
+    `--outfile=${BUNDLE}`,
+    // Explicit, because `@splitsutra/core` is no longer a declared dependency of the functions
+    // package (see "//no-core-dependency" in its package.json), so pnpm creates no node_modules
+    // symlink for esbuild to follow. This is the runtime half of the tsconfig `paths` mapping.
+    `--alias:@splitsutra/core=${CORE_ENTRY}`,
+    ...external.map((name) => `--external:${name}`),
+    // Node built-ins. `--platform=node` already externalises them, but a bare `node:` specifier
+    // reaching esbuild unresolved is the failure that would otherwise surface at cold start.
+    '--external:node:*',
+  ],
+  { stdio: 'inherit' },
+);
+
+if (bundle.status !== 0) {
+  console.error('build-functions: bundling failed — not deploying.');
+  process.exit(bundle.status ?? 1);
+}
+
+// Replace the entry point in place, so `main` in package.json keeps pointing at lib/index.js and
+// nothing downstream has to know this step happened.
+rmSync(ENTRY, { force: true });
+renameSync(BUNDLE, ENTRY);
 
 console.log('build-functions: done.');
