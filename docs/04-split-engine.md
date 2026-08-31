@@ -335,9 +335,10 @@ itself does. **Do not chase the optimum** — the extra complexity buys nothing 
 
 - Simplification **never mutates the ledger.** Expenses are untouched. It is purely a
   view over current balances.
-- Default: display-only. The settle-up screen shows the simplified payment as a
-  suggestion, alongside the raw "who owes whom".
-- With `group.simplifyDebts = true`, the simplified view becomes the primary presentation.
+- Default: **on** for a new group (ADR-12). The simplified payment list is the view that
+  opens first, with the raw "who owes whom" one tab away and never removed.
+- With `group.simplifyDebts = false`, that order reverses. Nothing else about the group
+  changes — the setting picks a starting tab, not a behaviour.
 - The UI must explain the substitution (AC-E3.4), because "why am I paying Carol when I
   borrowed from Bob?" is the number one confusion this feature creates.
 

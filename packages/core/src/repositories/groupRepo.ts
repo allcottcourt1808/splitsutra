@@ -246,7 +246,15 @@ export interface CreateGroupInput {
   readonly type: CreatableGroupType;
   /** 🔴 Immutable once written (AC-C1.1, threat T10). */
   readonly currency?: CurrencyCode | undefined;
-  /** Default `false`; the settle-up view is a display choice, not a ledger change (AC-E3.3). */
+  /**
+   * Default **`true`**; the settle-up view is a display choice, not a ledger change (AC-E3.3).
+   *
+   * On by default because the thing it optimises — how many separate payments a group has to
+   * make — is what people actually want help with, and a setting that has to be found before it
+   * helps is a setting most groups never turn on. Nothing about the ledger changes either way:
+   * simplification is a pure function over balances that writes nothing (Article VII), so this
+   * only decides which tab opens first and can be reversed per group at any time.
+   */
   readonly simplifyDebts?: boolean | undefined;
   readonly photoURL?: string | null | undefined;
 }
@@ -280,7 +288,7 @@ export async function createGroup(uid: string, input: CreateGroupInput): Promise
     currency,
     memberIds: [uid],
     memberCount: 1,
-    simplifyDebts: input.simplifyDebts ?? false,
+    simplifyDebts: input.simplifyDebts ?? true,
     createdBy: uid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

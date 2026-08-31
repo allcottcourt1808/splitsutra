@@ -84,7 +84,24 @@ export function GroupBalancesScreen() {
   // between renders while somebody is reading it.
   const transfers = useMemo(() => simplifyDebts(balances), [balances]);
 
-  const owing = balances.filter((balance) => balance.balanceMinor < 0).length;
+  /* 🔴 THERE IS NO "INSTEAD OF N PAYMENTS" COMPARISON HERE, AND ONE CANNOT BE COMPUTED.
+   *
+   * This card used to read "Instead of ${debtors} payments, settle up in ${transfers.length}".
+   * That is not a conservative estimate, it is backwards: every debtor has to discharge their
+   * own balance, so each one appears as the payer of at least one transfer, which makes
+   * `transfers.length >= debtors` an identity rather than a saving. The sentence could only ever
+   * claim a reduction that was equal or worse, and it did — a three-way debt rendered "Instead
+   * of 2 payments, settle up in 2", arguing against the feature it was introducing.
+   *
+   * The honest figure is the number of PAIRWISE debts, and this app deliberately stores none
+   * (docs/03: "No `balances/{pairId}` pairwise-debt collection") — only each member's net. It is
+   * not recoverable from this data, so the count is not shown. Reinstating it needs the pairwise
+   * history, not a cleverer expression over these balances.
+   *
+   * What remains IS the requirement. AC-E3.4 asks the UI to explain the substitution, not to
+   * quantify it, and since ADR-12 made this the view a new group opens on, the explanation below
+   * is the first thing it reads.
+   */
 
   const header = <ScreenHeader title="Balances" backTo={paths.GroupDetail({ gid: groupId })} />;
 
@@ -161,7 +178,7 @@ export function GroupBalancesScreen() {
             <Card>
               <Stack gap="xs">
                 <Text weight="semibold">
-                  {`Instead of ${String(owing)} ${owing === 1 ? 'payment' : 'payments'}, settle up in ${String(transfers.length)}.`}
+                  {`Settle up in ${String(transfers.length)} ${transfers.length === 1 ? 'payment' : 'payments'}.`}
                 </Text>
                 <Text variant="caption" tone="secondary">
                   Amounts owed do not change — only who pays whom. You might be asked to pay someone

@@ -34,10 +34,13 @@ Covers **Epic E**. Reference: [../docs/04-split-engine.md](../docs/04-split-engi
 
 - [ ] 🟡 Tab 1 **Balances** — every member's net (AC-E1.2)
 - [ ] 🟡 Tab 2 **Suggested payments** — simplified list
-- [ ] 🟡 `simplifyDebts` toggle wired to the group setting (AC-E3.3)
+- [ ] 🟡 `simplifyDebts` toggle wired to the group setting (AC-E3.3). **New groups default it
+      on** (ADR-12); the toggle turns it off.
 - [ ] 🟡 ⚠️ **Inline explanation** (AC-E3.4): "Instead of 5 payments, settle up in 2.
       Amounts owed do not change." Without this, "why am I paying Carol when I borrowed
-      from Bob?" becomes your most common support question.
+      from Bob?" becomes your most common support question. 🔴 **Load-bearing since ADR-12** —
+      the default is on, so this sentence is the first thing standing between a new group and
+      that question. It is not polish and it does not get trimmed.
 - [ ] 🟡 Each suggested payment has a **Settle up** action that prefills the settle screen
 
 ## 4. Settlements — data & rules

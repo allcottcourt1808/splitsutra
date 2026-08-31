@@ -229,9 +229,29 @@ describe('<GroupBalancesScreen>', () => {
 
     const text = visit().textContent ?? '';
 
-    expect(text).toContain('Instead of 2 payments, settle up in 2.');
+    // 🔴 The explanation is what AC-E3.4 actually requires — explain the substitution, not
+    //    quantify it. Since ADR-12 this tab is where a new group lands, so this is the first
+    //    thing it reads.
     expect(text).toContain('Amounts owed do not change');
     expect(text).toContain('someone you never borrowed from');
+
+    expect(text).toContain('Settle up in 2 payments.');
+  });
+
+  it('never claims a payment count it cannot compute (AC-E3.4)', () => {
+    // 🔴 Regression guard. The card used to read "Instead of ${debtors} payments, settle up in
+    //    ${transfers}". Every debtor must discharge their own balance, so each is the payer of
+    //    at least one transfer and `transfers >= debtors` is an identity — the sentence could
+    //    only ever claim a reduction that was equal or worse, and with a three-way debt it
+    //    rendered "Instead of 2 payments, settle up in 2".
+    //
+    //    The real quantity is the pairwise-debt count, which this app stores nowhere by design
+    //    (docs/03). So the assertion is that no such comparison appears AT ALL — reinstating one
+    //    requires new data, not a new expression over these balances.
+    threeWayDebt();
+    state.group = group({ simplifyDebts: true });
+
+    expect(visit().textContent ?? '').not.toContain('Instead of');
   });
 
   it('prefills settle up from a suggested payment without touching the ledger', () => {

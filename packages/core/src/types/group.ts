@@ -89,7 +89,14 @@ export const groupBaseSchema = z.object({
    * (Article V) rather than a parse-time invariant, so transient fan-out lag never blocks a read.
    */
   memberCount: z.number().int().nonnegative(),
-  /** Default `false`. When `true`, the simplified view becomes the primary settle-up screen. */
+  /**
+   * When `true`, the simplified view becomes the primary settle-up screen.
+   *
+   * 🔴 **No default here, on purpose.** New groups get `true` (docs/12 ADR-12), but that belongs to
+   * `createGroup`, not to the schema: this schema also DECODES existing documents, and a default
+   * would silently rewrite every group created before the flip into one that opts in. A stored
+   * `false` is a real answer and has to survive being read.
+   */
   simplifyDebts: z.boolean(),
   createdBy: uidSchema,
   createdAt: timestampSchema,

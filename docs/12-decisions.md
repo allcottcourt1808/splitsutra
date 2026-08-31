@@ -233,6 +233,29 @@ question in shared-expense apps.
 both platforms and keeps them visually identical for free.
 **Cost:** Slower initial styling than Tailwind. Accepted for the portability guarantee.
 
+### ADR-12 — Debt simplification is on by default for a new group
+
+**Decision:** `createGroup` writes `simplifyDebts: true`, so the suggested-payment view is
+what a new group opens on. The per-group toggle still turns it off, and existing groups keep
+whatever they already had — the default lives in `createGroup`, not in the schema, so nothing
+already stored is reinterpreted. Amends **AC-E3.3**, which specified display-only by default.
+**Why:** the thing simplification optimises — how many separate payments a group has to make —
+is the problem people want help with, and a setting that has to be found before it helps is one
+most groups never turn on. Article VII already guarantees this is safe to default: simplification
+is a pure function over balances that writes nothing, so the ledger is identical either way and
+the only thing the flag picks is which tab opens first.
+**Cost:** the reason it was off is real and recorded three times ([04-split-engine.md](04-split-engine.md),
+[15-usability.md](15-usability.md), `checklists/phase-07`): _"why am I paying Carol when I
+borrowed from Bob?"_ is the single largest source of confusion this feature creates, and every
+new group now meets it before seeing the raw view. AC-E3.4's inline explanation is the stated
+mitigation and it already ships — "Instead of 5 payments, settle up in 2. Amounts owed do not
+change." **If that explanation is ever weakened or moved, this decision goes with it**, because
+the explanation is the only thing making the default defensible.
+**Consequence:** `simplify_explanation_viewed` ([15-usability.md](15-usability.md)) stops being a
+curiosity and becomes the metric that says whether this was right. The implicit 1:1 friend group
+sets `true` for consistency only — with two people the greedy algorithm returns the same single
+transfer the raw view shows, so it is a no-op there.
+
 ---
 
 ## Part 2 — Questions & answers
