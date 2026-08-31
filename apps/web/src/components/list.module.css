@@ -45,6 +45,14 @@
   /* Enforced again here rather than trusted from <Pressable>, because a non-interactive
      row is a plain <Row> and must still line up with its tappable neighbours. */
   min-block-size: var(--splitsutra-size-touch-target);
+  /* 🔴 Without these the row sizes to its CONTENT and overflows its container, because a
+     <Row> nested in the flex <Pressable> resolves to `flex: 0 0 auto`. .rowBody's min-width
+     already lets the title and subtitle ellipsize, but it never got the chance: the row
+     simply grew instead, and the whole page scrolled sideways past the 390px design target
+     (Article IX). Latent on every list until a row carried content wide enough to show it —
+     which the group ledger's "you borrowed / $100.00" column finally did. */
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .rowLeading {
