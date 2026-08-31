@@ -102,10 +102,23 @@ const react = vi.hoisted(() => {
     return value;
   }
 
+  /**
+   * `useCallback(fn, deps)` is `useMemo(() => fn, deps)` — React's own relationship between the
+   * two. Defined in terms of `useMemo` rather than given its own slot array so the ordered-slot
+   * bookkeeping stays in one place.
+   */
+  function useCallback<T>(fn: T, deps?: readonly unknown[]): T {
+    // The `useMemo` below is the local harness above, not React's. The rule matches on the
+    // name and has nothing real to check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useMemo(() => fn, deps);
+  }
+
   return {
     useState,
     useEffect,
     useMemo,
+    useCallback,
     mount(render: () => unknown): void {
       states = [];
       effectSlots = [];
@@ -128,6 +141,7 @@ vi.mock('react', () => ({
   useState: react.useState,
   useEffect: react.useEffect,
   useMemo: react.useMemo,
+  useCallback: react.useCallback,
 }));
 
 const auth = vi.hoisted(() => ({ uid: null as string | null }));
@@ -201,7 +215,12 @@ describe('useGroupExpenses', () => {
 
     expect(repo.watchGroupExpenses).toHaveBeenCalledTimes(1);
     expect(latest().key).toBe('g1');
-    expect(view()).toEqual({ expenses: [], loading: true, error: null });
+    expect(view()).toEqual({
+      expenses: [],
+      loading: true,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('passes the default page size through to the repository', () => {
@@ -214,7 +233,12 @@ describe('useGroupExpenses', () => {
     mountGroup();
     latest().emit([]);
 
-    expect(view()).toEqual({ expenses: [], loading: false, error: null });
+    expect(view()).toEqual({
+      expenses: [],
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('emits the expenses in the order the repository gave them', () => {
@@ -230,7 +254,12 @@ describe('useGroupExpenses', () => {
     mountGroup();
     latest().fail(boom);
 
-    expect(view()).toEqual({ expenses: [], loading: false, error: boom });
+    expect(view()).toEqual({
+      expenses: [],
+      loading: false,
+      error: boom,
+      retry: expect.any(Function),
+    });
   });
 
   it('does not subscribe when no group is chosen', () => {
@@ -238,7 +267,12 @@ describe('useGroupExpenses', () => {
     mountGroup();
 
     expect(repo.watchGroupExpenses).not.toHaveBeenCalled();
-    expect(view()).toEqual({ expenses: [], loading: false, error: null });
+    expect(view()).toEqual({
+      expenses: [],
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('resubscribes when the group changes', () => {
@@ -252,7 +286,12 @@ describe('useGroupExpenses', () => {
     expect(first.unsubscribe).toHaveBeenCalledTimes(1);
     expect(repo.watchGroupExpenses).toHaveBeenCalledTimes(2);
     expect(latest().key).toBe('g2');
-    expect(view()).toEqual({ expenses: [dinner], loading: true, error: null });
+    expect(view()).toEqual({
+      expenses: [dinner],
+      loading: true,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('unsubscribes on unmount', () => {
@@ -294,14 +333,24 @@ describe('useMyExpenses', () => {
     mountMine();
 
     expect(repo.watchMyExpenses).not.toHaveBeenCalled();
-    expect(view()).toEqual({ expenses: [], loading: false, error: null });
+    expect(view()).toEqual({
+      expenses: [],
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('resolves to the emitted expenses', () => {
     mountMine();
     latest().emit([cab]);
 
-    expect(view()).toEqual({ expenses: [cab], loading: false, error: null });
+    expect(view()).toEqual({
+      expenses: [cab],
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('surfaces a subscription failure', () => {
@@ -310,7 +359,12 @@ describe('useMyExpenses', () => {
     mountMine();
     latest().fail(boom);
 
-    expect(view()).toEqual({ expenses: [], loading: false, error: boom });
+    expect(view()).toEqual({
+      expenses: [],
+      loading: false,
+      error: boom,
+      retry: expect.any(Function),
+    });
   });
 
   it('unsubscribes on unmount', () => {

@@ -5,7 +5,7 @@
  * without a refresh, which is the whole reason server state arrives over `onSnapshot`.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   EXPENSE_PAGE_SIZE,
@@ -23,6 +23,15 @@ export interface UseExpensesResult {
   readonly loading: boolean;
   /** The subscription failure, if there was one. */
   readonly error: Error | null;
+  /**
+   * Re-subscribe.
+   *
+   * A Firestore listener does not recover on its own: `permission-denied` **terminates** it
+   * rather than retrying, and nothing in the effect's dependencies changes when the underlying
+   * permission does. A list that was denied once — because the member document had not been
+   * written yet when the screen mounted — stays empty for the life of that mount without this.
+   */
+  readonly retry: () => void;
 }
 
 /** An empty array that keeps its identity, so an unsubscribed render is referentially stable. */
@@ -41,6 +50,11 @@ export function useGroupExpenses(
   const [expenses, setExpenses] = useState<readonly Expense[]>(NONE);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (groupId === null || groupId === '') {
@@ -62,11 +76,13 @@ export function useGroupExpenses(
       setError,
       pageSize,
     );
-  }, [groupId, pageSize]);
+    // `attempt` is read for its identity alone: bumping it is what tears the old listener down
+    // and starts a new one. Referenced here so the dependency is not "unnecessary".
+  }, [groupId, pageSize, attempt]);
 
   return useMemo(
-    () => ({ expenses, loading: !ready && error === null, error }),
-    [expenses, ready, error],
+    () => ({ expenses, loading: !ready && error === null, error, retry }),
+    [expenses, ready, error, retry],
   );
 }
 
@@ -83,6 +99,11 @@ export function useMyExpenses(pageSize: number = EXPENSE_PAGE_SIZE): UseExpenses
   const [expenses, setExpenses] = useState<readonly Expense[]>(NONE);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (uid === null) {
@@ -104,10 +125,12 @@ export function useMyExpenses(pageSize: number = EXPENSE_PAGE_SIZE): UseExpenses
       setError,
       pageSize,
     );
-  }, [uid, pageSize]);
+    // `attempt` is read for its identity alone: bumping it is what tears the old listener down
+    // and starts a new one. Referenced here so the dependency is not "unnecessary".
+  }, [uid, pageSize, attempt]);
 
   return useMemo(
-    () => ({ expenses, loading: !ready && error === null, error }),
-    [expenses, ready, error],
+    () => ({ expenses, loading: !ready && error === null, error, retry }),
+    [expenses, ready, error, retry],
   );
 }

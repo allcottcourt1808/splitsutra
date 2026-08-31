@@ -9,7 +9,15 @@ import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 
-import type { CurrencyCode, Group, GroupMember, GroupType } from '@splitsutra/core';
+import type {
+  CurrencyCode,
+  Expense,
+  Group,
+  GroupMember,
+  GroupType,
+  MinorUnits,
+  Settlement,
+} from '@splitsutra/core';
 
 import { render } from '../../__tests__/helpers/render';
 import { paths } from '../../navigation/paths';
@@ -22,10 +30,19 @@ const state = vi.hoisted(() => ({
   activeMembers: [] as unknown[],
   myBalanceMinor: 0,
   membersLoading: false,
+  expenses: [] as unknown[],
+  settlements: [] as unknown[],
+  ledgerLoading: false,
+  ledgerError: null as Error | null,
 }));
 
 /** The two `retry` callbacks, so a test can assert the screen re-subscribed after a repair. */
-const retries = vi.hoisted(() => ({ group: vi.fn(), members: vi.fn() }));
+const retries = vi.hoisted(() => ({
+  group: vi.fn(),
+  members: vi.fn(),
+  expenses: vi.fn(),
+  settlements: vi.fn(),
+}));
 
 const repo = vi.hoisted(() => ({ repairGroupMembership: vi.fn() }));
 
@@ -41,6 +58,19 @@ vi.mock('@splitsutra/core/hooks', () => ({
     myBalanceMinor: state.myBalanceMinor,
     loading: state.membersLoading,
     retry: retries.members,
+  }),
+  useAuth: () => ({ user: { uid: 'u1' }, loading: false }),
+  useGroupExpenses: () => ({
+    expenses: state.expenses,
+    loading: state.ledgerLoading,
+    error: state.ledgerError,
+    retry: retries.expenses,
+  }),
+  useGroupSettlements: () => ({
+    settlements: state.settlements,
+    loading: state.ledgerLoading,
+    error: state.ledgerError,
+    retry: retries.settlements,
   }),
 }));
 
@@ -97,6 +127,77 @@ function member(uid: string, displayName: string): GroupMember {
   } as unknown as GroupMember;
 }
 
+/**
+ * A Firestore `Timestamp` stand-in with the two methods the ledger actually calls.
+ *
+ * The dates below sit in a **past** year on purpose: `formatMonthLabel` prints the year only
+ * when it differs from today's, so a fixture dated "this month" would produce a different
+ * heading depending on when the suite runs.
+ */
+function ts(millis: number): Group['createdAt'] {
+  return {
+    toMillis: () => millis,
+    toDate: () => new Date(millis),
+  } as unknown as Group['createdAt'];
+}
+
+/** Branded money, for fixtures. `MinorUnits` is nominal, so a literal will not do. */
+function minor(amount: number): MinorUnits {
+  return amount as unknown as MinorUnits;
+}
+
+/** One entry in an expense's `paidBy`. */
+function payer(uid: string, amountMinor: number): Expense['paidBy'][number] {
+  return { uid, amountMinor: minor(amountMinor) };
+}
+
+/** One entry in an expense's `splits`. */
+function share(uid: string, amountMinor: number): Expense['splits'][number] {
+  return { uid, amountMinor: minor(amountMinor), rawValue: null };
+}
+const MARCH = Date.UTC(2025, 2, 10);
+const APRIL = Date.UTC(2025, 3, 5);
+
+function expense(overrides: Partial<Expense> = {}): Expense {
+  return {
+    id: 'e1',
+    groupId: 'g1',
+    description: 'Dinner',
+    amountMinor: minor(3000),
+    currency: 'USD' as CurrencyCode,
+    category: 'food',
+    date: ts(MARCH),
+    paidBy: [payer('u1', 3000)],
+    splitMethod: 'equal',
+    splits: [share('u1', 1500), share('u2', 1500)],
+    participantIds: ['u1', 'u2'],
+    createdBy: 'u1',
+    createdAt: TS,
+    updatedBy: null,
+    updatedAt: TS,
+    deletedAt: null,
+    commentCount: 0,
+    lastCommentAt: null,
+    ...overrides,
+  } as unknown as Expense;
+}
+
+function settlement(overrides: Partial<Settlement> = {}): Settlement {
+  return {
+    id: 's1',
+    groupId: 'g1',
+    fromUid: 'u2',
+    toUid: 'u1',
+    amountMinor: minor(1500),
+    currency: 'USD' as CurrencyCode,
+    date: ts(MARCH),
+    note: null,
+    createdBy: 'u2',
+    createdAt: TS,
+    deletedAt: null,
+    ...overrides,
+  } as unknown as Settlement;
+}
 const routes: RouteObject[] = [{ path: '/groups/:gid', element: <GroupDetailScreen /> }];
 
 /** Clicking has to run inside `act` or React never flushes the state update it causes. */
@@ -125,8 +226,14 @@ beforeEach(() => {
   state.activeMembers = [];
   state.myBalanceMinor = 0;
   state.membersLoading = false;
+  state.expenses = [];
+  state.settlements = [];
+  state.ledgerLoading = false;
+  state.ledgerError = null;
   retries.group.mockClear();
   retries.members.mockClear();
+  retries.expenses.mockClear();
+  retries.settlements.mockClear();
   repo.repairGroupMembership.mockReset();
   repo.repairGroupMembership.mockResolvedValue({
     groupId: 'g1',
@@ -229,13 +336,115 @@ describe('<GroupDetailScreen>', () => {
     expect(href(paths.AddExpense())).not.toBeNull();
   });
 
-  it('explains the empty expense section rather than showing a spinner that never resolves', () => {
-    state.group = group();
+  /* ────────────────────────────────────────────────────────────────────────────────────── *
+   * The expense ledger
+   *
+   * This section stood empty for a long time behind a placeholder card that read "…once you
+   * add one" whatever the group actually held — so a group WITH expenses looked exactly like a
+   * group with none, and the missing feature was reported as a permissions bug. Several of
+   * these tests exist to keep that specific lie from coming back.
+   * ────────────────────────────────────────────────────────────────────────────────────── */
 
-    const text = visit().textContent ?? '';
+  describe('the expense ledger', () => {
+    it('says the group is empty only when it really is', () => {
+      state.group = group();
 
-    expect(text).toContain('Expenses');
-    expect(text).toContain('appear here');
+      const text = visit().textContent ?? '';
+
+      expect(text).toContain('Expenses');
+      expect(text).toContain('No expenses yet');
+    });
+
+    it('lists expenses under a month heading, newest month first', () => {
+      state.group = group();
+      state.expenses = [
+        expense({ id: 'e-april', description: 'Kayaks', date: ts(APRIL) }),
+        expense({ id: 'e-march', description: 'Dinner', date: ts(MARCH) }),
+      ];
+
+      const text = visit().textContent ?? '';
+
+      expect(text).toContain('Kayaks');
+      expect(text).toContain('Dinner');
+      expect(text).not.toContain('No expenses yet');
+      // Newest first: April's heading and its row both precede March's.
+      expect(text.indexOf('April')).toBeLessThan(text.indexOf('March'));
+      expect(text.indexOf('Kayaks')).toBeLessThan(text.indexOf('Dinner'));
+    });
+
+    it('links each expense row to its detail screen', () => {
+      state.group = group();
+      state.expenses = [expense({ id: 'e-1' })];
+
+      const container = visit();
+
+      expect(
+        container.querySelector(`a[href="${paths.ExpenseDetail({ gid: 'g1', eid: 'e-1' })}"]`),
+      ).not.toBeNull();
+    });
+
+    it('reports what the expense did to YOU, not the expense total', () => {
+      state.group = group();
+      // u1 paid 30.00 and owes 15.00 of it, so u1 is up 15.00 — not 30.00.
+      state.expenses = [expense()];
+
+      const text = visit().textContent ?? '';
+
+      expect(text).toContain('you lent');
+      expect(text).toContain('15.00');
+      expect(text).not.toContain('30.00');
+    });
+
+    it('says so plainly when you are not part of an expense', () => {
+      state.group = group();
+      state.expenses = [
+        expense({
+          paidBy: [payer('u2', 3000)],
+          splits: [share('u2', 3000)],
+          participantIds: ['u2'],
+        }),
+      ];
+
+      const text = visit().textContent ?? '';
+
+      expect(text).toContain('Not involved');
+      expect(text).not.toContain('you lent');
+      expect(text).not.toContain('you borrowed');
+    });
+
+    it('renders a settlement as a payment, and does not link it anywhere', () => {
+      state.group = group();
+      state.activeMembers = [member('u2', 'Priya')];
+      state.settlements = [settlement()];
+
+      const container = visit();
+      const text = container.textContent ?? '';
+
+      expect(text).toContain('Priya paid You');
+      expect(text).toContain('Payment');
+      // A settlement has no detail screen, and a row that looks tappable and is not is worse
+      // than one that plainly is not.
+      // Scoped to the DETAIL route: the screen's own "Add an expense" button is /expense/new,
+      // and a selector loose enough to catch that proves nothing.
+      expect(container.querySelector('a[href^="/expense/g1/"]')).toBeNull();
+    });
+
+    it('offers a way back when the expense subscription was denied', async () => {
+      state.group = group();
+      state.ledgerError = new Error('Missing or insufficient permissions.');
+
+      const container = visit();
+
+      expect(container.textContent).toContain('Could not load the expenses');
+
+      // 🔴 The retry is the whole point: a Firestore permission-denied TERMINATES the listener,
+      // so without it the list stays empty for the life of the mount and reads as "no
+      // expenses" — exactly how this bug hid the first time.
+      await press(container, 'Try again');
+
+      expect(retries.expenses).toHaveBeenCalledTimes(1);
+      expect(retries.settlements).toHaveBeenCalledTimes(1);
+    });
   });
 
   /* ────────────────────────────────────────────────────────────────────────────────────── *

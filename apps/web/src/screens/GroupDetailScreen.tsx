@@ -1,9 +1,13 @@
 /**
  * `/groups/:gid` — the group home (docs/07 §GroupDetail).
  *
- * Header, member stack, balance strip and a settle-up action. The expense list itself is
- * Phase 06's; until it lands the section explains what will appear there rather than showing a
- * spinner that never resolves.
+ * Header, member stack, balance strip, a settle-up action, and the expense ledger.
+ *
+ * The ledger section stood empty for a long time as a placeholder card that always read "…once
+ * you add one", whatever the group actually held. That is worth remembering because of how it
+ * failed: a group with expenses in it looked exactly like a group with none, and the missing
+ * feature was reported as a permissions bug. A placeholder that states something false about
+ * live data is worse than an obviously unfinished one.
  *
  * ## `null` is a real answer here
  *
@@ -33,7 +37,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 
-import { useGroup, useGroupBalances } from '@splitsutra/core/hooks';
+import { useAuth, useGroup, useGroupBalances } from '@splitsutra/core/hooks';
 import { repairGroupMembership } from '@splitsutra/core/repositories';
 import type { GroupType, MinorUnits } from '@splitsutra/core';
 
@@ -45,6 +49,7 @@ import { Money } from '../components/Money';
 import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
+import { ExpenseLedger } from './group/ExpenseLedger';
 
 /**
  * Keyed by `GroupType`, so it covers the retired `couple` too — a group created before that type
@@ -78,6 +83,7 @@ export function GroupDetailScreen() {
   const { gid } = useParams();
   const groupId = gid ?? '';
 
+  const { user } = useAuth();
   const { group, loading, error, retry: retryGroup } = useGroup(groupId);
   const {
     activeMembers,
@@ -248,12 +254,12 @@ export function GroupDetailScreen() {
           <Text variant="caption" tone="secondary" weight="semibold">
             Expenses
           </Text>
-          <Card>
-            <Text variant="caption" tone="secondary">
-              Expenses and recorded payments in {group.name} appear here, newest first, once you add
-              one.
-            </Text>
-          </Card>
+          <ExpenseLedger
+            groupId={group.id}
+            currency={group.currency}
+            selfUid={user?.uid ?? ''}
+            members={activeMembers}
+          />
         </Stack>
       </Stack>
     </Screen>
