@@ -140,3 +140,68 @@ export function formatRelativeTime(when: number | Date, now: number | Date = Dat
 
   return absoluteDate(whenDate, nowDate);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Month headings — the expense ledger's section labels
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Full month names, for section headings.
+ *
+ * A second table rather than a suffix on {@link MONTH_NAMES}, because "Sep" abbreviates and
+ * "September" does not, and both spellings are wanted in different places: a row's date is
+ * squeezed next to a payer's name, a section heading has the width to be read as a word. The
+ * same no-ICU reasoning that spelled out the abbreviations applies here — `toLocaleDateString`
+ * with `{ month: 'long' }` is the obvious tool and is exactly the ICU dependency this module
+ * exists to avoid.
+ */
+const MONTH_NAMES_LONG = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+/**
+ * A sortable, comparable identity for the calendar month `when` falls in — `"2026-08"`.
+ *
+ * The month is read in the **host's local timezone**, matching {@link formatRelativeTime}'s
+ * "Yesterday": an expense added at 23:00 on the 31st belongs to the month the person who
+ * entered it was living in, not to UTC's.
+ *
+ * Zero-padded so lexical order is chronological order, which is what lets a grouping pass sort
+ * by key without converting back to a date.
+ */
+export function monthKey(when: number | Date): string {
+  const date = when instanceof Date ? when : new Date(when);
+  const month = date.getMonth() + 1;
+  return `${String(date.getFullYear())}-${month < 10 ? '0' : ''}${String(month)}`;
+}
+
+/**
+ * `"August"`, or `"August 2025"` when the year differs from the year of `now`.
+ *
+ * The year is dropped for the current one on the same reasoning as {@link formatRelativeTime}'s
+ * absolute dates: it is the year the reader is already in, so printing it is noise that makes
+ * the headings that *do* carry a year harder to notice.
+ */
+export function formatMonthLabel(when: number | Date, now: number | Date = Date.now()): string {
+  const date = when instanceof Date ? when : new Date(when);
+  const reference = now instanceof Date ? now : new Date(now);
+
+  // `getMonth()` is specified to return 0-11; the fallback is here because
+  // `noUncheckedIndexedAccess` cannot know that.
+  const month = MONTH_NAMES_LONG[date.getMonth()] ?? MONTH_NAMES_LONG[0];
+
+  return date.getFullYear() === reference.getFullYear()
+    ? month
+    : `${month} ${String(date.getFullYear())}`;
+}

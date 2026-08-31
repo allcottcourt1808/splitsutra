@@ -54,3 +54,4 @@ export * from './useGroup.js';
 export * from './useGroupMembers.js';
 export * from './useExpenses.js';
 export * from './useExpense.js';
+export * from './useSettlements.js';

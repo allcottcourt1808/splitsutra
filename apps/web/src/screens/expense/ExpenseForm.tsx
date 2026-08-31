@@ -40,24 +40,7 @@ import {
   type FormDerivation,
   type ParticipantState,
 } from './formState';
-
-/** One decorative glyph per category (AC-D1.6). The label always carries the meaning. */
-const CATEGORY_GLYPH: Readonly<Record<ExpenseCategory, string>> = {
-  general: '🧾',
-  food: '🍽',
-  groceries: '🛒',
-  transport: '🚕',
-  fuel: '⛽',
-  travel: '✈️',
-  accommodation: '🏨',
-  rent: '🔑',
-  utilities: '💡',
-  household: '🧹',
-  entertainment: '🎬',
-  medical: '🩺',
-  insurance: '🛡',
-  education: '🎓',
-};
+import { CATEGORY_GLYPH } from './categoryGlyph';
 
 const SPLIT_METHODS = [
   { value: 'equal', label: 'Equally' },
