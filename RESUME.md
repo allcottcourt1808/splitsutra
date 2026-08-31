@@ -4,30 +4,36 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#44 merged. **#45 is open** — web-only, nothing to deploy.
+## State: PRs #1–#45 merged. **#46 is open — it NEEDS A FUNCTIONS DEPLOY.**
 
-**#45** (`fix/ui-polish-expense-form`) is cosmetic and touches `apps/web` only: no functions, no
-rules, no indexes. Merging it needs a web deploy and nothing else.
+**#46** (`feat/simplify-by-default`) turns debt simplification on for new groups (**ADR-12**,
+which amends AC-E3.3 — the spec previously said display-only by default).
 
-What it changes, and the one worth knowing about:
+🔴 **It touches `firebase/functions/src/lib/friendship.ts`, so it is not web-only.** Until that
+deploys, a group created through the web app defaults simplification on and an implicit 1:1
+friend group still writes `false`. Harmless — with two people the greedy algorithm returns the
+same single transfer the raw view shows — but the two paths disagree until:
 
-🔴 **Layout custom properties used to inherit.** `stackStyle` in `components/Layout.tsx` omitted
-a var when the prop was unset, so `align-items: var(--stack-align, stretch)` resolved against
-whatever an ANCESTOR Stack had set instead of its own fallback. A plain `<Stack>` inside a
-`<Row align="center">` centred itself having asked for nothing. Every var is now written on every
-Stack and Row, defaults included. If a layout looks subtly wrong after this lands, that is the
-first place to look — and the fix is to declare the value, never to go back to omitting it.
+🔴 **Both callables, not one.** `establishFriendship` is reached from `respondToFriendRequest`
+(the normal accept) _and_ from `sendFriendRequest` (the mutual auto-accept, when the other person
+already had a request out to you). Deploying only the first leaves the second writing the old
+value.
 
-The rest: one focus ring instead of two on a focused input; block padding and a `compact` Button
-size for the modal header action (the 44x44 touch target is unchanged); the group member strip
-slimmed from a 145px card to a 62px line; and the expense Date field is now a native date control
-with a `max` of `MAX_FUTURE_DAYS` plus a "Pick a date" chip calling `showPicker()`.
+```bash
+FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:respondToFriendRequest,functions:sendFriendRequest
+```
 
-Also fixed on the way: `<ListRow>` rendered centred as a `<button>` and left-aligned as an `<a>`
-(a UA default), and `Chip.selected` no longer defaults to `false`, so an action chip is a button
-rather than a toggle stuck at "not pressed".
+The default lives in `createGroup`, **not** in `groupSchema`. That is deliberate: the schema also
+decodes stored documents, so a default there would silently rewrite every pre-existing group into
+one that opts in. Existing groups keep whatever they had.
 
-### Previously
+Also fixes the AC-E3.4 miscount recorded below — see "Open decisions" item 2.
+
+### Previously merged
+
+**#45** (`fix/ui-polish-expense-form`) is merged: layout vars no longer inherit, one focus ring
+instead of two, a `compact` Button size for modal headers, the group member strip slimmed from
+145px to 62px, and the expense Date field is a native date control with a "Pick a date" chip.
 
 **#39** (group repair + docs), **#40** (the group expense list), **#41** (reusable invite links),
 **#42** (friends by status), **#43** (undo a declined request) and **#44** (callable error status
@@ -291,8 +297,11 @@ have written to the live Firestore project. **Re-run the audit against the emula
 1. **Comment tombstones are impossible under the current rules.** Phase-08 wants a "comment
    deleted" marker; the rules set `allow update: if false` (T12) while `delete` is a hard
    delete. Both cannot hold, and it cuts against Article V. Documented in `deleteComment`.
-2. **AC-E3.4 counts the wrong quantity** — `owing` counts debtors, not payments. The test
-   pins the current string so a change fails loudly.
+2. ~~**AC-E3.4 counts the wrong quantity**~~ — **resolved**, and it was worse than "wrong
+   quantity": every debtor must discharge their own balance, so `transfers >= debtors` is an
+   identity and the comparison could only ever claim a saving that was equal or worse. The
+   count is gone rather than corrected — the honest figure is the pairwise-debt count, which
+   docs/03 stores nowhere by design. A test now asserts no such comparison renders at all.
 3. **Two delete affordances for an expense** — the detail screen's 5-second undo and a
    two-step confirm on the edit screen. Pick one.
 4. **shadcn (#23)** — recommended against: Article IX is tokens-only and `docs/11` prices

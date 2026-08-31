@@ -167,7 +167,7 @@ Load-bearing under ADR-11 — this is how a non-creator raises a correction.
 
 - **AC-E3.1** Given net balances, the algorithm outputs a payment list of at most `n-1` transactions.
 - **AC-E3.2** After applying every suggested payment, all balances are exactly zero.
-- **AC-E3.3** Simplification is **display-only by default**; a group setting `simplifyDebts` makes it the canonical settle-up view.
+- **AC-E3.3** Simplification is **on by default** for a new group (ADR-12) and the group setting `simplifyDebts` turns it off per group. On or off, it only chooses which settle-up view opens first — see AC-E3.5.
 - **AC-E3.4** The UI explains what simplification did, e.g. "A pays C directly instead of A to B to C".
 - **AC-E3.5** Simplification never changes the underlying ledger — expenses are untouched.
 

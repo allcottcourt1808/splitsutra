@@ -146,7 +146,11 @@ export async function establishFriendship(
     currency: resolveCurrency(currencyHint),
     memberIds: [creator.uid, other.uid],
     memberCount: 2,
-    simplifyDebts: false,
+    // `true` to match `createGroup`'s default (docs/12 ADR-12), and a no-op either way: simplifying
+    // two balances yields the one transfer the raw view already shows. Set anyway so there is
+    // exactly one answer to "what does a new group get", rather than a second one hiding here
+    // for a reason nobody can reconstruct later.
+    simplifyDebts: true,
     createdBy: creator.uid,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

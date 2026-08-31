@@ -122,7 +122,7 @@ Written by Cloud Functions only. Always created reciprocally on both users.
   currency: CurrencyCode;          // IMMUTABLE after creation
   memberIds: string[];             // denormalized; drives the "my groups" query
   memberCount: number;
-  simplifyDebts: boolean;          // default false
+  simplifyDebts: boolean;          // new groups get true (ADR-12); no schema default
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;            // bumped on any activity; drives sort order
