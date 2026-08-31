@@ -12,7 +12,7 @@
  * and it never changes what anyone owes (AC-E3.3).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { Balance } from '../domain/index.js';
 import { watchMembers } from '../repositories/groupRepo.js';
@@ -33,6 +33,16 @@ export interface UseGroupMembersResult {
   readonly loading: boolean;
   /** The subscription failure, if there was one. */
   readonly error: Error | null;
+  /**
+   * Re-subscribe.
+   *
+   * A Firestore listener does not recover on its own — `permission-denied` terminates it
+   * rather than retrying — and neither dependency of this effect changes when the permission
+   * does. `repairGroupMembership` writes the very member document `isMember()` was looking
+   * for, so the caller needs a way to ask for a fresh listener once it has. Mirrors
+   * `useGroup`; both are retried together, because one repair fixes both.
+   */
+  readonly retry: () => void;
 }
 
 /** An empty array that keeps its identity, so a signed-out render is referentially stable. */
@@ -45,6 +55,11 @@ export function useGroupMembers(groupId: string): UseGroupMembersResult {
   const [members, setMembers] = useState<readonly GroupMember[]>(NO_MEMBERS);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (uid === null || groupId === '') {
@@ -65,7 +80,9 @@ export function useGroupMembers(groupId: string): UseGroupMembersResult {
       },
       setError,
     );
-  }, [uid, groupId]);
+    // `attempt` is read for its identity alone: bumping it tears the old listener down and
+    // starts a new one. Referenced here so the dependency is not "unnecessary".
+  }, [uid, groupId, attempt]);
 
   return useMemo(() => {
     const activeMembers = members.filter((member) => member.leftAt === null);
@@ -77,8 +94,9 @@ export function useGroupMembers(groupId: string): UseGroupMembersResult {
       isAdmin: me !== null && me.leftAt === null && me.role === 'admin',
       loading: !ready && error === null,
       error,
+      retry,
     };
-  }, [members, uid, ready, error]);
+  }, [members, uid, ready, error, retry]);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *

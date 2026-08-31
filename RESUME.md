@@ -4,11 +4,14 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#36 merged except #23. Dev backend is DEPLOYED.
+## State: PRs #1–#38 all merged. Dev backend is DEPLOYED. Nothing is open.
 
-**#34** (profile currency picker + layout audit) and **#35** (Couple → Friends group type) are
-merged. **#36** merged. **#37** (invite join screen) and **#38** (deploy fixes) are open.
-**#23** (shadcn docs) is still open and should probably become an ADR instead; see below.
+**#37** (invite join screen) and **#38** (deploy fixes) merged. **#23** (shadcn docs) was closed
+without merging and should probably come back as an ADR instead; see below.
+
+🔴 **One thing outside the repo is still owed:** the Cloud Run `allUsers` → `Cloud Run Invoker`
+binding on the thirteen callables that predate this branch. Until it is granted, every callable
+but `repairGroupMembership` fails with `internal [0]`. See the 2026-08-30 section below.
 
 ### The five tabs
 
@@ -22,6 +25,68 @@ merged. **#36** merged. **#37** (invite join screen) and **#38** (deploy fixes) 
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-08-30 — the group that could not be opened, and the IAM binding nobody wrote
+
+Testing against the **live dev backend** (not emulators) surfaced two production-shaped bugs that
+no test could have caught, because both live outside the code.
+
+**1. A group can be permanently bricked, and there was no way back.**
+"Test Group" was created before the functions were deployed, so `onGroupCreated` never ran and
+its `groups/{gid}/members/{uid}` document was never written. Every read under `/groups/{gid}/**`
+is gated on `exists()` of that document, but `allow list` reads `memberIds` with zero document
+reads — so the group **shows in the list and opens for nobody**. `recomputeGroupBalances`, the
+one existing repair valve, calls `requireActiveMember` first: it reads the missing document.
+
+Fixed with a new callable, `repairGroupMembership`, authorised on `uid ∈ group.memberIds` —
+which grants nothing new, since `allow list` already trusts `memberIds` alone and the rules pin
+it immutable. `GroupDetailScreen` calls it automatically on `permission-denied`, once per group
+id, then retries both listeners. Reasoning in
+[docs/06-cloud-functions.md](docs/06-cloud-functions.md#repairgroupmembership).
+
+Two things this taught that are worth keeping:
+
+- A Firestore `permission-denied` **terminates** the snapshot listener. It does not retry. So
+  `useGroup` and `useGroupMembers` needed a `retry()` that tears the subscription down and opens
+  a fresh one — fixing the permission is otherwise invisible.
+- `recomputeBalances` derives its member set from the member **documents**, not `memberIds`. Seed
+  first, recompute second, or the rebuild runs with that person still missing.
+
+**2. 🔴 `internal [0]` on every callable — Cloud Run IAM, not app code.**
+Adding a friend failed with a bare `internal [0]` and **nothing in the function's own logs**,
+because the request never reached the function. A callable presents
+`Authorization: Bearer <firebase id token>`; Cloud Run's IAM layer wants a _Google-signed_
+identity token there. Without `allUsers` → `roles/run.invoker`, Cloud Run rejects it first,
+logging _"The request was not authenticated… Empty Authorization header value"_.
+
+**firebase-tools writes the invoker binding only when a function is CREATED.** Proven twice: a
+full `firebase deploy --only functions` reported "Successful update operation" for all fourteen
+and changed nothing; adding `invoker: 'public'` to `CALLABLE_OPTS` and redeploying also changed
+nothing. Only `repairGroupMembership`, freshly created, worked. The declaration is now in
+`CALLABLE_OPTS` so newly created functions get it, with a comment saying plainly that it does not
+repair a service that is already wrong.
+
+The thirteen pre-existing services need the binding granted **once, by hand**, in
+[Cloud Run](https://console.cloud.google.com/run?project=splitsutra-dev-eac96) → select all →
+Permissions → add principal `allUsers`, role `Cloud Run Invoker`. Until that lands, every
+callable except `repairGroupMembership` is broken: friend requests, invites, leave/delete group,
+remove member, recompute balances.
+
+**Also in this branch, from the same test pass:**
+
+- `.segmentActive` painted the selected segment in `surface` over the track's `bg-subtle` with a
+  1px `border` ring. On the dark theme those three tokens sit within a few points of each other,
+  so **every segmented control in the app read as inert** — reported on the simplified-payments
+  toggle and the Balances/Suggested-payments tabs, but it was the split-method picker and the
+  sign-in switch too. Now the brand fill, like `.chipSelected`.
+- **Category auto-detection** from the description (`utils/category.ts` — `utils/`, not
+  `domain/`, because `domain-is-pure` runs with `tsPreCompilationDeps` and `ExpenseCategory`
+  reaches `firebase/firestore` for a `Timestamp` type). Precision over recall: `gas`, `bar`,
+  `market`, `auto`, `ticket` and `books` are deliberately **not** keywords. Whole-word matching,
+  longest match wins, ties by `EXPENSE_CATEGORIES` order. Opt-in via `autoCategory` and wired on
+  the **add** screen only — on edit, the stored category is somebody's decision. A
+  `categoryTouched` ref is the whole safety mechanism: a guess may fill an untouched field, it
+  may never overrule a person.
 
 ### 2026-08-30 — #35: `friend` did not belong in the rules allowlist
 

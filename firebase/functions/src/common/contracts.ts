@@ -41,6 +41,7 @@
  *   LeaveGroupSchema              { groupId: string }
  *   DeleteGroupSchema             { groupId: string }
  *   RecomputeGroupBalancesSchema  { groupId: string }
+ *   RepairGroupMembershipSchema   { groupId: string }
  *   DeleteAccountSchema           { confirm: true }
  * ============================================================================
  */
@@ -71,6 +72,7 @@ export {
   recomputeGroupBalancesSchema as RecomputeGroupBalancesSchema,
   redeemInviteSchema as RedeemInviteSchema,
   removeMemberSchema as RemoveMemberSchema,
+  repairGroupMembershipSchema as RepairGroupMembershipSchema,
   respondToFriendRequestSchema as RespondToFriendRequestSchema,
   sendFriendRequestSchema as SendFriendRequestSchema,
 } from '@splitsutra/core';

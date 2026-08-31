@@ -45,6 +45,7 @@ export const CALLABLE = {
   recomputeGroupBalances: 'recomputeGroupBalances',
   redeemInvite: 'redeemInvite',
   removeMember: 'removeMember',
+  repairGroupMembership: 'repairGroupMembership',
   respondToFriendRequest: 'respondToFriendRequest',
   sendFriendRequest: 'sendFriendRequest',
 } as const;

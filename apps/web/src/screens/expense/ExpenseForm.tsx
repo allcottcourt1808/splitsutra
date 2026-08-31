@@ -11,9 +11,11 @@
  * is what makes the promise "the preview equals what gets stored" true rather than aspirational.
  */
 
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 import {
+  DEFAULT_EXPENSE_CATEGORY,
+  detectExpenseCategory,
   EXPENSE_CATEGORIES,
   type CurrencyCode,
   type ExpenseCategory,
@@ -84,6 +86,14 @@ export interface ExpenseFormProps {
   readonly groups: readonly Group[];
   /** Editing cannot move an expense between groups — `groupId` and `currency` are immutable. */
   readonly locked?: boolean | undefined;
+  /**
+   * Guess the category from the description as it is typed.
+   *
+   * Opt-in, and only `AddExpenseScreen` opts in. On the edit screen the stored category is a
+   * choice somebody already made — re-deriving it from the description would quietly overwrite a
+   * deliberate correction the moment a typo in the description got fixed.
+   */
+  readonly autoCategory?: boolean | undefined;
   readonly members: readonly GroupMember[];
   readonly currency: CurrencyCode;
   readonly selfUid: string;
@@ -104,6 +114,7 @@ export function ExpenseForm({
   derivation,
   groups,
   locked = false,
+  autoCategory = false,
   members,
   currency,
   selfUid,
@@ -115,6 +126,35 @@ export function ExpenseForm({
 }: ExpenseFormProps) {
   const patch = (next: Partial<ExpenseFormState>): void => {
     onChange({ ...state, ...next });
+  };
+
+  /**
+   * Set the moment the user taps a category chip, and never cleared.
+   *
+   * 🔴 This is the whole safety mechanism for auto-detection. Without it, typing "Dinner with
+   *    the team" after deliberately choosing "Entertainment" would silently take the choice
+   *    back, and the user would have no way to make the category stick short of typing the
+   *    description first. A guess may fill an untouched field; it may never overrule a person.
+   *
+   * A ref rather than state: nothing renders differently because of it, so putting it in state
+   * would only add a render. It resets when the form unmounts, which is the right lifetime —
+   * one decision per expense being composed.
+   */
+  const categoryTouched = useRef(false);
+
+  const changeDescription = (value: string): void => {
+    if (!autoCategory || categoryTouched.current) {
+      patch({ description: value });
+      return;
+    }
+
+    // Reset to the default when nothing matches, rather than leaving the previous guess behind:
+    // clearing "dinner" out of the description should clear Food with it, or the category ends
+    // up describing text that is no longer there.
+    patch({
+      description: value,
+      category: detectExpenseCategory(value) ?? DEFAULT_EXPENSE_CATEGORY,
+    });
   };
 
   const patchParticipant = (uid: string, next: Partial<ParticipantState>): void => {
@@ -194,9 +234,7 @@ export function ExpenseForm({
         <Input
           label="Description"
           value={state.description}
-          onValueChange={(value) => {
-            patch({ description: value });
-          }}
+          onValueChange={changeDescription}
           maxLength={100}
           placeholder="Dinner at Olive"
           error={derivation.descriptionError ?? undefined}
@@ -246,6 +284,7 @@ export function ExpenseForm({
                 glyph={CATEGORY_GLYPH[category]}
                 selected={category === state.category}
                 onPress={() => {
+                  categoryTouched.current = true;
                   patch({ category });
                 }}
               />

@@ -5,6 +5,7 @@
  * group the user left arrives as `null`.
  */
 
+import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 
@@ -23,14 +24,42 @@ const state = vi.hoisted(() => ({
   membersLoading: false,
 }));
 
+/** The two `retry` callbacks, so a test can assert the screen re-subscribed after a repair. */
+const retries = vi.hoisted(() => ({ group: vi.fn(), members: vi.fn() }));
+
+const repo = vi.hoisted(() => ({ repairGroupMembership: vi.fn() }));
+
 vi.mock('@splitsutra/core/hooks', () => ({
-  useGroup: () => ({ group: state.group, loading: state.loading, error: state.error }),
+  useGroup: () => ({
+    group: state.group,
+    loading: state.loading,
+    error: state.error,
+    retry: retries.group,
+  }),
   useGroupBalances: () => ({
     activeMembers: state.activeMembers,
     myBalanceMinor: state.myBalanceMinor,
     loading: state.membersLoading,
+    retry: retries.members,
   }),
 }));
+
+vi.mock('@splitsutra/core/repositories', () => ({
+  repairGroupMembership: repo.repairGroupMembership,
+}));
+
+/**
+ * The denial a missing member document produces.
+ *
+ * The `code` is the whole trigger — a bare `Error` saying "permission denied" must NOT start a
+ * repair, which is why the fixture carries a real Firestore error shape rather than a message.
+ */
+function denied(): Error {
+  return Object.assign(new Error('Missing or insufficient permissions.'), {
+    code: 'permission-denied',
+    name: 'FirebaseError',
+  });
+}
 
 const TS = { seconds: 0, nanoseconds: 0 } as unknown as Group['createdAt'];
 
@@ -70,6 +99,18 @@ function member(uid: string, displayName: string): GroupMember {
 
 const routes: RouteObject[] = [{ path: '/groups/:gid', element: <GroupDetailScreen /> }];
 
+/** Clicking has to run inside `act` or React never flushes the state update it causes. */
+async function press(container: HTMLElement, name: string): Promise<void> {
+  const target = [...container.querySelectorAll('button')].find(
+    (el) => (el.textContent ?? '').trim() === name,
+  );
+  if (target === undefined) throw new Error(`No button named "${name}"`);
+  await act(async () => {
+    target.click();
+    await Promise.resolve();
+  });
+}
+
 function visit(): HTMLElement {
   const memory = createMemoryRouter(routes, {
     initialEntries: [paths.GroupDetail({ gid: 'g1' })],
@@ -84,6 +125,15 @@ beforeEach(() => {
   state.activeMembers = [];
   state.myBalanceMinor = 0;
   state.membersLoading = false;
+  retries.group.mockClear();
+  retries.members.mockClear();
+  repo.repairGroupMembership.mockReset();
+  repo.repairGroupMembership.mockResolvedValue({
+    groupId: 'g1',
+    repaired: true,
+    role: 'admin',
+    balancesRebuilt: true,
+  });
 });
 
 describe('<GroupDetailScreen>', () => {
@@ -186,5 +236,77 @@ describe('<GroupDetailScreen>', () => {
 
     expect(text).toContain('Expenses');
     expect(text).toContain('appear here');
+  });
+
+  /* ────────────────────────────────────────────────────────────────────────────────────── *
+   * Repairing a group whose member document was never written
+   * ────────────────────────────────────────────────────────────────────────────────────── */
+
+  describe('when the member document is missing', () => {
+    it('repairs the membership and re-subscribes both listeners', async () => {
+      state.error = denied();
+
+      const container = visit();
+
+      expect(container.textContent).toContain('Finishing setting up this group');
+      expect(repo.repairGroupMembership).toHaveBeenCalledWith({ groupId: 'g1' });
+
+      await vi.waitFor(() => {
+        expect(retries.group).toHaveBeenCalledTimes(1);
+        expect(retries.members).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('attempts the repair once, not once per render', async () => {
+      state.error = denied();
+
+      const container = visit();
+      await vi.waitFor(() => expect(retries.group).toHaveBeenCalled());
+      // A second render of the same still-denied group must not call again — the failing case
+      // is the one that would spin.
+      container.dispatchEvent(new Event('resize'));
+
+      expect(repo.repairGroupMembership).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not repair an error that is not a permission denial', () => {
+      state.error = new Error('permission denied');
+
+      const container = visit();
+
+      expect(repo.repairGroupMembership).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('permission denied');
+    });
+
+    it('shows the original failure, not the repair’s, when the repair is refused', async () => {
+      state.error = denied();
+      repo.repairGroupMembership.mockRejectedValue(
+        Object.assign(new Error('You are not a member of this group.'), {
+          code: 'functions/permission-denied',
+        }),
+      );
+
+      const container = visit();
+
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain('Missing or insufficient permissions.');
+      });
+      expect(container.textContent).not.toContain('You are not a member of this group.');
+      expect(retries.group).not.toHaveBeenCalled();
+    });
+
+    it('offers a manual retry once the automatic one is spent', async () => {
+      state.error = denied();
+      repo.repairGroupMembership.mockRejectedValue(new Error('offline'));
+
+      const container = visit();
+      await vi.waitFor(() => expect(container.textContent).toContain('Try again'));
+      expect(retries.group).not.toHaveBeenCalled();
+
+      await press(container, 'Try again');
+
+      expect(retries.group).toHaveBeenCalledTimes(1);
+      expect(retries.members).toHaveBeenCalledTimes(1);
+    });
   });
 });

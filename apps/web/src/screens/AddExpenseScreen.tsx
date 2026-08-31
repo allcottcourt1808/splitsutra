@@ -155,6 +155,9 @@ export function AddExpenseScreen() {
       }}
       derivation={derivation}
       groups={groups}
+      // Adding only. On the edit screen the stored category is somebody's decision, and a guess
+      // does not get to revisit it.
+      autoCategory
       members={members}
       currency={currency}
       selfUid={selfUid}

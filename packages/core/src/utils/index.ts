@@ -37,3 +37,12 @@ export * from './money.js';
 
 /** `formatRelativeTime` — "Just now" / "42m ago" / "5h ago" / "Yesterday" / "12 Mar". */
 export * from './time.js';
+
+/**
+ * `detectExpenseCategory` — guesses a category from an expense description.
+ *
+ * Here rather than in `../domain/`: that barrel is the money math and everything in it is a pure
+ * function over integers (Article VII), which this is not. It also has to import
+ * `ExpenseCategory` from `../types/expense.js`, an edge `domain-is-pure` forbids outright.
+ */
+export * from './category.js';

@@ -316,3 +316,88 @@ describe('<AddExpenseScreen> — what gets written', () => {
     expect(field(container, 'Description').value).toBe('Dinner at Olive');
   });
 });
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Category auto-detection
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+const CATEGORY_NAMES =
+  /General|Food|Groceries|Transport|Fuel|Travel|Accommodation|Rent|Utilities|Household|Entertainment|Medical|Insurance|Education/u;
+
+/**
+ * A category chip by its label.
+ *
+ * Not `button()`: a chip renders its decorative glyph inside the same element as its label, so
+ * its `textContent` is "🎬Entertainment" with no separator and an exact-match lookup finds
+ * nothing.
+ */
+function categoryChip(container: HTMLElement, name: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll('button')].find((candidate) =>
+    (candidate.textContent ?? '').endsWith(name),
+  );
+  if (found === undefined) throw new Error(`no category chip for "${name}"`);
+  return found;
+}
+
+/** The selected category chip, read off `aria-pressed` rather than off any styling. */
+function selectedCategory(container: HTMLElement): string {
+  const chips = [...container.querySelectorAll('button[aria-pressed="true"]')];
+  const category = chips.find((chip) => CATEGORY_NAMES.test(chip.textContent ?? ''));
+  return (category?.textContent ?? '').replace(/[^A-Za-z]/gu, '');
+}
+
+describe('<AddExpenseScreen> — category from the description', () => {
+  it('starts on the default category', () => {
+    expect(selectedCategory(visitLoaded())).toBe('General');
+  });
+
+  it('follows the description as it is typed', () => {
+    const container = visitLoaded();
+
+    type(field(container, 'Description'), 'Dinner at Olive');
+    expect(selectedCategory(container)).toBe('Food');
+
+    type(field(container, 'Description'), 'Petrol on the way');
+    expect(selectedCategory(container)).toBe('Fuel');
+  });
+
+  it('falls back to the default when the description stops matching', () => {
+    const container = visitLoaded();
+
+    type(field(container, 'Description'), 'Dinner at Olive');
+    expect(selectedCategory(container)).toBe('Food');
+
+    // Not left on Food describing text that no longer mentions it.
+    type(field(container, 'Description'), 'Something else entirely');
+    expect(selectedCategory(container)).toBe('General');
+  });
+
+  it('never overrules a category the user picked, however the description changes', () => {
+    const container = visitLoaded();
+
+    type(field(container, 'Description'), 'Dinner at Olive');
+    expect(selectedCategory(container)).toBe('Food');
+
+    press(categoryChip(container, 'Entertainment'));
+    expect(selectedCategory(container)).toBe('Entertainment');
+
+    // The guess is spent for the rest of this form. This is the assertion that matters: a
+    // deliberate choice surviving further typing is the difference between a helpful default
+    // and a field that fights you.
+    type(field(container, 'Description'), 'Dinner and drinks');
+    expect(selectedCategory(container)).toBe('Entertainment');
+
+    type(field(container, 'Description'), 'Petrol');
+    expect(selectedCategory(container)).toBe('Entertainment');
+  });
+
+  it('saves the detected category rather than the default', async () => {
+    const container = visitLoaded();
+
+    fillValidExpense(container);
+    type(field(container, 'Description'), 'Groceries for the week');
+    await pressAndSettle(button(container, 'Save'));
+
+    expect(seam.createExpense.mock.calls[0]?.[0]).toMatchObject({ category: 'groceries' });
+  });
+});

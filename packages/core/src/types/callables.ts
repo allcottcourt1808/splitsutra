@@ -151,6 +151,24 @@ export const recomputeGroupBalancesSchema = z.object({
 export type RecomputeGroupBalancesInput = z.infer<typeof recomputeGroupBalancesSchema>;
 
 /**
+ * `repairGroupMembership` — materialises the caller's own `members/{uid}` document.
+ *
+ * The counterpart to `recomputeGroupBalances`: that one repairs a balance, this one repairs the
+ * membership record the balance hangs off. It exists because `onGroupCreated` is the ONLY writer
+ * of a creator's member document, and a trigger that never ran leaves a group its own creator
+ * cannot open — `firestore.rules` gates every `/groups/{gid}/**` read on that document existing.
+ *
+ * 🔴 It grants no access. The Function refuses unless `group.memberIds` already contains the
+ *    caller, and `memberIds` is pinned to `[creator]` at create and immutable to clients
+ *    thereafter — so this can only write down a membership the group document already asserts.
+ *    It is exactly the trust `allow list` on `/groups/{groupId}` already places in that field.
+ */
+export const repairGroupMembershipSchema = z.object({
+  groupId: documentIdSchema,
+});
+export type RepairGroupMembershipInput = z.infer<typeof repairGroupMembershipSchema>;
+
+/**
  * `deleteAccount` — irreversible.
  *
  * `confirm` is a literal `true` rather than a boolean on purpose: it makes an accidental

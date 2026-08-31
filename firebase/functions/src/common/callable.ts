@@ -26,6 +26,37 @@ import { ENFORCE_APP_CHECK, MAX_INSTANCES, REGION } from './config.js';
 export const CALLABLE_OPTS: CallableOptions = {
   region: REGION,
   maxInstances: MAX_INSTANCES,
+
+  // 🔴 REQUIRED, and not a security decision — 'public' here means "Cloud Run IAM does not gate
+  // this endpoint", NOT "anyone may do anything". Every callable still calls `requireAuth`, which
+  // rejects a request without a verified Firebase ID token, and that is the check that matters.
+  //
+  // A callable presents `Authorization: Bearer <firebase id token>`. Cloud Run's IAM layer wants
+  // a GOOGLE-signed identity token there, so if the service is not public it rejects the request
+  // BEFORE any of our code runs, logging
+  //
+  //     The request was not authenticated. Either allow unauthenticated invocations or set the
+  //     proper Authorization header. Empty Authorization header value.
+  //
+  // and the browser sees a bare `internal [0]` — no status worth showing, nothing in the
+  // function's own logs, and the app looks like it has a server bug. Every callable on
+  // splitsutra-dev-eac96 was in that state: the first deploy hit an IAM propagation race right
+  // after enabling the APIs, and the binding it failed to write is applied by firebase-tools only
+  // when a function is CREATED. A later `firebase deploy` reported "Successful update operation"
+  // for all thirteen and changed nothing — verified, twice.
+  //
+  // ⚠️ THIS DECLARATION DOES NOT REPAIR A SERVICE THAT IS ALREADY WRONG, and it was added
+  //    while trying to. firebase-tools writes the invoker binding when a function is CREATED and
+  //    at no other time: after adding this, a full deploy reported "Successful update operation"
+  //    for all fourteen and the rejection was byte-for-byte identical. Recreating the function is
+  //    what applies it — repairGroupMembership, created minutes earlier, was the one callable on
+  //    dev that worked.
+  //
+  //    So this is a statement of the requirement, not a repair mechanism: it pins the intent
+  //    where the next person reads the options rather than leaving it implicit in a CLI default,
+  //    and it is correct on a fresh project. Fixing an existing one means recreating the function
+  //    or granting run.invoker to allUsers on the Cloud Run service directly.
+  invoker: 'public',
   // TODO(phase-10): ENFORCE_APP_CHECK flips to true once App Check has run in
   // monitoring mode. docs/18 §4 R3 — this is what stops the public web config
   // being scripted against to run up a bill.

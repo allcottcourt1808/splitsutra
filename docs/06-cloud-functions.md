@@ -10,23 +10,24 @@ code** the client runs. There is never a second implementation of the money math
 
 ## Function inventory
 
-| Name                     | Kind      | Trigger                                | Purpose                                             |
-| ------------------------ | --------- | -------------------------------------- | --------------------------------------------------- |
-| `onGroupCreated`         | Firestore | `groups/{gid}` create                  | Seed creator's member doc, write activity           |
-| `onExpenseWritten`       | Firestore | `groups/{gid}/expenses/{eid}` write    | **Recompute balances**, verify sums, write activity |
-| `onSettlementWritten`    | Firestore | `groups/{gid}/settlements/{sid}` write | Recompute balances, write activity                  |
-| `onUserProfileWritten`   | Firestore | `users/{uid}` write                    | Maintain `usernames/` index, fan out name/photo     |
-| `redeemInvite`           | Callable  | client call                            | Validate token, add member atomically               |
-| `createInvite`           | Callable  | client call                            | Mint an invite token for a group                    |
-| `sendFriendRequest`      | Callable  | client call                            | Resolve a contact, write one `pending` request      |
-| `respondToFriendRequest` | Callable  | client call                            | Accept (friend docs + implicit group) or decline    |
-| `cancelFriendRequest`    | Callable  | client call                            | Sender withdraws an unanswered request              |
-| `removeMember`           | Callable  | client call                            | Admin removes a member (blocks if balance ≠ 0)      |
-| `leaveGroup`             | Callable  | client call                            | Self-removal (blocks if balance ≠ 0)                |
-| `deleteGroup`            | Callable  | client call                            | Admin delete (blocks unless all balances = 0)       |
-| `recomputeGroupBalances` | Callable  | client/admin call                      | Self-heal: rebuild balances from the ledger         |
-| `deleteAccount`          | Callable  | client call                            | Anonymise profile, remove memberships               |
-| `auditBalances`          | Scheduled | daily 03:00 IST                        | Assert zero-sum invariant, log/alert on drift       |
+| Name                     | Kind      | Trigger                                | Purpose                                              |
+| ------------------------ | --------- | -------------------------------------- | ---------------------------------------------------- |
+| `onGroupCreated`         | Firestore | `groups/{gid}` create                  | Seed creator's member doc, write activity            |
+| `onExpenseWritten`       | Firestore | `groups/{gid}/expenses/{eid}` write    | **Recompute balances**, verify sums, write activity  |
+| `onSettlementWritten`    | Firestore | `groups/{gid}/settlements/{sid}` write | Recompute balances, write activity                   |
+| `onUserProfileWritten`   | Firestore | `users/{uid}` write                    | Maintain `usernames/` index, fan out name/photo      |
+| `redeemInvite`           | Callable  | client call                            | Validate token, add member atomically                |
+| `createInvite`           | Callable  | client call                            | Mint an invite token for a group                     |
+| `sendFriendRequest`      | Callable  | client call                            | Resolve a contact, write one `pending` request       |
+| `respondToFriendRequest` | Callable  | client call                            | Accept (friend docs + implicit group) or decline     |
+| `cancelFriendRequest`    | Callable  | client call                            | Sender withdraws an unanswered request               |
+| `removeMember`           | Callable  | client call                            | Admin removes a member (blocks if balance ≠ 0)       |
+| `leaveGroup`             | Callable  | client call                            | Self-removal (blocks if balance ≠ 0)                 |
+| `deleteGroup`            | Callable  | client call                            | Admin delete (blocks unless all balances = 0)        |
+| `recomputeGroupBalances` | Callable  | client/admin call                      | Self-heal: rebuild balances from the ledger          |
+| `repairGroupMembership`  | Callable  | client call                            | Self-heal: reseed a member doc a trigger never wrote |
+| `deleteAccount`          | Callable  | client call                            | Anonymise profile, remove memberships                |
+| `auditBalances`          | Scheduled | daily 03:00 IST                        | ⚠️ **NOT IMPLEMENTED** — see the section below       |
 
 ---
 
@@ -222,6 +223,48 @@ Manual repair valve, callable by any group member. Runs the same `recomputeBalan
 Surfaced in the UI behind a "Balances look wrong?" affordance in group settings — cheap
 insurance that turns a support incident into a button press.
 
+### `repairGroupMembership`
+
+The repair valve for the one failure `recomputeGroupBalances` cannot fix: **a group whose
+`onGroupCreated` never ran.**
+
+Every `/groups/{gid}/**` read is gated on `isMember(gid)`, which is
+`exists(/groups/$(gid)/members/$(uid))`. That member document is written by `onGroupCreated`
+and by nothing else — the members subcollection is `allow write: if false` unconditionally
+(threats T2 and T4). But `allow list` on `/groups/{gid}` reads `memberIds` and performs **zero
+document reads**, deliberately, because 50 candidate groups against a 20-access-call query limit
+does not fit. So a group whose trigger was dropped **appears in its creator's list and cannot be
+opened by anyone**, and there was no way back:
+
+- `recomputeGroupBalances` calls `requireActiveMember(gid, uid)` first, which reads the very
+  document that is missing. The existing valve is locked behind the thing that is broken.
+- Loosening `allow get` to trust `memberIds` would not help — members, expenses, settlements and
+  activity all gate on `isMember()` too — and it would break `leaveGroup`, since `leftAt` is only
+  representable in the member document.
+
+**Authorisation is `uid ∈ group.memberIds`, and that grants nothing new.** The rules pin
+`memberIds == [creator]` at create and list it among the immutable fields on update, and
+`allow list` already trusts it alone. A caller who is in `memberIds` is someone the system has
+already decided is a member; the missing document is the bug, not the boundary.
+
+Notes on the shape:
+
+- **Self-repair only.** There is no `uid` parameter — you repair your own membership or nobody's.
+- **Balances are rebuilt, not assumed zero.** `recomputeBalances` derives its member set from the
+  member _documents_, so the doc is seeded inside a transaction first and the recompute runs
+  after. A failed rebuild is reported as `balancesRebuilt: false` rather than swallowed, and
+  logged at ERROR (docs/10 alerts on ERROR).
+- **No activity entry is written.** Backfilling a `group.created` row would stamp today's
+  timestamp on something that happened days ago — a false record in the log T8 exists to keep
+  honest.
+- Every repair logs at ERROR whether or not the user noticed, because a repair means a trigger
+  was dropped and that is worth an alert.
+
+The client side is automatic: a `permission-denied` from `useGroup` **terminates** the snapshot
+listener (Firestore does not retry it), so `GroupDetailScreen` calls this once per group id, then
+calls `retry()` on both hooks to open fresh subscriptions. The user sees "Finishing setting up
+this group…" and then the group.
+
 ---
 
 ## `onUserProfileWritten` — the fan-out
@@ -250,7 +293,25 @@ On create/update of users/{uid}:
 
 ## `auditBalances` (scheduled)
 
-Daily at 03:00 IST. For every active group, recompute from the ledger and compare to
+🔴 **This does not exist yet.** There is no `scheduled/` directory and nothing exports it, so it
+is not deployed and the drift check is not running. It was listed in the inventory above as
+though it were live, which it never was — corrected. By this file's own rule, restated in
+`index.ts` ("export it when it works, not before"), an entry here is a claim about the deployed
+system and this one was wrong.
+
+The two hard parts are already built and unused:
+
+- `findBalanceDrift(gid)` in `common/balances.ts` — a read-only recompute that _reports_ drift
+  rather than repairing it, so the discrepancy can be logged before the evidence is overwritten,
+  and which calls `assertZeroSum` independently of the write path.
+- `AUDIT_SCHEDULE` (`'0 3 * * *'`) and `AUDIT_TIMEZONE` (`'Asia/Kolkata'`) in `common/config.ts`.
+
+What remains is the `onSchedule` wrapper, the iteration over active groups, and the decision
+below about repairing versus only reporting.
+
+---
+
+Intended behaviour, daily at 03:00 IST. For every active group, recompute from the ledger and compare to
 stored member balances.
 
 - Mismatch → log at `ERROR` with the group ID and delta, and auto-repair.

@@ -46,6 +46,7 @@ import {
   groupTypeSchema,
   leaveGroupSchema,
   recomputeGroupBalancesSchema,
+  repairGroupMembershipSchema,
   redeemInviteSchema,
   removeMemberSchema,
   // Type-only: referenced solely as `typeof SELECTABLE_GROUP_TYPES` to derive CreatableGroupType.
@@ -57,6 +58,7 @@ import {
   type GroupMember,
   type LeaveGroupInput,
   type RecomputeGroupBalancesInput,
+  type RepairGroupMembershipInput,
   type RedeemInviteInput,
   type RemoveMemberInput,
 } from '../types/index.js';
@@ -389,6 +391,36 @@ export async function recomputeGroupBalances(
   const payload = recomputeGroupBalancesSchema.parse(input);
   return callFunction<RecomputeGroupBalancesInput, RecomputeGroupBalancesResult>(
     CALLABLE.recomputeGroupBalances,
+    payload,
+  );
+}
+
+export interface RepairGroupMembershipResult {
+  readonly groupId: string;
+  /** `false` when the member document was already there — the call is idempotent. */
+  readonly repaired: boolean;
+  readonly role: 'admin' | 'member';
+  /** `false` when the membership was fixed but the follow-up balance rebuild failed. */
+  readonly balancesRebuilt: boolean;
+}
+
+/**
+ * Write the caller's own `members/{uid}` document when it is missing.
+ *
+ * The membership counterpart to {@link recomputeGroupBalances}. `onGroupCreated` is the only
+ * writer of a creator's member document, and Rules gate every read inside a group on that
+ * document existing — so a group whose trigger never fired is one its own creator cannot open,
+ * with no way back. This is the way back.
+ *
+ * It grants nothing: the Function refuses unless `group.memberIds` already names the caller,
+ * which is the same field `allow list` on `/groups/{gid}` already trusts on its own. Idempotent.
+ */
+export async function repairGroupMembership(
+  input: RepairGroupMembershipInput,
+): Promise<RepairGroupMembershipResult> {
+  const payload = repairGroupMembershipSchema.parse(input);
+  return callFunction<RepairGroupMembershipInput, RepairGroupMembershipResult>(
+    CALLABLE.repairGroupMembership,
     payload,
   );
 }
