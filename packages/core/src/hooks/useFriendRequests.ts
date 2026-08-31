@@ -27,6 +27,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   watchIncomingFriendRequests,
   watchOutgoingFriendRequests,
+  watchWithdrawnFriendRequests,
 } from '../repositories/friendRequestRepo.js';
 import type { FriendRequest } from '../types/index.js';
 import { useAuth } from './useAuth.js';
@@ -116,5 +117,73 @@ export function useFriendRequests(): UseFriendRequestsResult {
       error,
     }),
     [incoming, outgoing, incomingReady, outgoingReady, error],
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Withdrawn requests — a separate hook on purpose
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** What {@link useWithdrawnFriendRequests} returns. */
+export interface UseWithdrawnFriendRequestsResult {
+  /** Requests the signed-in user sent and then withdrew, newest first. Capped by the query. */
+  readonly withdrawn: readonly FriendRequest[];
+  /** `true` until the first snapshot arrives. An empty list is an answer, not loading. */
+  readonly loading: boolean;
+  /** The subscription failure, if there was one. */
+  readonly error: Error | null;
+}
+
+/**
+ * Requests the signed-in user withdrew, for the Friends screen.
+ *
+ * Deliberately **not** a fourth field on {@link useFriendRequests}. That hook is also used by
+ * the Add Friend screen, which has no use for withdrawn requests, and every array it exposes
+ * costs each of its callers a live listener whether they read it or not. A screen that wants
+ * this subscribes to it.
+ *
+ * There is no `declined` counterpart and there will not be one — see the note on
+ * `watchWithdrawnFriendRequests`, which excludes that status at the query rather than here.
+ */
+export function useWithdrawnFriendRequests(): UseWithdrawnFriendRequestsResult {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+
+  const [withdrawn, setWithdrawn] = useState<readonly FriendRequest[]>(NONE);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (uid === null) {
+      setWithdrawn(NONE);
+      setReady(true);
+      setError(null);
+      return;
+    }
+
+    setReady(false);
+    setError(null);
+
+    return watchWithdrawnFriendRequests(
+      uid,
+      (requests) => {
+        setWithdrawn(requests);
+        setReady(true);
+      },
+      (cause) => {
+        setError(cause);
+      },
+    );
+  }, [uid]);
+
+  return useMemo(
+    () => ({
+      withdrawn,
+      // Same rule as above: once the snapshot has failed it is not coming, and a spinner that
+      // never stops is worse than a message.
+      loading: !ready && error === null,
+      error,
+    }),
+    [withdrawn, ready, error],
   );
 }

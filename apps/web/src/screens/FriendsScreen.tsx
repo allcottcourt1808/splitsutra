@@ -1,7 +1,34 @@
 /**
- * `/friends` — the friends list, with pending requests at the top.
+ * `/friends` — everyone you are connected to, and everyone you asked.
  *
  * checklists/phase-05 §7.
+ *
+ * ## Three sections, three different kinds of fact
+ *
+ * **Active** is a friendship: a `users/{uid}/friends/{friendUid}` document exists, so there is a
+ * balance to show and a detail screen to open. **Requested** and **Withdrawn** are not
+ * friendships at all — they are `friendRequests` documents in two different states, with no
+ * friend document behind them. That is why neither is tappable: `FriendDetail` reads the
+ * friendship, and there is none to read.
+ *
+ * ## 🔴 There is no "Declined" section, and its absence is the feature
+ *
+ * A request that was turned down is terminal — `sendFriendRequest` refuses to overwrite one —
+ * and the product does not tell the sender it happened. That is enforced one layer down, in
+ * `watchWithdrawnFriendRequests`, which excludes the status at the *query*: a declined request
+ * never reaches this device, so no change to this file could put it on screen by accident.
+ *
+ * Withdrawn is the opposite case and safe to show: the user withdrew it themselves, so it is
+ * their own action being reported back to them, not somebody else's answer.
+ *
+ * ## Asking again takes the same key it took the first time
+ *
+ * A Withdrawn row has no "Ask again" button. `sendFriendRequest` resolves people through
+ * `usernames/{sha256(contact)}` and takes an email or a phone number — never a uid — and the
+ * request document deliberately does not keep the contact key that found them. Re-sending from
+ * this row would mean either storing that key (a durable copy of someone's email in a document
+ * the other party can read) or opening a uid-shaped path into sending requests. Both are worse
+ * than retyping an address, so the row points at Add Friend instead.
  *
  * ## The requests section IS the in-app notification
  *
@@ -16,14 +43,20 @@
  *
  * ## Article VIII
  *
- * No Firestore here. Two hooks and one callable, all from `@splitsutra/core`.
+ * No Firestore here. Three hooks and one callable, all from `@splitsutra/core`.
  */
 
 import { useState } from 'react';
 
 import { respondToFriendRequest } from '@splitsutra/core/repositories';
-import { useFriendRequests, useFriends } from '@splitsutra/core/hooks';
-import type { BalanceByCurrency, CurrencyCode, MinorUnits } from '@splitsutra/core';
+import { useFriendRequests, useFriends, useWithdrawnFriendRequests } from '@splitsutra/core/hooks';
+import {
+  formatRelativeTime,
+  type BalanceByCurrency,
+  type CurrencyCode,
+  type FriendRequest,
+  type MinorUnits,
+} from '@splitsutra/core';
 
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -61,9 +94,45 @@ function currencyCount(balanceMinor: BalanceByCurrency): number {
   return Object.keys(balanceMinor).length;
 }
 
+/** The label above a section. Same treatment as the request count, so the three read as peers. */
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text variant="caption" tone="secondary" weight="semibold">
+      {children}
+    </Text>
+  );
+}
+
+/**
+ * One outgoing request, in either of the two states this screen shows.
+ *
+ * Not tappable, and not for want of a destination: there is no friendship behind a request, so
+ * there is nothing for `FriendDetail` to open.
+ */
+function RequestRow({
+  request,
+  caption,
+  muted,
+}: {
+  request: FriendRequest;
+  caption: string;
+  muted?: boolean | undefined;
+}) {
+  return (
+    <ListRow
+      title={request.toName}
+      subtitle={caption}
+      leading={<Avatar name={request.toName} photoURL={request.toPhotoURL} />}
+      muted={muted}
+      label={`${request.toName} — ${caption}`}
+    />
+  );
+}
+
 export function FriendsScreen() {
   const { friends, loading: friendsLoading } = useFriends();
-  const { incoming } = useFriendRequests();
+  const { incoming, outgoing } = useFriendRequests();
+  const { withdrawn } = useWithdrawnFriendRequests();
 
   /** Request ids currently in flight, so both buttons on that row disable together. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -87,6 +156,18 @@ export function FriendsScreen() {
     }
   }
 
+  /**
+   * Nothing to show anywhere — the only state that earns the big empty state.
+   *
+   * Checked across all four lists, not just `friends`: "No friends yet" printed above a request
+   * you sent an hour ago is both wrong and slightly rude.
+   */
+  const nothingYet =
+    friends.length === 0 &&
+    incoming.length === 0 &&
+    outgoing.length === 0 &&
+    withdrawn.length === 0;
+
   return (
     <Screen
       header={
@@ -103,9 +184,9 @@ export function FriendsScreen() {
       <Stack gap="lg">
         {incoming.length > 0 && (
           <Stack gap="sm">
-            <Text variant="caption" tone="secondary" weight="semibold">
+            <SectionLabel>
               {incoming.length === 1 ? '1 friend request' : `${incoming.length} friend requests`}
-            </Text>
+            </SectionLabel>
 
             <List
               data={incoming}
@@ -156,48 +237,92 @@ export function FriendsScreen() {
           </Stack>
         )}
 
-        {!friendsLoading && (
-          <List
-            data={friends}
-            aria-label="Friends"
-            keyExtractor={(friend) => friend.friendUid}
-            empty={
-              // Suppressed while a request is waiting: "you have no friends yet" under an
-              // invitation to accept one is both wrong and slightly rude.
-              incoming.length > 0 ? null : (
-                <EmptyState
-                  glyph="👋"
-                  title="No friends yet"
-                  body="Add someone by email or phone. They will get a request to accept before you share any expenses."
-                  action={<Button to={paths.AddFriend()}>Add a friend</Button>}
-                />
-              )
-            }
-            renderItem={(friend) => {
-              const sole = soleBalance(friend.balanceMinor);
-              const count = currencyCount(friend.balanceMinor);
-              return (
-                <ListRow
-                  title={friend.displayName}
-                  leading={<Avatar name={friend.displayName} photoURL={friend.photoURL} />}
-                  to={paths.FriendDetail({ uid: friend.friendUid })}
-                  trailing={
-                    sole !== null ? (
-                      <Money minorUnits={sole.amount} currency={sole.currency} tone="auto" />
-                    ) : count > 1 ? (
-                      <Text variant="caption" tone="secondary">
-                        {`${count} currencies`}
-                      </Text>
-                    ) : (
-                      <Text variant="caption" tone="secondary">
-                        Settled up
-                      </Text>
-                    )
-                  }
-                />
-              );
-            }}
+        {!friendsLoading && nothingYet && (
+          <EmptyState
+            glyph="👋"
+            title="No friends yet"
+            body="Add someone by email or phone. They will get a request to accept before you share any expenses."
+            action={<Button to={paths.AddFriend()}>Add a friend</Button>}
           />
+        )}
+
+        {!friendsLoading && friends.length > 0 && (
+          <Stack gap="sm">
+            <SectionLabel>{`Active · ${friends.length}`}</SectionLabel>
+
+            <List
+              data={friends}
+              aria-label="Active friends"
+              keyExtractor={(friend) => friend.friendUid}
+              renderItem={(friend) => {
+                const sole = soleBalance(friend.balanceMinor);
+                const count = currencyCount(friend.balanceMinor);
+                return (
+                  <ListRow
+                    title={friend.displayName}
+                    leading={<Avatar name={friend.displayName} photoURL={friend.photoURL} />}
+                    to={paths.FriendDetail({ uid: friend.friendUid })}
+                    trailing={
+                      sole !== null ? (
+                        <Money minorUnits={sole.amount} currency={sole.currency} tone="auto" />
+                      ) : count > 1 ? (
+                        <Text variant="caption" tone="secondary">
+                          {`${count} currencies`}
+                        </Text>
+                      ) : (
+                        <Text variant="caption" tone="secondary">
+                          Settled up
+                        </Text>
+                      )
+                    }
+                  />
+                );
+              }}
+            />
+          </Stack>
+        )}
+
+        {outgoing.length > 0 && (
+          <Stack gap="sm">
+            <SectionLabel>{`Requested · ${outgoing.length}`}</SectionLabel>
+
+            <List
+              data={outgoing}
+              aria-label="Requests you sent"
+              keyExtractor={(request) => request.id}
+              renderItem={(request) => (
+                <RequestRow
+                  request={request}
+                  caption={`Asked ${formatRelativeTime(request.createdAt.toMillis())}`}
+                />
+              )}
+            />
+          </Stack>
+        )}
+
+        {withdrawn.length > 0 && (
+          <Stack gap="sm">
+            <SectionLabel>{`Withdrawn · ${withdrawn.length}`}</SectionLabel>
+
+            <List
+              data={withdrawn}
+              aria-label="Requests you withdrew"
+              keyExtractor={(request) => request.id}
+              renderItem={(request) => (
+                <RequestRow
+                  request={request}
+                  muted
+                  caption={`Withdrawn ${formatRelativeTime(
+                    (request.respondedAt ?? request.updatedAt).toMillis(),
+                  )}`}
+                />
+              )}
+            />
+
+            <Text variant="caption" tone="secondary">
+              To ask again, add them by email or phone — the same way you found them the first time.
+            </Text>
+          </Stack>
         )}
       </Stack>
     </Screen>
