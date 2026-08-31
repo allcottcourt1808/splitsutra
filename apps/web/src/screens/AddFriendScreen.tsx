@@ -28,6 +28,7 @@ import {
   sendFriendRequest,
   type SendFriendRequestResult,
 } from '@splitsutra/core/repositories';
+import { describeFriendLookup } from '@splitsutra/core';
 import { useFriendRequests } from '@splitsutra/core/hooks';
 
 import { Avatar } from '../components/Avatar';
@@ -72,8 +73,22 @@ type SendState =
 function describeSendError(cause: unknown): { message: string; notFound: boolean } {
   const code = typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'code') : undefined;
   const raw = cause instanceof Error ? cause.message : String(cause);
+
+  // 🔴 A ZodError is an Error, and its `.message` is the JSON-encoded issue array — origin,
+  //    code, the raw regex source, the field path. That is what this function used to hand
+  //    straight to the screen, and what a user actually saw after pressing Send.
+  //
+  //    `describeFriendLookup` now blocks the submit before it can happen, so this is the second
+  //    line rather than the first. It stays because the shape of the guarantee matters: NOTHING
+  //    a validator serialises should be able to reach a user, whichever validator it is and
+  //    however it gets here.
+  const isSerialisedIssues = raw.trimStart().startsWith('[') && raw.includes('"code"');
+
   return {
-    message: raw.length > 0 ? raw : 'Could not send that request. Try again.',
+    message:
+      raw.length > 0 && !isSerialisedIssues
+        ? raw
+        : 'Could not send that request. Check the address and try again.',
     notFound: code === 'functions/not-found',
   };
 }
@@ -100,7 +115,18 @@ export function AddFriendScreen() {
   const { outgoing } = useFriendRequests();
 
   const trimmed = value.trim();
-  const canSend = trimmed.length > 0 && state.kind !== 'sending';
+
+  /**
+   * Live, on the field, while it is being typed — never an alert on submit (docs/07
+   * §Interaction rules 3). It used to be neither: the value went straight to
+   * `sendFriendRequest`, whose `.parse()` threw, and the ZodError JSON was rendered as the
+   * failure message.
+   */
+  const inputError = describeFriendLookup(mode, value);
+
+  // Blocked while the value cannot possibly resolve, so the round trip is not spent proving
+  // what the schema already knows.
+  const canSend = trimmed.length > 0 && inputError === null && state.kind !== 'sending';
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -158,6 +184,7 @@ export function AddFriendScreen() {
                 inputMode="email"
                 autoComplete="email"
                 placeholder="them@example.com"
+                error={inputError ?? undefined}
                 helper="They will get a request to accept."
               />
             ) : (
@@ -171,6 +198,7 @@ export function AddFriendScreen() {
                 placeholder="+14155550123"
                 // The Function matches E.164 exactly, because that is the format the
                 // `usernames/` index was built from. Saying so up front beats a rejection.
+                error={inputError ?? undefined}
                 helper="Include the country code, e.g. +14155550123."
               />
             )}

@@ -87,7 +87,9 @@ export const emailSchema = z.string().email().max(320).nullable();
 /** An E.164 phone number, e.g. `+919876543210`, or `null`. */
 export const phoneNumberSchema = z
   .string()
-  .regex(/^\+[1-9]\d{1,14}$/, 'Phone number must be in E.164 format, e.g. +919876543210')
+  // Same reasoning as `friendLookupSchema`: the message is read by a user, so it gives the
+  // instruction rather than the name of the standard. "E.164" is in the doc comment above.
+  .regex(/^\+[1-9]\d{1,14}$/, 'Start with + and the country code, e.g. +919876543210.')
   .nullable();
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
