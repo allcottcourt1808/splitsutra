@@ -331,7 +331,19 @@ const CATEGORY_NAMES =
  * its `textContent` is "🎬Entertainment" with no separator and an exact-match lookup finds
  * nothing.
  */
+/** The collapsed category row, or `undefined` when the picker is already open. */
+function categoryRow(container: HTMLElement): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll('button')].find((candidate) =>
+    (candidate.getAttribute('aria-label') ?? '').startsWith('Category, '),
+  );
+}
+
 function categoryChip(container: HTMLElement, name: string): HTMLButtonElement {
+  // The chips live behind a collapsed summary row now (CategoryPicker), so a test that wants
+  // one has to open the picker exactly as a user would.
+  const row = categoryRow(container);
+  if (row !== undefined) press(row);
+
   const found = [...container.querySelectorAll('button')].find((candidate) =>
     (candidate.textContent ?? '').endsWith(name),
   );
@@ -339,8 +351,22 @@ function categoryChip(container: HTMLElement, name: string): HTMLButtonElement {
   return found;
 }
 
-/** The selected category chip, read off `aria-pressed` rather than off any styling. */
+/**
+ * The current category — off the collapsed row's accessible name, or off `aria-pressed` when
+ * the grid happens to be open. Never off styling.
+ *
+ * 🔴 Reading the COLLAPSED row is the point of the first branch. The category is auto-detected
+ *    from the description, and the only thing that makes that safe is the guess staying visible
+ *    without opening anything. Asserting through the summary row is asserting that.
+ */
 function selectedCategory(container: HTMLElement): string {
+  const row = categoryRow(container);
+  if (row !== undefined) {
+    return (row.getAttribute('aria-label') ?? '')
+      .replace(/^Category, /u, '')
+      .replace(/\. Change it$/u, '');
+  }
+
   const chips = [...container.querySelectorAll('button[aria-pressed="true"]')];
   const category = chips.find((chip) => CATEGORY_NAMES.test(chip.textContent ?? ''));
   return (category?.textContent ?? '').replace(/[^A-Za-z]/gu, '');

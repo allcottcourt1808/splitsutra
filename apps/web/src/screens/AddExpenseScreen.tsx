@@ -161,6 +161,7 @@ export function AddExpenseScreen() {
       members={members}
       currency={currency}
       selfUid={selfUid}
+      selfName={user?.displayName ?? ''}
       saving={saving}
       saveError={saveError}
       onSave={() => {

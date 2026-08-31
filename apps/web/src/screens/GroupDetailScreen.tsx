@@ -193,7 +193,10 @@ export function GroupDetailScreen() {
       }
       footer={
         <Stack padding="md">
-          <Button fullWidth to={paths.AddExpense()}>
+          {/* Carries the group, so the composer opens on the one you are looking at rather
+              than on whichever was last active. Without it, adding from inside a group could
+              silently file the expense somewhere else. */}
+          <Button fullWidth to={paths.AddExpense({ gid: group.id })}>
             Add an expense
           </Button>
         </Stack>

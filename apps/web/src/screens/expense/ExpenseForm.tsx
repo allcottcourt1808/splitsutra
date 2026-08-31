@@ -16,9 +16,7 @@ import { useRef, type ReactNode } from 'react';
 import {
   DEFAULT_EXPENSE_CATEGORY,
   detectExpenseCategory,
-  EXPENSE_CATEGORIES,
   type CurrencyCode,
-  type ExpenseCategory,
   type Group,
   type GroupMember,
   type MinorUnits,
@@ -41,7 +39,10 @@ import {
   type FormDerivation,
   type ParticipantState,
 } from './formState';
-import { CATEGORY_GLYPH } from './categoryGlyph';
+import { CategoryPicker } from './CategoryPicker';
+import { GroupPicker } from './GroupPicker';
+import { MemberPicker } from './MemberPicker';
+import { Pressable } from '../../components/Pressable';
 
 const SPLIT_METHODS = [
   { value: 'equal', label: 'Equally' },
@@ -54,11 +55,6 @@ const PAYER_MODES = [
   { value: 'single', label: 'One person' },
   { value: 'multiple', label: 'Several people' },
 ] as const;
-
-/** Title case for a category key, so the list needs no second table of labels. */
-function categoryLabel(category: ExpenseCategory): string {
-  return category.charAt(0).toUpperCase() + category.slice(1);
-}
 
 export interface ExpenseFormProps {
   readonly title: string;
@@ -81,6 +77,13 @@ export interface ExpenseFormProps {
   readonly members: readonly GroupMember[];
   readonly currency: CurrencyCode;
   readonly selfUid: string;
+  /**
+   * The viewer's own display name, used only to shorten a 1:1 label in the group picker.
+   *
+   * Optional and defaulting to `''`, which disables the shortening rather than breaking: a
+   * missing name is a cosmetic loss on one row, never a reason to fail to render the picker.
+   */
+  readonly selfName?: string | undefined;
   readonly saving: boolean;
   readonly saveError: string | null;
   readonly onSave: () => void;
@@ -102,6 +105,7 @@ export function ExpenseForm({
   members,
   currency,
   selfUid,
+  selfName = '',
   saving,
   saveError,
   onSave,
@@ -161,6 +165,35 @@ export function ExpenseForm({
   const allocationFor = (uid: string): MinorUnits | null =>
     derivation.allocations?.find((allocation) => allocation.uid === uid)?.amountMinor ?? null;
 
+  /**
+   * Who has been named as a payer, in member order.
+   *
+   * Ordered by `members` rather than by insertion, so a row never jumps position when an amount
+   * is edited — `payerInputs` is an object and its key order is insertion order, which is stable
+   * in practice but is not the order the rest of this screen lists people in.
+   */
+  const payerUids = members
+    .map((member) => member.uid)
+    .filter((uid) => state.payerInputs[uid] !== undefined);
+
+  /** Everyone still available to add. Empty means the picker has nothing left to offer. */
+  const unpaidMembers = members.filter((member) => state.payerInputs[member.uid] === undefined);
+
+  /**
+   * Switch payer mode, seeding "several people" with whoever was the single payer.
+   *
+   * Without the seed the multi-payer list opens empty, so the first thing it asks is that you
+   * re-enter the person the form already had — and the overwhelmingly common shape of this case
+   * is "I paid most of it and Priya paid the rest", which starts from you.
+   */
+  const changePayerMode = (mode: (typeof PAYER_MODES)[number]['value']): void => {
+    if (mode === 'multiple' && Object.keys(state.payerInputs).length === 0) {
+      patch({ payerMode: mode, payerInputs: { [state.singlePayerUid]: '' } });
+      return;
+    }
+    patch({ payerMode: mode });
+  };
+
   const today = new Date();
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
   const latest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + MAX_FUTURE_DAYS);
@@ -215,24 +248,17 @@ export function ExpenseForm({
     <Screen header={header} label={title}>
       <Stack gap="lg">
         {/* ── Group ───────────────────────────────────────────────────────────────────── */}
+        {/* Collapsed, not a chip row — see GroupPicker's header for why, and for the condition
+            that makes collapsing it safe. */}
         {!locked && groups.length > 0 && (
-          <Stack gap="sm">
-            <Text variant="caption" tone="secondary" weight="semibold">
-              With you and
-            </Text>
-            <Row gap="sm" wrap>
-              {groups.map((group) => (
-                <Chip
-                  key={group.id}
-                  label={group.name}
-                  selected={group.id === state.groupId}
-                  onPress={() => {
-                    patch({ groupId: group.id });
-                  }}
-                />
-              ))}
-            </Row>
-          </Stack>
+          <GroupPicker
+            groups={groups}
+            selectedId={state.groupId}
+            selfName={selfName}
+            onSelect={(groupId) => {
+              patch({ groupId });
+            }}
+          />
         )}
 
         {/* ── Description and amount ──────────────────────────────────────────────────── */}
@@ -257,6 +283,22 @@ export function ExpenseForm({
           maxLength={100}
           placeholder="Dinner at Olive"
           error={derivation.descriptionError ?? undefined}
+        />
+
+        {/* ── Category ────────────────────────────────────────────────────────────────── */}
+        {/* Collapsed to its current value — fourteen chips wrapped to a third of the form, on
+            the field `autoCategory` usually fills in for you. See CategoryPicker.
+
+            🔴 Directly under Description, not after Date. The category is DERIVED from the
+            description (`changeDescription` above), so this row changes as that field is typed
+            — with Date in between, the guess updated outside where the user was looking, which
+            is how an automatic change becomes a surprise instead of a suggestion. */}
+        <CategoryPicker
+          value={state.category}
+          onChange={(category) => {
+            categoryTouched.current = true;
+            patch({ category });
+          }}
         />
 
         {/* ── Date ────────────────────────────────────────────────────────────────────── */}
@@ -299,27 +341,6 @@ export function ExpenseForm({
           </Row>
         </Stack>
 
-        {/* ── Category ────────────────────────────────────────────────────────────────── */}
-        <Stack gap="sm">
-          <Text variant="caption" tone="secondary" weight="semibold">
-            Category
-          </Text>
-          <Row gap="sm" wrap>
-            {EXPENSE_CATEGORIES.map((category) => (
-              <Chip
-                key={category}
-                label={categoryLabel(category)}
-                glyph={CATEGORY_GLYPH[category]}
-                selected={category === state.category}
-                onPress={() => {
-                  categoryTouched.current = true;
-                  patch({ category });
-                }}
-              />
-            ))}
-          </Row>
-        </Stack>
-
         {/* ── Paid by ─────────────────────────────────────────────────────────────────── */}
         <Card>
           <Stack gap="md">
@@ -328,39 +349,70 @@ export function ExpenseForm({
               label="Who paid"
               options={PAYER_MODES}
               value={state.payerMode}
-              onValueChange={(mode) => {
-                patch({ payerMode: mode });
-              }}
+              onValueChange={changePayerMode}
             />
 
             {state.payerMode === 'single' ? (
-              <Row gap="sm" wrap>
-                {members.map((member) => (
-                  <Chip
-                    key={member.uid}
-                    label={nameOf(member.uid)}
-                    selected={member.uid === state.singlePayerUid}
-                    onPress={() => {
-                      patch({ singlePayerUid: member.uid });
-                    }}
-                  />
-                ))}
-              </Row>
+              <MemberPicker
+                members={members}
+                selectedUid={state.singlePayerUid}
+                nameOf={nameOf}
+                label="Paid by"
+                onSelect={(uid) => {
+                  patch({ singlePayerUid: uid });
+                }}
+              />
             ) : (
               <Stack gap="sm">
-                {members.map((member) => (
+                {/* 🔴 An input per PAYER, not per member.
+                    It used to be per member: fifty labelled decimal fields, ~4,000px of form,
+                    to record that two people paid. It also asserted something false — that
+                    every member is a candidate payer you must consider and skip — when the
+                    real task is naming the two or three who actually put money in. */}
+                {payerUids.map((uid) => (
                   <Input
-                    key={member.uid}
-                    label={nameOf(member.uid)}
-                    value={state.payerInputs[member.uid] ?? ''}
+                    key={uid}
+                    label={nameOf(uid)}
+                    value={state.payerInputs[uid] ?? ''}
                     onValueChange={(value) => {
-                      patch({ payerInputs: { ...state.payerInputs, [member.uid]: value } });
+                      patch({ payerInputs: { ...state.payerInputs, [uid]: value } });
                     }}
                     inputMode="decimal"
                     placeholder="0"
                     leading={<Text aria-hidden>{currencySymbol(currency)}</Text>}
+                    trailing={
+                      <Pressable
+                        label={`Remove ${nameOf(uid)} as a payer`}
+                        onPress={() => {
+                          // Deleted, not blanked. `deriveExpenseForm` reads an empty string as
+                          // "paid nothing", which is a different claim from "did not pay" and
+                          // would leave the row on screen for ever.
+                          const next = { ...state.payerInputs };
+                          delete next[uid];
+                          patch({ payerInputs: next });
+                        }}
+                      >
+                        <Text aria-hidden tone="secondary">
+                          ✕
+                        </Text>
+                      </Pressable>
+                    }
                   />
                 ))}
+
+                {unpaidMembers.length > 0 && (
+                  <MemberPicker
+                    members={unpaidMembers}
+                    selectedUid={null}
+                    nameOf={nameOf}
+                    label="Add a payer"
+                    emptyLabel="Add someone who paid"
+                    onSelect={(uid) => {
+                      // Seeded empty, so the row appears and the keypad is one tap away.
+                      patch({ payerInputs: { ...state.payerInputs, [uid]: '' } });
+                    }}
+                  />
+                )}
                 {derivation.payerRemainingMinor !== null &&
                   derivation.payerRemainingMinor !== 0 && (
                     <Stack aria-live="polite">
