@@ -32,9 +32,29 @@ export const redeemInviteSchema = z.object({
 });
 export type RedeemInviteInput = z.infer<typeof redeemInviteSchema>;
 
-/** `createInvite` — mints a new invite token for a group the caller belongs to. */
+/**
+ * `createInvite` — the group's invite link.
+ *
+ * Despite the name it does not mint one every time. A group has **one active link at a time**
+ * and this returns it, creating one only when there is none. That is what makes a reusable
+ * link usable at all: the token is returned by this call and by nothing else — `invites/{id}`
+ * is unreadable to every client — so without an idempotent read-or-create, losing the string
+ * would mean the old link stays live and unreachable while a second one is minted beside it.
+ *
+ * The name is kept because a Cloud Function export name IS its deployed name (Article XI):
+ * renaming it to `getInviteLink` is a delete plus a create, and every client in flight during
+ * the swap gets `functions/not-found`.
+ */
 export const createInviteSchema = z.object({
   groupId: documentIdSchema,
+  /**
+   * Revoke the current link and mint a fresh token.
+   *
+   * The counterweight to a link that keeps working. Anyone still holding the old string gets
+   * `failed-precondition` from that moment; nobody who already joined is affected, because a
+   * membership is not held open by the invite that created it.
+   */
+  reset: z.boolean().optional(),
 });
 export type CreateInviteInput = z.infer<typeof createInviteSchema>;
 

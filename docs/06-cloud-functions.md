@@ -16,8 +16,8 @@ code** the client runs. There is never a second implementation of the money math
 | `onExpenseWritten`       | Firestore | `groups/{gid}/expenses/{eid}` write    | **Recompute balances**, verify sums, write activity  |
 | `onSettlementWritten`    | Firestore | `groups/{gid}/settlements/{sid}` write | Recompute balances, write activity                   |
 | `onUserProfileWritten`   | Firestore | `users/{uid}` write                    | Maintain `usernames/` index, fan out name/photo      |
-| `redeemInvite`           | Callable  | client call                            | Validate token, add member atomically                |
-| `createInvite`           | Callable  | client call                            | Mint an invite token for a group                     |
+| `redeemInvite`           | Callable  | client call                            | Validate token, add member — the link stays reusable |
+| `createInvite`           | Callable  | client call                            | The group's one active link; `reset` mints a new one |
 | `sendFriendRequest`      | Callable  | client call                            | Resolve a contact, write one `pending` request       |
 | `respondToFriendRequest` | Callable  | client call                            | Accept (friend docs + implicit group) or decline     |
 | `cancelFriendRequest`    | Callable  | client call                            | Sender withdraws an unanswered request               |
@@ -141,18 +141,74 @@ SDK can bridge that gap.
 
 ```
 1. Look up invite by token          → not-found if absent
-2. status === 'pending'             → failed-precondition if used/revoked
+2. status === 'pending'             → failed-precondition if revoked/expired/legacy-spent
 3. expiresAt > now                  → deadline-exceeded if expired
 4. Already a member?                → return success (idempotent, not an error)
 5. Group memberCount < 50           → resource-exhausted if full
 6. Transaction:
      create groups/{gid}/members/{uid}  (role: 'member', balanceMinor: 0)
      update group.memberIds arrayUnion(uid), memberCount++
-     update invite.status = 'accepted', acceptedBy = uid
+     append uid to invite.redeemedBy   ← the link stays pending
      write activity 'member.joined'
 ```
 
 Step 4 matters: double-tapping the join button must not error.
+
+#### 🔴 An invite is not consumed by being used
+
+Step 6 used to set `invite.status = 'accepted'`, which made a link a single ticket. The second
+person to click a shared link was told it **"has already been used"** — for the most obvious
+way anyone would ever use one, which is pasting it into a group chat with four people in it.
+The link now stays `pending` and the redeemer is appended to `redeemedBy`.
+
+Stated plainly, because it is a real widening: **a leaked token is now good for everyone who
+sees it**, not for one person. Three things bound it, and none of them is the click count.
+
+| Bound                                                                   | Where          |
+| ----------------------------------------------------------------------- | -------------- |
+| The group ceiling — the 51st person is refused whichever link they hold | step 5         |
+| `expiresAt`, 14 days from minting                                       | step 3         |
+| Revocation — `createInvite({ reset: true })`                            | `createInvite` |
+
+The third is why the reset shipped in the same change. A standing credential nobody can revoke
+is a worse design than a single-use one, and shipping the reusable half without it would have
+traded one bad shape for another.
+
+Concurrency got **simpler**. The old in-transaction re-read existed so that only one of two
+simultaneous redemptions could consume the token; there is nothing to consume now, so both may
+proceed. The re-read stays for a different reason — the link may have been revoked or reset
+between the check and the write, and a credential has to be judged on the value being acted on.
+
+`status` keeps the word `pending` for a link that three people have walked through. `active`
+would be the better word and renaming it is a live-data migration: `parseDocument` throws on an
+enum member it does not know, so every invite written before the rename would fail to decode.
+`accepted` stays in the enum as **legacy only** — nothing writes it, and the invites that carry
+it stay dead, because a link that was already spent does not come back to life when the rules
+around it change.
+
+### `createInvite`
+
+Despite the name, it does **not** mint one every time. A group has one active link and this
+returns it, creating one only when there is none.
+
+That follows from the link being reusable. The token is returned by this call and by nothing
+else — `invites/{id}` is unreadable to every client — so a caller who lost the string cannot
+ask for it again. Minting a second link would leave the first live and unreachable beside it:
+two standing doors into the group, one of which nobody can see, revoke, or account for.
+Read-or-create keeps the number of live doors equal to the number the group can see, which is
+one.
+
+`reset: true` revokes **every** live link for the group and issues a fresh token — every one,
+not just the newest, because the point of a reset is that no string anybody holds still opens
+the group. Groups minted before this change may legitimately hold several. Nobody who already
+joined is affected: a membership is not held open by the invite that created it.
+
+The name is a slight lie and is kept anyway. A Cloud Function export name **is** its deployed
+name (Article XI), so renaming this to `getInviteLink` is a delete plus a create, and every
+client in flight during the swap gets `functions/not-found`.
+
+The read-or-create query (`groupId` + `status` + `createdAt`) needs the `invites` composite
+index in `firestore.indexes.json`.
 
 ### `sendFriendRequest` / `respondToFriendRequest` / `cancelFriendRequest`
 
