@@ -27,7 +27,7 @@ code** the client runs. There is never a second implementation of the money math
 | `recomputeGroupBalances` | Callable  | client/admin call                      | Self-heal: rebuild balances from the ledger          |
 | `repairGroupMembership`  | Callable  | client call                            | Self-heal: reseed a member doc a trigger never wrote |
 | `deleteAccount`          | Callable  | client call                            | Anonymise profile, remove memberships                |
-| `auditBalances`          | Scheduled | daily 03:00 IST                        | Assert zero-sum invariant, log/alert on drift        |
+| `auditBalances`          | Scheduled | daily 03:00 IST                        | ⚠️ **NOT IMPLEMENTED** — see the section below       |
 
 ---
 
@@ -293,7 +293,25 @@ On create/update of users/{uid}:
 
 ## `auditBalances` (scheduled)
 
-Daily at 03:00 IST. For every active group, recompute from the ledger and compare to
+🔴 **This does not exist yet.** There is no `scheduled/` directory and nothing exports it, so it
+is not deployed and the drift check is not running. It was listed in the inventory above as
+though it were live, which it never was — corrected. By this file's own rule, restated in
+`index.ts` ("export it when it works, not before"), an entry here is a claim about the deployed
+system and this one was wrong.
+
+The two hard parts are already built and unused:
+
+- `findBalanceDrift(gid)` in `common/balances.ts` — a read-only recompute that _reports_ drift
+  rather than repairing it, so the discrepancy can be logged before the evidence is overwritten,
+  and which calls `assertZeroSum` independently of the write path.
+- `AUDIT_SCHEDULE` (`'0 3 * * *'`) and `AUDIT_TIMEZONE` (`'Asia/Kolkata'`) in `common/config.ts`.
+
+What remains is the `onSchedule` wrapper, the iteration over active groups, and the decision
+below about repairing versus only reporting.
+
+---
+
+Intended behaviour, daily at 03:00 IST. For every active group, recompute from the ledger and compare to
 stored member balances.
 
 - Mismatch → log at `ERROR` with the group ID and delta, and auto-repair.
