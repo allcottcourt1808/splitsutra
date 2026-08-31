@@ -21,6 +21,14 @@
  * "settle $X first" — so they are deliberately passed through untouched rather than replaced
  * with a generic apology.
  *
+ * 🔴 **With one subtraction: the SDK appends the HTTP status.** `firebase/functions` builds
+ * `message` as `"<what the Function said> [<http status>]"`, so a user reading a carefully
+ * written sentence also read `[400]` on the end of it. Screens are not at fault for showing it —
+ * passing the message through is the correct thing for them to do — so it is removed here, at
+ * the one place every callable error passes through, rather than in each screen that displays
+ * one. Nothing is lost: `code` (`functions/failed-precondition`) survives untouched and says
+ * more than the number did.
+ *
  * @see docs/06-cloud-functions.md — the inventory and each function's contract
  * @see firebase/functions/src/index.ts — the deployed names
  */
@@ -62,11 +70,40 @@ export type CallableName = (typeof CALLABLE)[keyof typeof CALLABLE];
  * output. Documents are different — those can be written by an older client, a migration, or a
  * bug, which is why every *document* read goes through a converter.
  */
+/**
+ * The ` [404]` the Functions SDK appends to every callable error message.
+ *
+ * Anchored to the end and requiring the whole bracket, so a message that merely *contains* a
+ * bracketed number keeps it. The digit count is not pinned: a Cloud Run rejection that never
+ * reached the Function arrives as `internal [0]`, which is the same noise from the same source.
+ */
+const STATUS_SUFFIX = /\s\[\d+\]$/;
+
+/**
+ * The message a user should see, given what the SDK produced.
+ *
+ * Exported for its tests. Pure, and total: a message without the suffix comes back unchanged.
+ */
+export function withoutStatusSuffix(message: string): string {
+  return message.replace(STATUS_SUFFIX, '');
+}
+
 export async function callFunction<Request, Response>(
   name: CallableName,
   payload: Request,
 ): Promise<Response> {
   const fn = httpsCallable<Request, Response>(getFunctionsClient(), name);
-  const result = await fn(payload);
-  return result.data;
+  try {
+    const result = await fn(payload);
+    return result.data;
+  } catch (cause: unknown) {
+    // Trimmed in place and rethrown, rather than wrapped in a new Error. Callers read `code`
+    // off this object — AddFriendScreen singles out `functions/not-found` to offer an invite —
+    // and a wrapper would have to copy every field it might ever be asked for. Narrowing the
+    // error at the exact moment it is being made *more* readable would be the wrong trade.
+    if (cause instanceof Error) {
+      cause.message = withoutStatusSuffix(cause.message);
+    }
+    throw cause;
+  }
 }
