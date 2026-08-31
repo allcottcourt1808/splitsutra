@@ -106,8 +106,13 @@ export function previewSplits(
   }
 }
 
-/** How far into the future a user may date an expense. checklists/phase-06 §5: not > 1 day. */
-const MAX_FUTURE_DAYS = 1;
+/**
+ * How far into the future a user may date an expense. checklists/phase-06 §5: not > 1 day.
+ *
+ * Exported so the date field can hand the same bound to the calendar as `max`. One constant,
+ * or the picker offers a day the form then refuses.
+ */
+export const MAX_FUTURE_DAYS = 1;
 
 /* -------------------------------------------------------------------------- */
 /* State                                                                      */

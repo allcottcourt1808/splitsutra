@@ -20,6 +20,14 @@ export interface ChipProps {
   label: string;
   /** Optional leading glyph. Decorative — the label carries the meaning. */
   glyph?: string | undefined;
+  /**
+   * Omit entirely for a chip that DOES something rather than answering something — "Pick a
+   * date" opens the calendar; it is not a third answer to which day is chosen.
+   *
+   * The distinction is audible, not cosmetic. Any value here, `false` included, makes this a
+   * toggle: a screen reader says "not pressed", implying a state the chip does not have and
+   * an off position the user cannot return to. Undefined leaves it an ordinary button.
+   */
   selected?: boolean | undefined;
   onPress?: (() => void) | undefined;
   to?: string | undefined;
@@ -27,7 +35,7 @@ export interface ChipProps {
   trailing?: ReactNode | undefined;
 }
 
-export function Chip({ label, glyph, selected = false, onPress, to, trailing }: ChipProps) {
+export function Chip({ label, glyph, selected, onPress, to, trailing }: ChipProps) {
   return (
     <Pressable
       to={to}

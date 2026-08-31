@@ -16,6 +16,14 @@ import { Pressable } from './Pressable';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
+/**
+ * `compact` narrows the button for a shared bar — a modal header's Save beside a ✕.
+ *
+ * It changes the padding and the type size and NOTHING else: the 44x44 minimum from
+ * <Pressable> applies to both sizes (Article IX / NFR-4).
+ */
+export type ButtonSize = 'default' | 'compact';
+
 const VARIANT: Readonly<Record<ButtonVariant, string | undefined>> = {
   primary: styles.buttonPrimary,
   secondary: styles.buttonSecondary,
@@ -26,6 +34,7 @@ const VARIANT: Readonly<Record<ButtonVariant, string | undefined>> = {
 export interface ButtonProps {
   children: ReactNode;
   variant?: ButtonVariant | undefined;
+  size?: ButtonSize | undefined;
   onPress?: (() => void) | undefined;
   to?: string | undefined;
   disabled?: boolean | undefined;
@@ -39,6 +48,7 @@ export interface ButtonProps {
 export function Button({
   children,
   variant = 'primary',
+  size = 'default',
   onPress,
   to,
   disabled = false,
@@ -57,6 +67,7 @@ export function Button({
       className={cx(
         styles.button,
         VARIANT[variant],
+        size === 'compact' && styles.buttonCompact,
         fullWidth && styles.buttonFullWidth,
         loading && styles.buttonLoading,
       )}

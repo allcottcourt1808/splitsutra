@@ -107,6 +107,14 @@
     overflow: hidden;
   }
 
+  /* A card holding one row. The block padding shrinks further than the inline: a single row
+     already has a 44px control setting its height, so the vertical space is doing nothing,
+     while the horizontal gutter still has to line the card's contents up with its neighbours. */
+  .cardTight {
+    padding-block: var(--splitsutra-space-sm);
+    padding-inline: var(--splitsutra-space-md);
+  }
+
   /* --- Divider -------------------------------------------------------------- */
 
   .divider {
