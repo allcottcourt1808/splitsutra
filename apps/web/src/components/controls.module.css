@@ -217,11 +217,22 @@
   color: var(--splitsutra-color-text-secondary);
 }
 
+/* Painted with the brand fill, exactly like .chipSelected — the codebase already has one
+   answer to "this option is the chosen one" and a second, quieter one is not a second answer,
+   it is a weaker one.
+
+   What was here before was `surface` on the track's `bg-subtle`, plus a 1px `border` ring. On
+   the dark theme those three tokens sit within a few points of each other, so the selected
+   segment differed from its neighbours by almost nothing and the control read as inert —
+   reported from the "Use simplified payments by default" toggle, but it was every segmented
+   control in the app: the split-method picker, the balances tabs, the sign-in switch.
+
+   `on-primary` (#04241D) is the token minted for foreground ON a `primary` fill; the ordinary
+   text tokens are contrast-checked against the page background, not against teal. */
 .segmentActive {
-  background-color: var(--splitsutra-color-surface);
-  color: var(--splitsutra-color-text);
+  background-color: var(--splitsutra-color-primary);
+  color: var(--splitsutra-color-on-primary);
   font-weight: var(--splitsutra-font-weight-semibold);
-  box-shadow: inset 0 0 0 1px var(--splitsutra-color-border);
 }
 
 /* --- Chip ----------------------------------------------------------------- */
