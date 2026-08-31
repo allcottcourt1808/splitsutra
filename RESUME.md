@@ -17,8 +17,11 @@ write the `allUsers` → `Cloud Run Invoker` binding itself. Verify it landed ra
 an unauthenticated POST should come back `401` with the app's own JSON body, not a Cloud Run
 `403`. If it is a `403`, grant the 12th service by hand the way the other eleven were.
 
+`sendFriendRequest` ships in the same deploy: #43 also reworded `ALREADY_DECLINED`, which a real
+user read as a broken app.
+
 ```bash
-FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:undoDeclineFriendRequest
+FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:undoDeclineFriendRequest,functions:sendFriendRequest
 ```
 
 ✅ **The Cloud Run invoker binding is granted** — `allUsers` → `Cloud Run Invoker`, on **11 of
