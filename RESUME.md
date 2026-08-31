@@ -35,9 +35,10 @@ suffix) all merged. **#43 IS DEPLOYED** — 16 services live, invoker bindings v
 callables. **#23** (shadcn docs) was closed without merging and should probably come back as an
 ADR instead; see below.
 
-✅ **The Cloud Run invoker binding is granted** — `allUsers` → `Cloud Run Invoker`, on **11 of
-the 15** services. Eleven, not fifteen, and the four left out must stay out: see the 2026-08-31
-section below.
+✅ **The Cloud Run invoker binding is granted** — `allUsers` → `Cloud Run Invoker`, on **12 of
+the 16** services. Twelve, not sixteen, and the four left out must stay out: they are Firestore
+triggers, which have no `requireAuth`, trust the CloudEvent body they are handed, and run with the
+Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 section below.
 
 ### The five tabs
 
