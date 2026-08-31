@@ -10,24 +10,25 @@ code** the client runs. There is never a second implementation of the money math
 
 ## Function inventory
 
-| Name                     | Kind      | Trigger                                | Purpose                                              |
-| ------------------------ | --------- | -------------------------------------- | ---------------------------------------------------- |
-| `onGroupCreated`         | Firestore | `groups/{gid}` create                  | Seed creator's member doc, write activity            |
-| `onExpenseWritten`       | Firestore | `groups/{gid}/expenses/{eid}` write    | **Recompute balances**, verify sums, write activity  |
-| `onSettlementWritten`    | Firestore | `groups/{gid}/settlements/{sid}` write | Recompute balances, write activity                   |
-| `onUserProfileWritten`   | Firestore | `users/{uid}` write                    | Maintain `usernames/` index, fan out name/photo      |
-| `redeemInvite`           | Callable  | client call                            | Validate token, add member — the link stays reusable |
-| `createInvite`           | Callable  | client call                            | The group's one active link; `reset` mints a new one |
-| `sendFriendRequest`      | Callable  | client call                            | Resolve a contact, write one `pending` request       |
-| `respondToFriendRequest` | Callable  | client call                            | Accept (friend docs + implicit group) or decline     |
-| `cancelFriendRequest`    | Callable  | client call                            | Sender withdraws an unanswered request               |
-| `removeMember`           | Callable  | client call                            | Admin removes a member (blocks if balance ≠ 0)       |
-| `leaveGroup`             | Callable  | client call                            | Self-removal (blocks if balance ≠ 0)                 |
-| `deleteGroup`            | Callable  | client call                            | Admin delete (blocks unless all balances = 0)        |
-| `recomputeGroupBalances` | Callable  | client/admin call                      | Self-heal: rebuild balances from the ledger          |
-| `repairGroupMembership`  | Callable  | client call                            | Self-heal: reseed a member doc a trigger never wrote |
-| `deleteAccount`          | Callable  | client call                            | Anonymise profile, remove memberships                |
-| `auditBalances`          | Scheduled | daily 03:00 IST                        | ⚠️ **NOT IMPLEMENTED** — see the section below       |
+| Name                       | Kind      | Trigger                                | Purpose                                              |
+| -------------------------- | --------- | -------------------------------------- | ---------------------------------------------------- |
+| `onGroupCreated`           | Firestore | `groups/{gid}` create                  | Seed creator's member doc, write activity            |
+| `onExpenseWritten`         | Firestore | `groups/{gid}/expenses/{eid}` write    | **Recompute balances**, verify sums, write activity  |
+| `onSettlementWritten`      | Firestore | `groups/{gid}/settlements/{sid}` write | Recompute balances, write activity                   |
+| `onUserProfileWritten`     | Firestore | `users/{uid}` write                    | Maintain `usernames/` index, fan out name/photo      |
+| `redeemInvite`             | Callable  | client call                            | Validate token, add member — the link stays reusable |
+| `createInvite`             | Callable  | client call                            | The group's one active link; `reset` mints a new one |
+| `sendFriendRequest`        | Callable  | client call                            | Resolve a contact, write one `pending` request       |
+| `respondToFriendRequest`   | Callable  | client call                            | Accept (friend docs + implicit group) or decline     |
+| `cancelFriendRequest`      | Callable  | client call                            | Sender withdraws an unanswered request               |
+| `undoDeclineFriendRequest` | Callable  | client call                            | Recipient takes back an accidental decline, briefly  |
+| `removeMember`             | Callable  | client call                            | Admin removes a member (blocks if balance ≠ 0)       |
+| `leaveGroup`               | Callable  | client call                            | Self-removal (blocks if balance ≠ 0)                 |
+| `deleteGroup`              | Callable  | client call                            | Admin delete (blocks unless all balances = 0)        |
+| `recomputeGroupBalances`   | Callable  | client/admin call                      | Self-heal: rebuild balances from the ledger          |
+| `repairGroupMembership`    | Callable  | client call                            | Self-heal: reseed a member doc a trigger never wrote |
+| `deleteAccount`            | Callable  | client call                            | Anonymise profile, remove memberships                |
+| `auditBalances`            | Scheduled | daily 03:00 IST                        | ⚠️ **NOT IMPLEMENTED** — see the section below       |
 
 ---
 
@@ -210,7 +211,7 @@ client in flight during the swap gets `functions/not-found`.
 The read-or-create query (`groupId` + `status` + `createdAt`) needs the `invites` composite
 index in `firestore.indexes.json`.
 
-### `sendFriendRequest` / `respondToFriendRequest` / `cancelFriendRequest`
+### `sendFriendRequest` / `respondToFriendRequest` / `cancelFriendRequest` / `undoDeclineFriendRequest`
 
 Replaces `addFriend`, which did the lookup and the write in one call with no consent step.
 Split either side of the recipient's answer (AC-B1.4). `friendRequests/{fromUid}__{toUid}`
@@ -235,6 +236,12 @@ respondToFriendRequest   (recipient only; toUid read from the doc, never the pay
                then status 'accepted' with the group id     (AC-B1.7)
 
 cancelFriendRequest      (sender only) → status 'cancelled', which CAN be re-sent
+
+undoDeclineFriendRequest (RECIPIENT only; toUid read from the doc)
+1. toUid === caller                             → not-found otherwise
+2. status === 'declined'                        → failed-precondition otherwise
+3. now - respondedAt <= UNDO_DECLINE_WINDOW_MS  → failed-precondition otherwise
+4. status back to 'pending', respondedAt back to null
 ```
 
 Both sides of a friendship are written in one transaction — a one-directional friendship
@@ -247,6 +254,42 @@ preference, and the currency is immutable after creation (T10, AC-C1.1).
 
 🔴 A decline is terminal rather than rate-limited. See AC-B1.8 for why, and for the
 recipient-initiated escape hatch that makes that safe.
+
+#### 🔴 `undoDeclineFriendRequest` is not a second chance for the sender
+
+Decline sits directly beside Accept and a thumb is not a decision, so an accidental tap has a
+way back. The distinction that keeps this safe is **who** may call it:
+
+|                            | Undoes               | Authorised on           |
+| -------------------------- | -------------------- | ----------------------- |
+| `cancelFriendRequest`      | your own **request** | `fromUid` — the sender  |
+| `undoDeclineFriendRequest` | your own **answer**  | `toUid` — the recipient |
+
+A sender able to reach this could clear their own refusal and ask again, and again — which is
+exactly the thing the terminal decline exists to prevent. The recipient withdrawing an answer
+they did not mean to give is the opposite act, and grants the sender nothing they did not
+already have: the request returns to `pending`, where it was before the tap. The sender is told
+none of it, because they were never told it was declined in the first place.
+
+**Time-boxed** by `UNDO_DECLINE_WINDOW_MS` (core), measured against `respondedAt` — written
+with `serverTimestamp()` and compared to the Function's own clock, so a client cannot widen
+the window by lying about its time. An accident is noticed immediately; a week later it is a
+change of mind, and a change of mind should mean asking the person again rather than silently
+reviving a request they were never told had died.
+
+The timing decision itself is `declineUndoState()` in `core/src/types/friendRequest.ts`, pulled
+out so the one part of this Function that computes anything is unit-tested at its boundary —
+Cloud Functions still have no test harness in this repository. **The `toUid` check is not in
+there and must not be**: it is the load-bearing half, and it is enforced against the stored
+document inside the transaction.
+
+`respondedAt` returns to `null` with the status. The schema refines
+`(status === 'pending') === (respondedAt === null)`, so writing one without the other produces
+a document that stops decoding on the next read.
+
+**There is no undo for Accept.** Accepting creates a group, two member documents and two
+`friends` documents carrying `balanceMinor`; taking that back is a teardown with money state
+hanging off it, not a status flip. `leaveGroup` covers the reachable half.
 
 ### `leaveGroup` / `removeMember` / `deleteGroup`
 

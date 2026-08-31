@@ -140,6 +140,21 @@ export const cancelFriendRequestSchema = z.object({
 });
 export type CancelFriendRequestInput = z.infer<typeof cancelFriendRequestSchema>;
 
+/**
+ * `undoDeclineFriendRequest` — the **decliner** takes back an accidental tap.
+ *
+ * 🔴 The caller must be `toUid`. This is not a re-send and must never become one: a *sender*
+ * able to reach this would undo the anti-harassment property that makes `declined` terminal in
+ * `sendFriendRequest`. The payload carries an id and nothing else — there is no field naming
+ * who the caller claims to be, because the Function reads that off the stored document.
+ *
+ * Time-boxed by {@link UNDO_DECLINE_WINDOW_MS}, checked server-side against `respondedAt`.
+ */
+export const undoDeclineFriendRequestSchema = z.object({
+  requestId: friendRequestIdSchema,
+});
+export type UndoDeclineFriendRequestInput = z.infer<typeof undoDeclineFriendRequestSchema>;
+
 /** `removeMember` — admin-only; the Function enforces that, not this schema. */
 export const removeMemberSchema = z.object({
   groupId: documentIdSchema,

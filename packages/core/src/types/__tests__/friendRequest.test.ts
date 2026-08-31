@@ -21,7 +21,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { friendRequestId, friendRequestSchema, isPending } from '../friendRequest.js';
+import {
+  UNDO_DECLINE_WINDOW_MS,
+  declineUndoState,
+  friendRequestId,
+  friendRequestSchema,
+  isPending,
+} from '../friendRequest.js';
 
 /** A stand-in `Timestamp`. `timestampSchema` accepts anything `Timestamp`-like. */
 const ts = { seconds: 1_700_000_000, nanoseconds: 0, toDate: () => new Date(), toMillis: () => 0 };
@@ -106,5 +112,52 @@ describe('friendRequestSchema', () => {
 
   it('rejects a status outside the four the state machine defines', () => {
     expect(() => friendRequestSchema.parse(pending({ status: 'expired' }))).toThrow();
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * declineUndoState — the one part of undoDeclineFriendRequest that computes
+ *
+ * Cloud Functions have no test harness in this repository, so the timing rule was pulled into
+ * core to be testable at its boundary, which is where an off-by-one would live. What is NOT
+ * here, and cannot be: the caller being `toUid`. That is the load-bearing half of the check and
+ * it is enforced against the stored document inside the Function.
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+describe('declineUndoState', () => {
+  const NOW = Date.UTC(2026, 7, 31, 12);
+
+  it('allows an undo immediately after the decline', () => {
+    expect(declineUndoState('declined', NOW, NOW)).toBe('undoable');
+  });
+
+  it('allows one exactly at the edge of the window, and refuses one millisecond past it', () => {
+    // The boundary is the whole reason this is a function and not an inline comparison.
+    expect(declineUndoState('declined', NOW - UNDO_DECLINE_WINDOW_MS, NOW)).toBe('undoable');
+    expect(declineUndoState('declined', NOW - UNDO_DECLINE_WINDOW_MS - 1, NOW)).toBe(
+      'window-passed',
+    );
+  });
+
+  it('refuses a decline from long ago', () => {
+    expect(declineUndoState('declined', NOW - 7 * 24 * 60 * 60 * 1000, NOW)).toBe('window-passed');
+  });
+
+  it('reports every other status as not-declined, so nothing else can be undone this way', () => {
+    for (const status of ['pending', 'accepted', 'cancelled'] as const) {
+      expect(declineUndoState(status, NOW, NOW)).toBe('not-declined');
+    }
+  });
+
+  it('🔴 treats a declined request with no respondedAt as too old, never as just now', () => {
+    // Unreachable for a well-formed document — the refine above guarantees the timestamp. If a
+    // malformed one ever existed, reading `null` as "no time has passed" would turn it into an
+    // undo that never expires.
+    expect(declineUndoState('declined', null, NOW)).toBe('window-passed');
+  });
+
+  it('is bounded in minutes, not hours — an accident is noticed immediately', () => {
+    expect(UNDO_DECLINE_WINDOW_MS).toBeGreaterThan(60_000);
+    expect(UNDO_DECLINE_WINDOW_MS).toBeLessThanOrEqual(30 * 60_000);
   });
 });
