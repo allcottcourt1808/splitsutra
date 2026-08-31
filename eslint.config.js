@@ -127,7 +127,10 @@ export default tseslint.config(
   // (`*.{js,cjs,mjs,ts}`), not a subdirectory — so a Node script in scripts/ fails both
   // `no-undef` on process/console and `no-console`, which is how CI broke once already.
   {
-    files: ['scripts/**/*.{js,mjs}'],
+    // `**/scripts/**`, not `scripts/**`: a workspace has build tooling of its own
+    // (`apps/web/scripts/make-icons.mjs`), and the anchored pattern missed it in exactly the
+    // way described above — the same CI break, one directory deeper.
+    files: ['**/scripts/**/*.{js,mjs}'],
     languageOptions: {
       sourceType: 'module',
       globals: {
@@ -136,6 +139,8 @@ export default tseslint.config(
         // Resolving a path relative to the script itself needs `new URL(..., import.meta.url)`,
         // which is the only portable way to do it in an ESM file that may be spawned from any cwd.
         URL: 'readonly',
+        // Node's Buffer — binary output (a PNG encoder) has no portable alternative.
+        Buffer: 'readonly',
       },
     },
     rules: {

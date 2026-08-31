@@ -21,9 +21,32 @@
       content="Split expenses with friends and settle up without the arithmetic."
     />
 
+    <!--
+      Painted by the browser UI around the app once installed. Matches `theme_color` in the
+      manifest (vite.config.ts) and `primary` in tokens.ts — all three move together.
+    -->
+    <meta name="theme-color" content="#1CC29F" />
+
+    <!--
+      iOS reads NONE of the manifest for "Add to Home Screen": not the name, not the icon, not
+      `display: standalone`. These four tags are the iOS half of the same configuration, and
+      dropping any one of them silently downgrades the install to a Safari bookmark that opens
+      with browser chrome. `mobile-web-app-capable` is the standard tag; the `apple-` one is
+      still what older iOS reads, so both are present on purpose.
+    -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SplitSutra" />
+    <!-- `default` keeps the status bar legible; `black-translucent` would slide the app under
+         it, and the header would collide with the clock. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- 🔴 iOS uses THIS for the home-screen icon, never the manifest's. It must stay a PNG:
+         Safari does not accept an SVG here and falls back to a screenshot of the page. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <!-- TODO(phase-09): manifest.webmanifest + service worker (PWA). -->
+    <!-- The manifest link and the service-worker registration are injected by
+         `vite-plugin-pwa` at build time — see the VitePWA block in vite.config.ts. -->
   </head>
   <body>
     <div id="root"></div>

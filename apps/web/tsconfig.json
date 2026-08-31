@@ -6,7 +6,9 @@
        there (Article II, checklists/phase-01-foundation.md §3). */
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    // `vite-plugin-pwa/react` declares the `virtual:pwa-register/react` module the
+    // update prompt imports. Without it that import is an unresolved-module error.
+    "types": ["vite/client", "vite-plugin-pwa/react"],
 
     "noEmit": true,
     "allowImportingTsExtensions": false,

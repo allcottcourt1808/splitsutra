@@ -30,6 +30,18 @@ export default defineConfig({
           // under apps/web was previously collected by neither project and never ran.
           include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
         },
+        resolve: {
+          alias: {
+            // `virtual:pwa-register/react` only exists when vite-plugin-pwa is in the
+            // pipeline, which it is not here. Without this alias every test that mounts
+            // <AppShell> fails at TRANSFORM time on an unresolvable import, which reads as
+            // an unrelated breakage. See the stub for why this is not a per-file vi.mock.
+            'virtual:pwa-register/react': new URL(
+              './apps/web/src/pwa/__mocks__/pwa-register.ts',
+              import.meta.url,
+            ).pathname,
+          },
+        },
       },
       {
         // Security rules — shared emulator state
