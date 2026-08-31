@@ -4,25 +4,36 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#42 merged. **#43 is open and needs a deploy.**
+## State: PRs #1–#44 merged. **#45 is open** — web-only, nothing to deploy.
 
-**#39** (group repair + docs), **#40** (the group expense list), **#41** (reusable invite links)
-and **#42** (friends by status) all merged. **#23** (shadcn docs) was closed without merging and
-should probably come back as an ADR instead; see below.
+**#45** (`fix/ui-polish-expense-form`) is cosmetic and touches `apps/web` only: no functions, no
+rules, no indexes. Merging it needs a web deploy and nothing else.
 
-🔴 **#43 adds a NEW callable, `undoDeclineFriendRequest`, so it is inert until deployed** — the
-Undo button 404s with `functions/not-found` against the current backend. It also takes the
-service count from 15 to 16, and a new function is the one case where firebase-tools _does_
-write the `allUsers` → `Cloud Run Invoker` binding itself. Verify it landed rather than assume:
-an unauthenticated POST should come back `401` with the app's own JSON body, not a Cloud Run
-`403`. If it is a `403`, grant the 12th service by hand the way the other eleven were.
+What it changes, and the one worth knowing about:
 
-`sendFriendRequest` ships in the same deploy: #43 also reworded `ALREADY_DECLINED`, which a real
-user read as a broken app.
+🔴 **Layout custom properties used to inherit.** `stackStyle` in `components/Layout.tsx` omitted
+a var when the prop was unset, so `align-items: var(--stack-align, stretch)` resolved against
+whatever an ANCESTOR Stack had set instead of its own fallback. A plain `<Stack>` inside a
+`<Row align="center">` centred itself having asked for nothing. Every var is now written on every
+Stack and Row, defaults included. If a layout looks subtly wrong after this lands, that is the
+first place to look — and the fix is to declare the value, never to go back to omitting it.
 
-```bash
-FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:undoDeclineFriendRequest,functions:sendFriendRequest
-```
+The rest: one focus ring instead of two on a focused input; block padding and a `compact` Button
+size for the modal header action (the 44x44 touch target is unchanged); the group member strip
+slimmed from a 145px card to a 62px line; and the expense Date field is now a native date control
+with a `max` of `MAX_FUTURE_DAYS` plus a "Pick a date" chip calling `showPicker()`.
+
+Also fixed on the way: `<ListRow>` rendered centred as a `<button>` and left-aligned as an `<a>`
+(a UA default), and `Chip.selected` no longer defaults to `false`, so an action chip is a button
+rather than a toggle stuck at "not pressed".
+
+### Previously
+
+**#39** (group repair + docs), **#40** (the group expense list), **#41** (reusable invite links),
+**#42** (friends by status), **#43** (undo a declined request) and **#44** (callable error status
+suffix) all merged. **#43 IS DEPLOYED** — 16 services live, invoker bindings verified on the
+callables. **#23** (shadcn docs) was closed without merging and should probably come back as an
+ADR instead; see below.
 
 ✅ **The Cloud Run invoker binding is granted** — `allUsers` → `Cloud Run Invoker`, on **11 of
 the 15** services. Eleven, not fifteen, and the four left out must stay out: see the 2026-08-31
