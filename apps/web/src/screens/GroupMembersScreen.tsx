@@ -13,11 +13,17 @@
  * written to be shown to a user (they name the outstanding amount), so they are displayed
  * verbatim rather than replaced with an apology.
  *
- * ## The invite token is shown once
+ * ## One link per group, and it keeps working
  *
  * `invites/{id}` is unreadable to clients — no `get`, no `list` — so the response from
- * `createInvite` is the only copy of the token that will ever exist on this device. Losing it
- * means minting another, which is cheap; leaking it means anyone holding the link can join.
+ * `createInvite` is the only copy of the token that will ever exist on this device. That is
+ * why the button asks for the link rather than minting one: a group has one active link, and
+ * `createInvite` returns the existing one when there is one. Pressing it twice gives the same
+ * string, so the link can be re-shared with a fourth person a week later.
+ *
+ * The link is good for everyone it reaches until it expires or is reset — which is the whole
+ * point, and also the exposure. **Reset link** is the counterweight and belongs next to it:
+ * a standing credential nobody can revoke is a worse design than a single-use one.
  */
 
 import { useState } from 'react';
@@ -68,15 +74,24 @@ export function GroupMembersScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [invite, setInvite] = useState<string | null>(null);
+  /** How many people have already joined through the link on screen. */
+  const [redeemedCount, setRedeemedCount] = useState(0);
 
-  async function createLink(): Promise<void> {
-    setBusy('invite');
+  async function createLink(reset: boolean): Promise<void> {
+    setBusy(reset ? 'reset' : 'invite');
     setFailure(null);
     setMessage(null);
     try {
-      const result = await createInvite({ groupId });
+      const result = await createInvite(reset ? { groupId, reset: true } : { groupId });
       const url = inviteUrl(result.token);
       setInvite(url);
+      setRedeemedCount(result.redeemedCount);
+
+      if (reset) {
+        setMessage('New link ready. The old one no longer works.');
+        return;
+      }
+
       try {
         await getPlatformAdapter().share({
           title: `Join ${result.groupName} on SplitSutra`,
@@ -85,10 +100,17 @@ export function GroupMembersScreen() {
         });
       } catch {
         // Sharing is a convenience; the link is on screen either way (AC-B3.2).
-        setMessage('Copy the link below and send it however you like.');
+        setMessage('Copy the link below and send it to as many people as you like.');
       }
     } catch (cause: unknown) {
-      setFailure(describe(cause, 'Could not create an invite link. Try again.'));
+      setFailure(
+        describe(
+          cause,
+          reset
+            ? 'Could not reset the invite link. Try again.'
+            : 'Could not get an invite link. Try again.',
+        ),
+      );
     } finally {
       setBusy(null);
     }
@@ -153,21 +175,40 @@ export function GroupMembersScreen() {
           <Stack gap="sm">
             <Text weight="semibold">Invite someone</Text>
             <Text variant="caption" tone="secondary">
-              Anyone with the link can join this group. It stops working after 14 days.
+              One link for the whole group — share it with as many people as you like. Anyone
+              holding it can join, and it stops working after 14 days.
             </Text>
             <Button
               loading={busy === 'invite'}
               disabled={busy !== null || me === null}
               onPress={() => {
-                void createLink();
+                void createLink(false);
               }}
             >
-              Create an invite link
+              {invite === null ? 'Get the invite link' : 'Share again'}
             </Button>
             {invite !== null && (
-              <Card>
-                <Text variant="caption">{invite}</Text>
-              </Card>
+              <Stack gap="sm">
+                <Card>
+                  <Text variant="caption">{invite}</Text>
+                </Card>
+                <Text variant="caption" tone="secondary">
+                  {redeemedCount === 0
+                    ? 'Nobody has joined through this link yet.'
+                    : `${String(redeemedCount)} ${redeemedCount === 1 ? 'person has' : 'people have'} joined through this link.`}
+                </Text>
+                <Button
+                  variant="secondary"
+                  loading={busy === 'reset'}
+                  disabled={busy !== null || me === null}
+                  onPress={() => {
+                    void createLink(true);
+                  }}
+                  label="Reset the invite link, so the current one stops working"
+                >
+                  Reset link
+                </Button>
+              </Stack>
             )}
           </Stack>
         </Card>

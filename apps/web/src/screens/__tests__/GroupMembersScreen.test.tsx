@@ -141,9 +141,14 @@ beforeEach(() => {
   state.isAdmin = false;
   state.loading = false;
   state.error = null;
-  state.createInvite = vi
-    .fn()
-    .mockResolvedValue({ inviteId: 'i1', token: 'deadbeef', groupName: 'Goa Trip' });
+  state.createInvite = vi.fn().mockResolvedValue({
+    inviteId: 'i1',
+    token: 'deadbeef',
+    groupName: 'Goa Trip',
+    expiresAtMillis: Date.now() + 14 * 24 * 60 * 60 * 1000,
+    redeemedCount: 0,
+    created: true,
+  });
   state.leaveGroup = vi.fn().mockResolvedValue({ groupId: 'g1', left: true });
   state.removeMember = vi.fn().mockResolvedValue({ groupId: 'g1', uid: 'u2', removed: true });
   state.share = vi.fn().mockResolvedValue(undefined);
@@ -274,15 +279,82 @@ describe('<GroupMembersScreen>', () => {
     expect(visit().textContent).not.toContain('Leave this group');
   });
 
-  it('mints an invite through the callable and shows the token once', async () => {
+  /* ──────────────────────────────────────────────────────────────────────────────────── *
+   * The invite link
+   *
+   * It used to be a single ticket: the first person through consumed it and everyone else
+   * was told the link "has already been used" — for the most obvious way anyone would use
+   * one, pasting it into a group chat. These tests hold the reusable shape in place, and in
+   * particular that asking twice gives the SAME link rather than minting a second live door
+   * into the group.
+   * ──────────────────────────────────────────────────────────────────────────────────── */
+
+  it('asks for the link and shares it', async () => {
     twoMembers();
 
     const container = visit();
-    await press(container, 'Create an invite link');
+    await press(container, 'Get the invite link');
 
     expect(state.createInvite).toHaveBeenCalledWith({ groupId: 'g1' });
     expect(state.share).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain(paths.JoinGroup({ token: 'deadbeef' }));
+  });
+
+  it('says the link is for everyone, not for one person', () => {
+    twoMembers();
+
+    const text = visit().textContent ?? '';
+
+    expect(text).toContain('share it with as many people as you like');
+  });
+
+  it('asks again for the same link rather than minting a second one', async () => {
+    twoMembers();
+
+    const container = visit();
+    await press(container, 'Get the invite link');
+
+    // 🔴 No `reset` on a plain re-share. The server returns the group's existing link, so two
+    //    presses must not leave two live doors into the group — one of which nobody can see.
+    await press(container, 'Share again');
+
+    expect(state.createInvite).toHaveBeenCalledTimes(2);
+    expect(state.createInvite).toHaveBeenNthCalledWith(1, { groupId: 'g1' });
+    expect(state.createInvite).toHaveBeenNthCalledWith(2, { groupId: 'g1' });
+  });
+
+  it('resets the link on request, and says the old one is dead', async () => {
+    twoMembers();
+
+    const container = visit();
+    await press(container, 'Get the invite link');
+    await press(container, 'Reset link');
+
+    expect(state.createInvite).toHaveBeenLastCalledWith({ groupId: 'g1', reset: true });
+    expect(container.textContent).toContain('The old one no longer works');
+  });
+
+  it('offers no reset until there is a link to reset', () => {
+    twoMembers();
+
+    expect(visit().textContent).not.toContain('Reset link');
+  });
+
+  it('reports how many people have already joined through the link', async () => {
+    twoMembers();
+    state.createInvite = vi.fn().mockResolvedValue({
+      inviteId: 'i1',
+      token: 'deadbeef',
+      groupName: 'Goa Trip',
+      expiresAtMillis: Date.now() + 1000,
+      redeemedCount: 3,
+      created: false,
+    });
+
+    const container = visit();
+    await press(container, 'Get the invite link');
+
+    expect(container.textContent).toContain('3 people have joined through this link');
   });
 
   it('keeps the link on screen when the platform cannot share it', async () => {
@@ -290,7 +362,7 @@ describe('<GroupMembersScreen>', () => {
     state.share = vi.fn().mockRejectedValue(new Error('share unavailable'));
 
     const container = visit();
-    await press(container, 'Create an invite link');
+    await press(container, 'Get the invite link');
 
     expect(container.textContent).toContain(paths.JoinGroup({ token: 'deadbeef' }));
     expect(container.textContent).toContain('Copy the link below');
@@ -301,7 +373,7 @@ describe('<GroupMembersScreen>', () => {
     state.createInvite = vi.fn().mockRejectedValue(new Error('not a member of this group'));
 
     const container = visit();
-    await press(container, 'Create an invite link');
+    await press(container, 'Get the invite link');
 
     expect(container.textContent).toContain('not a member of this group');
   });

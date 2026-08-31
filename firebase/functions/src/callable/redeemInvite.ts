@@ -22,15 +22,34 @@ import { newMemberDoc, profileSnapshot, readGroupInTransaction } from '../lib/gr
  *    is the entire credential (`invites/{id}` is unreadable to clients), so the
  *    order of the checks below is the access-control policy.
  *
- * The doc's sequence, preserved exactly:
+ * The doc's sequence:
  *   1. look up by token        → not-found
  *   2. status === 'pending'    → failed-precondition
  *   3. expiresAt > now         → deadline-exceeded
  *   4. already a member        → SUCCESS, not an error (idempotent)
  *   5. memberCount < 50        → resource-exhausted
- *   6. one transaction: member doc + memberIds + invite status + activity
+ *   6. one transaction: member doc + memberIds + invite redemption record + activity
  *
  * Step 4 matters: double-tapping the join button must not error.
+ *
+ * ## 🔴 An invite is no longer consumed by being used
+ *
+ * This used to set `status: accepted` in step 6, which meant the second person to click a
+ * shared link was told it "has already been used" — for the most obvious way anyone would
+ * ever use one, pasting it into a group chat. The link now stays `pending` and the redeemer
+ * is appended to `redeemedBy`.
+ *
+ * What that changes about the threat model, stated plainly: a leaked token is now good for
+ * everyone who sees it, not for one person, until it expires or is reset. Two things bound it
+ * and neither is the click count — the group's own ceiling (step 5 refuses the 51st member,
+ * whichever link they hold) and `expiresAt`. The third is that the link can be revoked, which
+ * is why `createInvite` grew a reset in the same change.
+ *
+ * Concurrency got SIMPLER, not harder. The old in-transaction re-read existed to make sure
+ * only one of two simultaneous redemptions consumed the token; there is nothing to consume
+ * now, so both may proceed. The re-read stays for a different reason: the link may have been
+ * revoked or reset between the check above and the write below, and the credential has to be
+ * judged on the value being acted upon.
  * ============================================================================
  */
 export const redeemInvite = onCall(CALLABLE_OPTS, async (req) => {
@@ -52,10 +71,10 @@ export const redeemInvite = onCall(CALLABLE_OPTS, async (req) => {
 
   // --- 2. status -------------------------------------------------------------
   if (invite['status'] !== 'pending') {
-    throw new HttpsError(
-      'failed-precondition',
-      'This invite link has already been used or revoked.',
-    );
+    // Covers a reset link, a revoked one, and an invite already spent under the old
+    // single-use rule. One message for all three: which of them it is tells the holder
+    // something about a group they are not in.
+    throw new HttpsError('failed-precondition', 'This invite link is no longer active.');
   }
 
   // --- 3. expiry -------------------------------------------------------------
@@ -82,13 +101,12 @@ export const redeemInvite = onCall(CALLABLE_OPTS, async (req) => {
       throw new HttpsError('not-found', 'That group no longer exists.');
     }
 
-    // Re-checked inside the transaction: two devices redeeming the same token at
-    // the same time both passed the check above. Only one may consume the invite.
-    const freshStatus = freshInvite.data()?.['status'];
-    const alreadyAcceptedByMe =
-      freshStatus === 'accepted' && freshInvite.data()?.['acceptedBy'] === uid;
-    if (freshStatus !== 'pending' && !alreadyAcceptedByMe) {
-      throw new HttpsError('failed-precondition', 'This invite link has already been used.');
+    // Re-checked inside the transaction against the freshly read document, because the link
+    // may have been revoked or reset since the check above. Not a race over consuming a
+    // ticket — several people may redeem the same link at once and all of them should get in.
+    const fresh = freshInvite.data();
+    if (fresh?.['status'] !== 'pending') {
+      throw new HttpsError('failed-precondition', 'This invite link is no longer active.');
     }
 
     // --- 4. already a member -> idempotent success --------------------------
@@ -132,7 +150,21 @@ export const redeemInvite = onCall(CALLABLE_OPTS, async (req) => {
       memberCount: nextMemberIds.length,
     });
 
-    tx.update(inviteSnap.ref, { status: 'accepted', acceptedBy: uid });
+    // Appended, not overwritten, and the status is left alone — the link stays open for the
+    // next person. Deduplicated by hand rather than with arrayUnion so the length below is
+    // the length that will be stored, and so a rejoin does not list the same uid twice.
+    //
+    // The cap is the same ceiling step 5 enforces, restated on the array because that array
+    // is what actually grows (Article XI: a document a group can cause writes to needs a
+    // stated bound). Reaching it is unreachable in practice — you cannot redeem without
+    // becoming a member, and step 5 stops the 51st — so it is a guard, not a code path.
+    const previous = Array.isArray(fresh['redeemedBy'])
+      ? (fresh['redeemedBy'] as string[]).filter((id): id is string => typeof id === 'string')
+      : [];
+    const redeemedBy = previous.includes(uid) ? previous : [...previous, uid];
+    if (redeemedBy.length <= MAX_GROUP_MEMBERS) {
+      tx.update(inviteSnap.ref, { redeemedBy });
+    }
 
     // In the SAME transaction as the join. A feed entry that commits while the join
     // rolls back asserts something that never happened (T8 cuts both ways).

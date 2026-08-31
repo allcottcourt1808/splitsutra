@@ -430,9 +430,20 @@ export interface CreateInviteResult {
   /** 128 bits of lowercase hex. Never readable from Firestore — this response is the only copy. */
   readonly token: string;
   readonly groupName: string;
+  /** When the link stops working. */
+  readonly expiresAtMillis: number;
+  /** How many people have already joined through this link. */
+  readonly redeemedCount: number;
+  /** `false` when an existing active link was returned rather than a new one minted. */
+  readonly created: boolean;
 }
 
-/** Mint a 14-day invite token for a group the caller belongs to (AC-B3.1). */
+/**
+ * The group's current invite link, minting one only if there is none (AC-B3.1).
+ *
+ * Not "mint a new token" despite the name — see {@link createInviteSchema}. Pass
+ * `reset: true` to revoke the current link and issue a fresh one.
+ */
 export async function createInvite(input: CreateInviteInput): Promise<CreateInviteResult> {
   const payload = createInviteSchema.parse(input);
   return callFunction<CreateInviteInput, CreateInviteResult>(CALLABLE.createInvite, payload);
