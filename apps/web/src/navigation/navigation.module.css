@@ -234,8 +234,15 @@
 .modalHeader {
   flex: 0 0 auto;
   gap: var(--splitsutra-space-sm);
-  padding-inline: var(--splitsutra-space-sm);
-  padding-block-start: var(--splitsutra-safe-area-top);
+  /* Asymmetric on purpose. The leading ✕ is a 44x44 <Pressable> whose glyph already sits
+     centred inside that box, so it carries its own gutter; the trailing action is a filled
+     button whose edge IS its edge and needs a real one. */
+  padding-inline: var(--splitsutra-space-sm) var(--splitsutra-space-md);
+  /* The action used to sit flush against both borders — a 44px button in a 44px bar, reading
+     as a header made of button. The block padding is what turns it back into a control
+     placed in a bar. */
+  padding-block: var(--splitsutra-space-sm);
+  padding-block-start: calc(var(--splitsutra-safe-area-top) + var(--splitsutra-space-sm));
   border-block-end: 1px solid var(--splitsutra-color-border);
   background-color: var(--splitsutra-color-surface);
 }

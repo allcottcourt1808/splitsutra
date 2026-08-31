@@ -6,7 +6,7 @@
  * `aria-invalid` so a screen reader announces it at the field, not at the top of a form.
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useId } from 'react';
 import styles from './controls.module.css';
 import { cx } from './tokenProps';
@@ -24,7 +24,28 @@ export interface InputProps {
   helper?: string | undefined;
   /** `decimal` and `numeric` bring up the right keypad on a phone. */
   inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel' | 'search' | undefined;
-  type?: 'text' | 'email' | 'tel' | 'search' | 'password' | undefined;
+  /**
+   * `date` renders the platform date control: a calendar on desktop, the OS date wheel on a
+   * phone. Its value is `YYYY-MM-DD` in every locale while the DISPLAY follows the viewer's —
+   * so the field shows `29/08/2026` to someone in India and stores the same string either way.
+   * Phase 12 maps it onto the native picker rather than a `TextInput`.
+   */
+  type?: 'text' | 'email' | 'tel' | 'search' | 'password' | 'date' | undefined;
+  /**
+   * Upper bound for `type="date"`, as `YYYY-MM-DD`.
+   *
+   * The calendar greys out everything past it, which is the difference between a rule the user
+   * discovers by being told off after choosing and one they cannot break in the first place.
+   */
+  max?: string | undefined;
+  /**
+   * Handle on the field itself, for a control that has to ACT on it — the "Pick a date" chip
+   * calling `showPicker()`.
+   *
+   * Deliberately not a general escape hatch: reach for a prop first. RN's `TextInput` takes a
+   * ref too, so the seam survives Phase 12 even though what you can call through it changes.
+   */
+  inputRef?: RefObject<HTMLInputElement | null> | undefined;
   /**
    * Autofill hint — `current-password`, `new-password`, `one-time-code`, `tel`.
    *
@@ -52,6 +73,8 @@ export function Input({
   helper,
   inputMode = 'text',
   type = 'text',
+  max,
+  inputRef,
   autoComplete,
   autoFocus = false,
   disabled = false,
@@ -74,12 +97,16 @@ export function Input({
         {leading}
         <input
           id={id}
+          ref={inputRef}
           className={styles.input}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           placeholder={placeholder}
-          inputMode={inputMode}
+          /* A date control has its own keypad and its own segmented editing; an `inputMode`
+             on top of it is at best ignored and at worst overrides the picker's keyboard. */
+          inputMode={type === 'date' ? undefined : inputMode}
           type={type}
+          max={max}
           autoComplete={autoComplete}
           autoFocus={autoFocus}
           disabled={disabled}

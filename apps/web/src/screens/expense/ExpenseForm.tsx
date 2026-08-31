@@ -35,6 +35,7 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { Text } from '../../components/Text';
 import { ModalHeader } from '../../navigation/ScreenHeader';
 import {
+  MAX_FUTURE_DAYS,
   toDateInput,
   type ExpenseFormState,
   type FormDerivation,
@@ -162,13 +163,48 @@ export function ExpenseForm({
 
   const today = new Date();
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const latest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + MAX_FUTURE_DAYS);
+
+  /**
+   * The date field, so "Pick a date" can open the calendar on it.
+   *
+   * A separate hidden input would be the other way, and it is worse: two elements holding one
+   * value, and the picker would write to whichever one the chip happened to point at.
+   */
+  const dateRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Open the platform date picker.
+   *
+   * `showPicker` is the only way to raise a date control from a control that is NOT the field
+   * itself, and it is the whole reason the chip exists — a native date input shows a calendar
+   * glyph so small that on desktop people miss it entirely.
+   *
+   * It throws when the browser refuses the gesture as untrusted, and older Safari and Firefox
+   * do not implement it at all. Both fall back to focusing the field, which at minimum puts
+   * the cursor where the date is edited rather than doing nothing at all.
+   */
+  const openDatePicker = (): void => {
+    const field = dateRef.current;
+    if (field === null) return;
+    try {
+      field.showPicker();
+    } catch {
+      field.focus();
+    }
+  };
 
   const header = (
     <ModalHeader
       title={title}
       dismissTo={dismissTo}
       action={
-        <Button onPress={onSave} disabled={derivation.draft === null} loading={saving}>
+        <Button
+          size="compact"
+          onPress={onSave}
+          disabled={derivation.draft === null}
+          loading={saving}
+        >
           {saveLabel}
         </Button>
       }
@@ -224,6 +260,10 @@ export function ExpenseForm({
         />
 
         {/* ── Date ────────────────────────────────────────────────────────────────────── */}
+        {/* The field is a native date control, so the value is `YYYY-MM-DD` in every locale
+            while the browser renders it in the viewer's. That replaced a plain text box
+            captioned "YYYY-MM-DD", which asked everyone outside that convention to translate
+            their own date format by hand and then told them off for getting it wrong. */}
         <Stack gap="sm">
           <Input
             label="Date"
@@ -231,9 +271,9 @@ export function ExpenseForm({
             onValueChange={(value) => {
               patch({ dateInput: value });
             }}
-            inputMode="numeric"
-            placeholder="2026-08-29"
-            helper="YYYY-MM-DD"
+            type="date"
+            inputRef={dateRef}
+            max={toDateInput(latest)}
             error={derivation.dateError ?? undefined}
           />
           <Row gap="sm" wrap>
@@ -251,6 +291,11 @@ export function ExpenseForm({
                 patch({ dateInput: toDateInput(yesterday) });
               }}
             />
+            {/* Never `selected`: the other two chips report which day is chosen, and this one
+                is a way in rather than a third answer to that question. Marking it selected
+                for "some other date" would leave two chips lit whenever the picker landed on
+                today. */}
+            <Chip label="Pick a date" glyph="📅" onPress={openDatePicker} />
           </Row>
         </Stack>
 

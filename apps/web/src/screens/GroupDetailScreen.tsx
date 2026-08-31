@@ -43,7 +43,7 @@ import type { GroupType, MinorUnits } from '@splitsutra/core';
 
 import { AvatarStack } from '../components/Avatar';
 import { Button } from '../components/Button';
-import { Card, Row, Screen, Stack } from '../components/Layout';
+import { Card, Row, Screen, Spacer, Stack } from '../components/Layout';
 import { EmptyState } from '../components/EmptyState';
 import { Money } from '../components/Money';
 import { Text } from '../components/Text';
@@ -200,26 +200,29 @@ export function GroupDetailScreen() {
       }
     >
       <Stack gap="lg">
-        <Card>
-          <Row gap="md" align="center">
-            <Stack gap="xs" flex="1">
-              <Text variant="caption" tone="secondary">
-                {TYPE_LABEL[group.type]} · {group.currency}
-              </Text>
-              {activeMembers.length > 0 && (
-                <AvatarStack
-                  people={activeMembers.map((member) => ({
-                    uid: member.uid,
-                    displayName: member.displayName,
-                    photoURL: member.photoURL,
-                  }))}
-                />
-              )}
-              <Text variant="caption" tone="secondary">
-                {`${String(group.memberCount)} ${group.memberCount === 1 ? 'member' : 'members'}`}
-              </Text>
-            </Stack>
-            <Button variant="secondary" to={paths.GroupMembers({ gid: group.id })}>
+        {/* One line, not four.
+
+            This was a full card stacking the type, the avatars and the member count as three
+            rows above a Members button — 145px of chrome before the balance, which is the
+            number the screen exists to show. Everything it said still fits on one line beside
+            the faces, so it says it there. */}
+        <Card tight>
+          <Row gap="sm">
+            {activeMembers.length > 0 && (
+              <AvatarStack
+                people={activeMembers.map((member) => ({
+                  uid: member.uid,
+                  displayName: member.displayName,
+                  photoURL: member.photoURL,
+                }))}
+                max={3}
+              />
+            )}
+            <Text variant="caption" tone="secondary" truncate>
+              {`${String(group.memberCount)} ${group.memberCount === 1 ? 'member' : 'members'} · ${TYPE_LABEL[group.type]} · ${group.currency}`}
+            </Text>
+            <Spacer />
+            <Button variant="ghost" size="compact" to={paths.GroupMembers({ gid: group.id })}>
               Members
             </Button>
           </Row>

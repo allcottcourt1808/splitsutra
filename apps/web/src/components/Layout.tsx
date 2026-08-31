@@ -97,13 +97,28 @@ export interface StackProps {
   'aria-live'?: 'off' | 'polite' | 'assertive' | undefined;
 }
 
-function stackStyle(props: StackProps): CSSProperties {
+/**
+ * 🔴 EVERY var is written on EVERY Stack and Row, defaults included. Do not go back to
+ *    omitting the ones the caller left unset.
+ *
+ * Custom properties INHERIT. When a var was omitted, the primitive's own fallback —
+ * `align-items: var(--stack-align, stretch)` — was not what resolved: the value set by the
+ * nearest ancestor Stack was, and the fallback only applied if no ancestor had ever set one.
+ * So a plain `<Stack>` inside a `<Row align="center">` silently centred itself, having asked
+ * for nothing. The group header's member strip did exactly that, and every one of its rows
+ * rendered centred with no screen requesting it.
+ *
+ * Writing the default stops the lookup here. `alignDefault` differs per component because
+ * their fallbacks do (a Row centres, a Stack stretches); the rest are the primitives' own
+ * fallbacks restated, so nothing that already set a value moves.
+ */
+function stackStyle(props: StackProps, alignDefault: string): CSSProperties {
   return vars({
-    '--stack-gap': props.gap === undefined ? undefined : spaceVar(props.gap),
-    '--stack-padding': props.padding === undefined ? undefined : spaceVar(props.padding),
-    '--stack-align': props.align === undefined ? undefined : ALIGN[props.align],
-    '--stack-justify': props.justify === undefined ? undefined : JUSTIFY[props.justify],
-    '--stack-flex': props.flex,
+    '--stack-gap': props.gap === undefined ? '0' : spaceVar(props.gap),
+    '--stack-padding': props.padding === undefined ? '0' : spaceVar(props.padding),
+    '--stack-align': props.align === undefined ? alignDefault : ALIGN[props.align],
+    '--stack-justify': props.justify === undefined ? 'flex-start' : JUSTIFY[props.justify],
+    '--stack-flex': props.flex ?? '0 0 auto',
   });
 }
 
@@ -113,7 +128,7 @@ export function Stack(props: StackProps) {
   return (
     <Tag
       className={cx(styles.stack, props.wrap === true && styles.wrap, props.className)}
-      style={{ ...stackStyle(props), ...props.style }}
+      style={{ ...stackStyle(props, 'stretch'), ...props.style }}
       role={props.role}
       aria-label={props['aria-label']}
       aria-live={props['aria-live']}
@@ -129,7 +144,7 @@ export function Row(props: StackProps) {
   return (
     <Tag
       className={cx(styles.stack, styles.row, props.wrap === true && styles.wrap, props.className)}
-      style={{ ...stackStyle(props), ...props.style }}
+      style={{ ...stackStyle(props, 'center'), ...props.style }}
       role={props.role}
       aria-label={props['aria-label']}
       aria-live={props['aria-live']}
@@ -147,14 +162,26 @@ export interface CardProps {
   children: ReactNode;
   /** Removes the inner padding — for cards that contain a full-bleed `<List>`. */
   flush?: boolean | undefined;
+  /**
+   * Narrows the inner padding for a card holding a single row.
+   *
+   * Not a general "make it smaller": the default padding is what gives a card of stacked
+   * content its weight, and a screen full of tight cards is a screen with no hierarchy.
+   */
+  tight?: boolean | undefined;
   className?: string | undefined;
   'aria-label'?: string | undefined;
 }
 
-export function Card({ children, flush, className, ...rest }: CardProps) {
+export function Card({ children, flush, tight, className, ...rest }: CardProps) {
   return (
     <div
-      className={cx(styles.card, flush === true && styles.cardFlush, className)}
+      className={cx(
+        styles.card,
+        flush === true && styles.cardFlush,
+        tight === true && styles.cardTight,
+        className,
+      )}
       aria-label={rest['aria-label']}
     >
       {children}

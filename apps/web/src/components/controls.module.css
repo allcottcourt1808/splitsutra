@@ -41,6 +41,12 @@
     min-inline-size: 0;
     inline-size: 100%;
     justify-content: flex-start;
+    /* A UA centres text inside a <button> and leaves it alone inside an <a>. <ListRow> is
+     whichever the caller's props make it — `to` gives a link, `onPress` a button — so the
+     same row rendered identically in JSX came out left-aligned in a list and centred in the
+     currency picker, for no reason either component could see. `justify-content` above
+     already declares the intent; this says it for the text too. */
+    text-align: start;
   }
 
   .pressable:active {
@@ -74,6 +80,17 @@
 
 .buttonFullWidth {
   inline-size: 100%;
+}
+
+/* For a button sharing a bar with something else — the Save action in a modal header.
+ *
+ * 🔴 Only the INLINE padding and the type shrink. `min-block-size` and `min-inline-size` come
+ *    from `.pressable` and stay at 44x44 (Article IX / NFR-4); there is no "small" button in
+ *    this design system, only a narrower one. A compact button that dips under the touch
+ *    target is a bug, not a size. */
+.buttonCompact {
+  padding-inline: var(--splitsutra-space-md);
+  font-size: var(--splitsutra-font-size-sm);
 }
 
 /* primary: brand teal FILL with the dark on-primary foreground.
@@ -166,6 +183,21 @@
   min-block-size: var(--splitsutra-size-touch-target);
   font-size: var(--splitsutra-font-size-md);
   color: var(--splitsutra-color-text);
+}
+
+/* ONE ring, not two.
+ *
+ * `styles/reset.css` draws a token focus ring on `:focus-visible` for every element in the
+ * app, and `.inputShell:focus-within` above draws its own — so a focused field rendered BOTH:
+ * the shell's inset ring, and the input's outline 2px outside it. Two concentric rings around
+ * one field, which reads as two controls.
+ *
+ * 🔴 Suppressed on the INPUT only, and only because the shell around it draws the replacement
+ *    the reset's own comment requires ("never globally"). `:focus-within` fires for keyboard
+ *    and pointer alike, so the field is still unmistakably focused and NFR-6 holds. Do not
+ *    copy this to an element that has no ring of its own. */
+.input:focus-visible {
+  outline: none;
 }
 
 .input::placeholder {
