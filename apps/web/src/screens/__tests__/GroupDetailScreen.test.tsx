@@ -333,7 +333,11 @@ describe('<GroupDetailScreen>', () => {
     expect(href(paths.GroupMembers({ gid: 'g1' }))).not.toBeNull();
     expect(href(paths.GroupBalances({ gid: 'g1' }))).not.toBeNull();
     expect(href(paths.SettleUp({ gid: 'g1' }))).not.toBeNull();
-    expect(href(paths.AddExpense())).not.toBeNull();
+    // 🔴 Carries the group. Adding from inside a group must open the composer on THAT group —
+    //    a bare /expense/new falls back to the most recently active one, which files the
+    //    expense somewhere the user was not looking.
+    expect(href(paths.AddExpense({ gid: 'g1' }))).not.toBeNull();
+    expect(href(paths.AddExpense())).toBeNull();
   });
 
   /* ────────────────────────────────────────────────────────────────────────────────────── *

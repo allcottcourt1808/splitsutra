@@ -68,7 +68,15 @@ export interface RouteParamMap {
   /** `to`/`amountMinor` prefill the form when arriving from a suggested payment (AC-E3.4). */
   SettleUp: { gid: string };
   GroupBalances: { gid: string };
-  AddExpense: undefined;
+  /**
+   * `gid` preselects the group, for the "Add an expense" button on a group screen.
+   *
+   * A query parameter rather than a path segment because it is a PREFILL, not the identity of
+   * the screen: `/expense/new` is one route whichever group it opens on, and the user may change
+   * the group without the URL becoming a lie. Optional, because the Add tab opens the same
+   * screen with no group in mind.
+   */
+  AddExpense: { gid?: string | undefined } | undefined;
   ExpenseDetail: { gid: string; eid: string };
   EditExpense: { gid: string; eid: string };
   FriendList: undefined;
@@ -106,7 +114,12 @@ export const paths = {
   GroupMembers: (p: RouteParamMap['GroupMembers']): string => `/groups/${seg(p.gid)}/members`,
   SettleUp: (p: RouteParamMap['SettleUp']): string => `/groups/${seg(p.gid)}/settle`,
   GroupBalances: (p: RouteParamMap['GroupBalances']): string => `/groups/${seg(p.gid)}/balances`,
-  AddExpense: (): string => ROUTE_PATTERNS.AddExpense,
+  AddExpense: (p?: RouteParamMap['AddExpense']): string =>
+    p?.gid === undefined
+      ? ROUTE_PATTERNS.AddExpense
+      : // `URLSearchParams` rather than a template, so a group id needing escaping cannot
+        // invent a second parameter. Same reasoning as `seg` above, for the query half.
+        `${ROUTE_PATTERNS.AddExpense}?${new URLSearchParams({ gid: p.gid }).toString()}`,
   ExpenseDetail: (p: RouteParamMap['ExpenseDetail']): string =>
     `/expense/${seg(p.gid)}/${seg(p.eid)}`,
   EditExpense: (p: RouteParamMap['EditExpense']): string =>
