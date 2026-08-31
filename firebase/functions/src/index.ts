@@ -45,7 +45,9 @@
  * caller is affected; once that stops being true, ship the client and the functions together.
  *
  * In its place: `sendFriendRequest` (the lookup half) and `respondToFriendRequest` (the write
- * half, behind the consent of whoever was asked), plus `cancelFriendRequest` for the sender.
+ * half, behind the consent of whoever was asked), plus `cancelFriendRequest` for the sender
+ * and `undoDeclineFriendRequest` for a recipient who declined by accident — the latter
+ * authorised on `toUid` and time-boxed, so it can never become a re-send for the sender.
  */
 
 /* ── Callables: client-invoked, auth-checked in each function's own preamble ─────────── */
@@ -60,6 +62,7 @@ export { removeMember } from './callable/removeMember.js';
 export { repairGroupMembership } from './callable/repairGroupMembership.js';
 export { respondToFriendRequest } from './callable/respondToFriendRequest.js';
 export { sendFriendRequest } from './callable/sendFriendRequest.js';
+export { undoDeclineFriendRequest } from './callable/undoDeclineFriendRequest.js';
 
 /* ── Triggers: Firestore-driven. Article V — recompute is idempotent, so a retried ─────
  *    delivery cannot double-count. */

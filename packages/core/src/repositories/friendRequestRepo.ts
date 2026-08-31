@@ -34,10 +34,12 @@ import {
   cancelFriendRequestSchema,
   respondToFriendRequestSchema,
   sendFriendRequestSchema,
+  undoDeclineFriendRequestSchema,
   type CancelFriendRequestInput,
   type FriendRequest,
   type RespondToFriendRequestInput,
   type SendFriendRequestInput,
+  type UndoDeclineFriendRequestInput,
 } from '../types/index.js';
 import { CALLABLE, callFunction } from './callables.js';
 import { friendRequestsCollection } from './refs.js';
@@ -234,6 +236,31 @@ export async function cancelFriendRequest(
   const payload = cancelFriendRequestSchema.parse(input);
   return callFunction<CancelFriendRequestInput, CancelFriendRequestResult>(
     CALLABLE.cancelFriendRequest,
+    payload,
+  );
+}
+
+/** What `undoDeclineFriendRequest` returns — the request is pending again. */
+export interface UndoDeclineFriendRequestResult {
+  readonly requestId: string;
+  readonly status: 'pending';
+}
+
+/**
+ * Take back a decline the caller made by accident, putting the request back in their inbox.
+ *
+ * Only the person who declined can call this, and only inside `UNDO_DECLINE_WINDOW_MS`. It
+ * restores the request to exactly the state it was in before the tap — `pending`, unanswered —
+ * so nothing is granted to the sender that they did not already have, and they are told none
+ * of it. Both properties are enforced in the Function; this wrapper cannot be trusted with
+ * either.
+ */
+export async function undoDeclineFriendRequest(
+  input: UndoDeclineFriendRequestInput,
+): Promise<UndoDeclineFriendRequestResult> {
+  const payload = undoDeclineFriendRequestSchema.parse(input);
+  return callFunction<UndoDeclineFriendRequestInput, UndoDeclineFriendRequestResult>(
+    CALLABLE.undoDeclineFriendRequest,
     payload,
   );
 }

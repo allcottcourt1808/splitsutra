@@ -21,6 +21,23 @@
  * Withdrawn is the opposite case and safe to show: the user withdrew it themselves, so it is
  * their own action being reported back to them, not somebody else's answer.
  *
+ * ## Decline is undoable for a few minutes, and only by the person who tapped it
+ *
+ * Decline sits directly beside Accept and a thumb is not a decision, so an accidental tap has
+ * a way back: the row is replaced by "Declined <name>. Undo" until the window closes.
+ *
+ * 🔴 This is the **recipient** correcting their own mis-tap, never a second chance for the
+ * sender — the two are opposites, and only the first is safe. `undoDeclineFriendRequest` is
+ * authorised on `toUid` and time-boxed server-side; the button below stops being offered on
+ * the same clock, which is UX and not the rule (Article IV).
+ *
+ * The undone request comes back on its own. It returns to `pending`, which is exactly the
+ * query `incoming` runs, so the subscription re-delivers it — nothing here puts it back.
+ *
+ * There is no undo for **Accept**. Accepting creates a group, two member documents and two
+ * `friends` documents carrying `balanceMinor`; taking that back is a teardown with money state
+ * hanging off it, not a status flip.
+ *
  * ## Asking again takes the same key it took the first time
  *
  * A Withdrawn row has no "Ask again" button. `sendFriendRequest` resolves people through
@@ -46,12 +63,13 @@
  * No Firestore here. Three hooks and one callable, all from `@splitsutra/core`.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { respondToFriendRequest } from '@splitsutra/core/repositories';
+import { respondToFriendRequest, undoDeclineFriendRequest } from '@splitsutra/core/repositories';
 import { useFriendRequests, useFriends, useWithdrawnFriendRequests } from '@splitsutra/core/hooks';
 import {
   formatRelativeTime,
+  UNDO_DECLINE_WINDOW_MS,
   type BalanceByCurrency,
   type CurrencyCode,
   type FriendRequest,
@@ -137,20 +155,60 @@ export function FriendsScreen() {
   /** Request ids currently in flight, so both buttons on that row disable together. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The decline that can still be taken back, held here rather than read from a query.
+   *
+   * A declined request leaves `incoming` the instant it is answered — that is what makes the
+   * inbox self-clearing — so by the time the undo could be offered, the document is in no
+   * query this screen runs. The name is the one the row was already showing.
+   */
+  const [undoable, setUndoable] = useState<{ requestId: string; name: string } | null>(null);
 
-  async function respond(requestId: string, accept: boolean): Promise<void> {
+  // Stop offering the undo at the moment the server stops honouring it. Offering an action
+  // that is guaranteed to fail is worse than not offering one.
+  useEffect(() => {
+    if (undoable === null) return;
+    const timer = setTimeout(() => {
+      setUndoable(null);
+    }, UNDO_DECLINE_WINDOW_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [undoable]);
+
+  async function respond(requestId: string, name: string, accept: boolean): Promise<void> {
     setBusy((current) => new Set(current).add(requestId));
     setError(null);
     try {
       await respondToFriendRequest({ requestId, accept });
       // No local removal: the request leaves `incoming` on its own, because the subscription
       // sees the status change. Removing it here too would fight the snapshot and flicker.
+      if (!accept) setUndoable({ requestId, name });
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Could not answer that request.');
     } finally {
       setBusy((current) => {
         const next = new Set(current);
         next.delete(requestId);
+        return next;
+      });
+    }
+  }
+
+  async function undoDecline(entry: { requestId: string; name: string }): Promise<void> {
+    setBusy((current) => new Set(current).add(entry.requestId));
+    setError(null);
+    try {
+      await undoDeclineFriendRequest({ requestId: entry.requestId });
+      // Nothing puts the row back: the request is `pending` again, which is the query
+      // `incoming` runs, so the subscription re-delivers it.
+      setUndoable(null);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'Could not undo that.');
+    } finally {
+      setBusy((current) => {
+        const next = new Set(current);
+        next.delete(entry.requestId);
         return next;
       });
     }
@@ -166,7 +224,9 @@ export function FriendsScreen() {
     friends.length === 0 &&
     incoming.length === 0 &&
     outgoing.length === 0 &&
-    withdrawn.length === 0;
+    withdrawn.length === 0 &&
+    // A "you have nothing" panel while the last action is still reversible is premature.
+    undoable === null;
 
   return (
     <Screen
@@ -210,7 +270,7 @@ export function FriendsScreen() {
                         fullWidth
                         disabled={busy.has(request.id)}
                         onPress={() => {
-                          void respond(request.id, true);
+                          void respond(request.id, request.fromName, true);
                         }}
                         label={`Accept the friend request from ${request.fromName}`}
                       >
@@ -221,7 +281,7 @@ export function FriendsScreen() {
                         fullWidth
                         disabled={busy.has(request.id)}
                         onPress={() => {
-                          void respond(request.id, false);
+                          void respond(request.id, request.fromName, false);
                         }}
                         label={`Decline the friend request from ${request.fromName}`}
                       >
@@ -232,9 +292,27 @@ export function FriendsScreen() {
                 </Card>
               )}
             />
-
-            {error !== null && <Text tone="danger">{error}</Text>}
           </Stack>
+        )}
+
+        {error !== null && <Text tone="danger">{error}</Text>}
+
+        {undoable !== null && (
+          <Card>
+            <Row gap="sm" align="center" justify="between" aria-live="polite">
+              <Text variant="caption">{`Declined ${undoable.name}.`}</Text>
+              <Button
+                variant="ghost"
+                disabled={busy.has(undoable.requestId)}
+                onPress={() => {
+                  void undoDecline(undoable);
+                }}
+                label={`Undo declining the friend request from ${undoable.name}`}
+              >
+                Undo
+              </Button>
+            </Row>
+          </Card>
         )}
 
         {!friendsLoading && nothingYet && (

@@ -1,3 +1,4 @@
+import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 
@@ -12,6 +13,8 @@ const state = vi.hoisted(() => ({
   incoming: [] as FriendRequest[],
   outgoing: [] as FriendRequest[],
   withdrawn: [] as FriendRequest[],
+  respond: vi.fn(),
+  undo: vi.fn(),
 }));
 
 vi.mock('@splitsutra/core/hooks', () => ({
@@ -31,7 +34,8 @@ vi.mock('@splitsutra/core/hooks', () => ({
 }));
 
 vi.mock('@splitsutra/core/repositories', () => ({
-  respondToFriendRequest: vi.fn().mockResolvedValue({}),
+  respondToFriendRequest: (input: unknown) => state.respond(input),
+  undoDeclineFriendRequest: (input: unknown) => state.undo(input),
 }));
 
 /** A Firestore `Timestamp` stand-in with the one method the screen calls. */
@@ -81,6 +85,22 @@ function visit(): HTMLElement {
   return render(<RouterProvider router={memory} />).container;
 }
 
+function button(container: HTMLElement, name: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll('button')].find(
+    (el) => (el.textContent ?? '').trim() === name || el.getAttribute('aria-label') === name,
+  );
+  if (found === undefined) throw new Error(`No button named "${name}"`);
+  return found;
+}
+
+async function press(container: HTMLElement, name: string): Promise<void> {
+  const target = button(container, name);
+  await act(async () => {
+    target.click();
+    await Promise.resolve();
+  });
+}
+
 function list(container: HTMLElement, label: string): HTMLElement | null {
   return container.querySelector(`ul[aria-label="${label}"]`);
 }
@@ -91,6 +111,8 @@ beforeEach(() => {
   state.incoming = [];
   state.outgoing = [];
   state.withdrawn = [];
+  state.respond = vi.fn().mockResolvedValue({});
+  state.undo = vi.fn().mockResolvedValue({ requestId: 'u9__u1', status: 'pending' });
 });
 
 describe('<FriendsScreen>', () => {
@@ -194,5 +216,94 @@ describe('<FriendsScreen>', () => {
     expect(text).toContain('Accept');
     expect(text).toContain('Decline');
     expect(text).not.toContain('No friends yet');
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * Undoing an accidental decline
+ *
+ * Decline sits directly beside Accept and a thumb is not a decision. The undo is the
+ * RECIPIENT correcting their own tap — never a second chance for the sender, which would undo
+ * the anti-harassment property that makes `declined` terminal. The screen half is what these
+ * cover; the `toUid` check itself lives in the Function and is asserted by its header, since
+ * Cloud Functions have no test harness in this repository.
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+describe('<FriendsScreen> undoing a decline', () => {
+  function incomingFrom(name: string): void {
+    state.incoming = [request({ id: 'u9__u1', fromUid: 'u9', fromName: name, toUid: 'u1' })];
+  }
+
+  it('offers an undo after a decline, naming who was declined', async () => {
+    incomingFrom('Meera Iyer');
+
+    const container = visit();
+    await press(container, 'Decline');
+
+    expect(state.respond).toHaveBeenCalledWith({ requestId: 'u9__u1', accept: false });
+    expect(container.textContent).toContain('Declined Meera Iyer.');
+    expect(button(container, 'Undo')).toBeDefined();
+  });
+
+  it('offers no undo after an accept', async () => {
+    // Accepting creates a group, two member documents and two friends documents. Taking that
+    // back is a teardown with money state hanging off it, not a status flip.
+    incomingFrom('Meera Iyer');
+
+    const container = visit();
+    await press(container, 'Accept');
+
+    expect(state.respond).toHaveBeenCalledWith({ requestId: 'u9__u1', accept: true });
+    expect(container.textContent).not.toContain('Declined');
+  });
+
+  it('calls the undo callable with the request that was declined', async () => {
+    incomingFrom('Meera Iyer');
+
+    const container = visit();
+    await press(container, 'Decline');
+
+    // The row is gone from `incoming` by now in the real app — the id comes from what the
+    // screen remembered, not from a query.
+    state.incoming = [];
+    await press(container, 'Undo');
+
+    expect(state.undo).toHaveBeenCalledWith({ requestId: 'u9__u1' });
+  });
+
+  it('stops offering the undo once it has been taken', async () => {
+    incomingFrom('Meera Iyer');
+
+    const container = visit();
+    await press(container, 'Decline');
+    state.incoming = [];
+    await press(container, 'Undo');
+
+    expect(container.textContent).not.toContain('Declined Meera Iyer.');
+  });
+
+  it('reports an undo the server refused, and keeps the offer on screen', async () => {
+    incomingFrom('Meera Iyer');
+    state.undo = vi.fn().mockRejectedValue(new Error('Too much time has passed to undo that.'));
+
+    const container = visit();
+    await press(container, 'Decline');
+    state.incoming = [];
+    await press(container, 'Undo');
+
+    expect(container.textContent).toContain('Too much time has passed');
+  });
+
+  it('does not say "no friends yet" while the decline can still be taken back', async () => {
+    // Declining the only request would otherwise drop straight to an empty state, while the
+    // action is still reversible.
+    incomingFrom('Meera Iyer');
+
+    const container = visit();
+    await press(container, 'Decline');
+    state.incoming = [];
+
+    expect(container.textContent).not.toContain('No friends yet');
+    expect(container.textContent).toContain('Declined Meera Iyer.');
   });
 });

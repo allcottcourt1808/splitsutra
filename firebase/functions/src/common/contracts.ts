@@ -37,6 +37,7 @@
  *   SendFriendRequestSchema       { email?: string; phoneNumber?: string }
  *   RespondToFriendRequestSchema  { requestId: string; accept: boolean }
  *   CancelFriendRequestSchema     { requestId: string }
+ *   UndoDeclineFriendRequestSchema { requestId: string }
  *   RemoveMemberSchema            { groupId: string; uid: string }
  *   LeaveGroupSchema              { groupId: string }
  *   DeleteGroupSchema             { groupId: string }
@@ -75,4 +76,7 @@ export {
   repairGroupMembershipSchema as RepairGroupMembershipSchema,
   respondToFriendRequestSchema as RespondToFriendRequestSchema,
   sendFriendRequestSchema as SendFriendRequestSchema,
+  undoDeclineFriendRequestSchema as UndoDeclineFriendRequestSchema,
+  declineUndoState,
+  type FriendRequestStatus,
 } from '@splitsutra/core';

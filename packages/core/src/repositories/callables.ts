@@ -48,6 +48,7 @@ export const CALLABLE = {
   repairGroupMembership: 'repairGroupMembership',
   respondToFriendRequest: 'respondToFriendRequest',
   sendFriendRequest: 'sendFriendRequest',
+  undoDeclineFriendRequest: 'undoDeclineFriendRequest',
 } as const;
 
 /** One of the deployed callable names. */

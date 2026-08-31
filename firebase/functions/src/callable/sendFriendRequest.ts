@@ -67,8 +67,24 @@ import { normalizeEmail, normalizePhone, usernameKey } from '../lib/identity.js'
  */
 const NO_SUCH_ACCOUNT = 'No SplitSutra account is registered with that email or phone number.';
 
-/** What a decline gets. Says nothing about *why* — see the header. */
-const ALREADY_DECLINED = 'That request was already answered.';
+/**
+ * What a decline gets.
+ *
+ * Still says nothing about *how* it was answered — see the header. What it now says is what to
+ * do about it, because the previous wording ("That request was already answered.") was a wall:
+ * accurate, unactionable, and read by a real user as a broken app, who then retried and hit the
+ * same wall again.
+ *
+ * 🔴 Pointing at the reverse direction leaks nothing that the situation did not already leak.
+ * A sender who is not friends with someone and cannot ask again can infer the answer whatever
+ * this string says; what the design withholds is an explicit "X declined you" notification, and
+ * that is untouched. What the reverse direction genuinely gives is **consent flowing from the
+ * person who said no** — they ask, or nobody does. It is the recipient-initiated escape hatch
+ * of AC-B1.8, and it works because the guard below inspects only the caller's OWN outgoing
+ * document: a declined request in the other direction blocks nothing.
+ */
+const ALREADY_DECLINED =
+  'That request was already answered. To connect, ask them to send you one instead.';
 
 /** `${fromUid}__${toUid}`. Mirrors `friendRequestId` in `@splitsutra/core`. */
 function requestId(fromUid: string, toUid: string): string {

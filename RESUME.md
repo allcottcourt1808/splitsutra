@@ -4,11 +4,25 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#41 all merged. Dev backend is DEPLOYED and exercised end to end.
+## State: PRs #1–#42 merged. **#43 is open and needs a deploy.**
 
-**#39** (group repair + docs), **#40** (the group expense list) and **#41** (reusable invite
-links) all merged. **#23** (shadcn docs) was closed without merging and should probably come
-back as an ADR instead; see below.
+**#39** (group repair + docs), **#40** (the group expense list), **#41** (reusable invite links)
+and **#42** (friends by status) all merged. **#23** (shadcn docs) was closed without merging and
+should probably come back as an ADR instead; see below.
+
+🔴 **#43 adds a NEW callable, `undoDeclineFriendRequest`, so it is inert until deployed** — the
+Undo button 404s with `functions/not-found` against the current backend. It also takes the
+service count from 15 to 16, and a new function is the one case where firebase-tools _does_
+write the `allUsers` → `Cloud Run Invoker` binding itself. Verify it landed rather than assume:
+an unauthenticated POST should come back `401` with the app's own JSON body, not a Cloud Run
+`403`. If it is a `403`, grant the 12th service by hand the way the other eleven were.
+
+`sendFriendRequest` ships in the same deploy: #43 also reworded `ALREADY_DECLINED`, which a real
+user read as a broken app.
+
+```bash
+FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:undoDeclineFriendRequest,functions:sendFriendRequest
+```
 
 ✅ **The Cloud Run invoker binding is granted** — `allUsers` → `Cloud Run Invoker`, on **11 of
 the 15** services. Eleven, not fifteen, and the four left out must stay out: see the 2026-08-31

@@ -51,6 +51,21 @@ import { displayNameSchema, photoUrlSchema, timestampSchema, uidSchema } from '.
  * `invite.ts`), whereas a request is addressed to one person and is only worth what they decide.
  */
 export const FRIEND_REQUEST_STATUSES = ['pending', 'accepted', 'declined', 'cancelled'] as const;
+
+/**
+ * How long a decline can be taken back, measured from `respondedAt`.
+ *
+ * An undo exists because Decline sits next to Accept and a thumb is not a decision. It is
+ * **bounded** because an accident is discovered immediately: a minute later it is a mistake, a
+ * week later it is a change of mind, and a change of mind should mean asking the person again
+ * rather than silently reviving a request they were never told had died.
+ *
+ * 🔴 Enforced by `undoDeclineFriendRequest` against **server** time, and only for `toUid` — the
+ * person who did the declining. This constant is shared with the client so the button can stop
+ * being offered at the same moment it stops working; the client copy is UX, the server copy is
+ * the rule (Article IV).
+ */
+export const UNDO_DECLINE_WINDOW_MS = 10 * 60 * 1000;
 export const friendRequestStatusSchema = z.enum(FRIEND_REQUEST_STATUSES);
 export type FriendRequestStatus = z.infer<typeof friendRequestStatusSchema>;
 
@@ -121,4 +136,38 @@ export type FriendRequest = z.infer<typeof friendRequestSchema>;
 /** `true` while the request is still awaiting an answer. */
 export function isPending(request: FriendRequest): boolean {
   return request.status === 'pending';
+}
+
+/** Why a decline can or cannot be taken back. */
+export type DeclineUndoState = 'undoable' | 'not-declined' | 'window-passed';
+
+/**
+ * Whether `undoDeclineFriendRequest` will accept this document, and if not, why.
+ *
+ * Pure and in `core` so the one part of that Function which actually *computes* something can
+ * be tested — the rest of it is auth, a transaction and a write, and this repository has no
+ * harness for those. The boundary is where the off-by-one lives, so the boundary is what has
+ * tests.
+ *
+ * Takes milliseconds rather than a `Timestamp` on purpose: the client and the Admin SDK have
+ * different `Timestamp` classes, and a shared rule that only one of them can call is not
+ * shared. The caller unwraps.
+ *
+ * 🔴 This decides *timing only*. It knows nothing about **who** is calling, and the caller
+ * being `toUid` is the load-bearing half of the check — enforced in the Function against the
+ * stored document, never here and never on the client.
+ *
+ * @param respondedAtMillis when the status left `pending`, or `null` if it has not.
+ */
+export function declineUndoState(
+  status: FriendRequestStatus,
+  respondedAtMillis: number | null,
+  now: number = Date.now(),
+): DeclineUndoState {
+  if (status !== 'declined') return 'not-declined';
+  // A declined request always carries `respondedAt` — the schema refine below enforces it. A
+  // document that somehow lacks one is treated as too old rather than as "just now", so a
+  // malformed write cannot become an unbounded undo.
+  if (respondedAtMillis === null) return 'window-passed';
+  return now - respondedAtMillis <= UNDO_DECLINE_WINDOW_MS ? 'undoable' : 'window-passed';
 }
