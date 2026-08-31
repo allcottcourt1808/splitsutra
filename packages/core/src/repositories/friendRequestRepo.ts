@@ -15,16 +15,20 @@
  *
  * ## The queries need composite indexes
  *
- * Both of the watchers below filter on two fields and order on a third, which Firestore cannot
- * serve from single-field indexes. Both are declared in `firestore.indexes.json`; without them
- * the query fails at runtime with a `failed-precondition` whose message contains the URL that
+ * Each watcher below filters on two fields and orders on a third, which Firestore cannot serve
+ * from single-field indexes. They are declared in `firestore.indexes.json`; without them the
+ * query fails at runtime with a `failed-precondition` whose message contains the URL that
  * creates the missing index.
+ *
+ * There are three watchers and two indexes, which is correct rather than an oversight: the
+ * outgoing and withdrawn queries differ only in the value they match on `status`, so one
+ * `fromUid + status + createdAt` index serves both.
  *
  * @see docs/06-cloud-functions.md §sendFriendRequest
  * @see ../types/friendRequest.ts — why the document ID is derived
  */
 
-import { orderBy, query, where } from 'firebase/firestore';
+import { limit, orderBy, query, where } from 'firebase/firestore';
 
 import {
   cancelFriendRequestSchema,
@@ -90,6 +94,47 @@ export function watchOutgoingFriendRequests(
       where('fromUid', '==', uid),
       where('status', '==', 'pending'),
       orderBy('createdAt', 'desc'),
+    ),
+    onNext,
+    onError,
+  );
+}
+
+/** How many withdrawn requests the outbox keeps on screen. */
+export const WITHDRAWN_REQUEST_LIMIT = 50;
+
+/**
+ * Requests `uid` sent and then withdrew — `status: 'cancelled'`.
+ *
+ * Kept as its own query rather than folded into {@link watchOutgoingFriendRequests} with an
+ * `in` filter, for two reasons. `outgoing` means *awaiting an answer* to the Add Friend screen,
+ * which uses it to avoid offering to send a duplicate; widening it would have that screen
+ * report a withdrawn request as still outstanding. And one query covering both statuses would
+ * need one `limit` covering both, where a run of withdrawals could push a still-pending request
+ * out of the window and off the screen that depends on it.
+ *
+ * 🔴 **`declined` is excluded here, at the query.** Not hidden in the hook, not skipped in the
+ * screen — never fetched. Being turned down is terminal (`sendFriendRequest` refuses to
+ * overwrite a declined request; see the ANTI-HARASSMENT note in its header) and the product
+ * deliberately does not tell a sender it happened. Excluding it at the query is what makes that
+ * true rather than merely unrendered: the document never reaches the device, so no later change
+ * to a component can leak it.
+ *
+ * Capped because withdrawals accumulate: `cancelFriendRequest` leaves the document in place, so
+ * this is the one outbox query whose result set only ever grows.
+ */
+export function watchWithdrawnFriendRequests(
+  uid: string,
+  onNext: OnNext<readonly FriendRequest[]>,
+  onError: OnError,
+): Unsubscribe {
+  return watchQuery(
+    query(
+      friendRequestsCollection(),
+      where('fromUid', '==', uid),
+      where('status', '==', 'cancelled'),
+      orderBy('createdAt', 'desc'),
+      limit(WITHDRAWN_REQUEST_LIMIT),
     ),
     onNext,
     onError,

@@ -1,17 +1,18 @@
 # Resume here
 
-**Last updated:** 2026-08-30. Project: **SplitSutra**.
+**Last updated:** 2026-08-31. Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#38 all merged. Dev backend is DEPLOYED. Nothing is open.
+## State: PRs #1–#41 all merged. Dev backend is DEPLOYED and exercised end to end.
 
-**#37** (invite join screen) and **#38** (deploy fixes) merged. **#23** (shadcn docs) was closed
-without merging and should probably come back as an ADR instead; see below.
+**#39** (group repair + docs), **#40** (the group expense list) and **#41** (reusable invite
+links) all merged. **#23** (shadcn docs) was closed without merging and should probably come
+back as an ADR instead; see below.
 
-🔴 **One thing outside the repo is still owed:** the Cloud Run `allUsers` → `Cloud Run Invoker`
-binding on the thirteen callables that predate this branch. Until it is granted, every callable
-but `repairGroupMembership` fails with `internal [0]`. See the 2026-08-30 section below.
+✅ **The Cloud Run invoker binding is granted** — `allUsers` → `Cloud Run Invoker`, on **11 of
+the 15** services. Eleven, not fifteen, and the four left out must stay out: see the 2026-08-31
+section below.
 
 ### The five tabs
 
@@ -25,6 +26,47 @@ but `repairGroupMembership` fails with `internal [0]`. See the 2026-08-30 sectio
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-08-31 — the binding is 11 of 15, a deploy that times out, and links that stop being tickets
+
+**The invoker grant is callables only.** Cloud Run rejects an unauthenticated request _before_
+any function code runs, which is why a missing binding presents as a bare `internal [0]` with
+**nothing in the function's own logs** — the request never reached them. The obvious fix is to
+select all fifteen services in the console; that is wrong, and it was caught before it was
+applied. A Firestore trigger has no `requireAuth` line, trusts the CloudEvent body it is handed,
+and runs with the **Admin SDK, which bypasses Security Rules entirely** — so IAM is the _only_
+control on those four endpoints, and making them public is a forged-event path straight into
+privileged writes. **11 callables public, 4 triggers private.**
+
+**🔴 `firebase deploy --only functions:…` fails on this machine at the discovery step.**
+
+```
+Error: User code failed to load. Cannot determine backend specification. Timeout after 10000.
+```
+
+It is not the code and it is worth not debugging twice: the bundle imports locally in ~2s and
+exports all fifteen functions. Firebase boots it as a server to read `functions.yaml` off it and
+allows a hard 10s, which this machine does not make. Prefix every functions deploy here:
+
+```bash
+FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:<names>
+```
+
+**Deploy an index before the code that queries it, as its own command.** One combined
+`--only functions:…,firestore:indexes` leaves a window in which the new code is live and its
+index is not, and every caller inside that window gets `failed-precondition`.
+
+**A deployed function is not a verified one.** After the deploy, both invite callables answered
+an unauthenticated probe with `401` and the app's own JSON body (`"Sign in required."`) rather
+than a Cloud Run `403` — which is how you tell that the binding survived. It matters because
+**firebase-tools writes the invoker binding only when a function is CREATED, never on update**,
+so every deploy is a chance to silently lose it.
+
+**#41 was then checked against live data rather than only tests.** First press logged
+`invite minted`; second press logged `existing invite link returned` for the _same_ invite id;
+the token survived a redemption. One surprise worth knowing: `redeemInvite` cold-started in
+**~19s** on the first call after the deploy, during which the UI sits on "Joining…" looking
+exactly like a hang.
 
 ### 2026-08-30 — the group that could not be opened, and the IAM binding nobody wrote
 

@@ -40,7 +40,8 @@ export * from './useFriends.js';
 export * from './useFriend.js';
 
 /**
- * `useFriendRequests()` — the pending inbox and outbox.
+ * `useFriendRequests()` — the pending inbox and outbox, and
+ * `useWithdrawnFriendRequests()` — the ones the user sent and took back.
  *
  * Also the in-app notification: `incomingCount` is what the Friends tab badges. docs/03 defers a
  * `notifications` collection with push, and this feature does not need one — the pending request
