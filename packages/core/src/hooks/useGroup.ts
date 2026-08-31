@@ -8,7 +8,7 @@
  * honestly say.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { watchGroup } from '../repositories/groupRepo.js';
 import type { Group } from '../types/index.js';
@@ -22,6 +22,16 @@ export interface UseGroupResult {
   readonly loading: boolean;
   /** The subscription failure, if there was one. */
   readonly error: Error | null;
+  /**
+   * Re-subscribe.
+   *
+   * Needed because a Firestore listener does not recover on its own: `permission-denied`
+   * **terminates** the subscription rather than retrying it, and neither of this effect's
+   * dependencies changes when the underlying permission does. So a caller that has just fixed
+   * the reason for the denial — `repairGroupMembership` writing the member document the rules
+   * were looking for — has no way to see the fix without asking for a fresh listener.
+   */
+  readonly retry: () => void;
 }
 
 export function useGroup(groupId: string): UseGroupResult {
@@ -31,6 +41,11 @@ export function useGroup(groupId: string): UseGroupResult {
   const [group, setGroup] = useState<Group | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (uid === null || groupId === '') {
@@ -51,10 +66,12 @@ export function useGroup(groupId: string): UseGroupResult {
       },
       setError,
     );
-  }, [uid, groupId]);
+    // `attempt` is read for its identity alone: bumping it is what tears the old listener
+    // down and starts a new one. Referenced here so the dependency is not "unnecessary".
+  }, [uid, groupId, attempt]);
 
   return useMemo(
-    () => ({ group, loading: !ready && error === null, error }),
-    [group, ready, error],
+    () => ({ group, loading: !ready && error === null, error, retry }),
+    [group, ready, error, retry],
   );
 }

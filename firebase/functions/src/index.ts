@@ -57,6 +57,7 @@ export { leaveGroup } from './callable/leaveGroup.js';
 export { recomputeGroupBalances } from './callable/recomputeGroupBalances.js';
 export { redeemInvite } from './callable/redeemInvite.js';
 export { removeMember } from './callable/removeMember.js';
+export { repairGroupMembership } from './callable/repairGroupMembership.js';
 export { respondToFriendRequest } from './callable/respondToFriendRequest.js';
 export { sendFriendRequest } from './callable/sendFriendRequest.js';
 

@@ -45,5 +45,14 @@
   // ── Firestore rules ───────────────────────────────────────────────────────
   "files.associations": { "*.rules": "firerules" },
 
-  "cSpell.words": ["firebaseui", "Firestore", "zustand", "depcruise", "vitest", "unsettle"]
+  "cSpell.words": [
+    "depcruise",
+    "firebaserc",
+    "firebaseui",
+    "Firestore",
+    "splitsutra",
+    "unsettle",
+    "vitest",
+    "zustand"
+  ]
 }

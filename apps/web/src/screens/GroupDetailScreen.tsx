@@ -10,11 +10,31 @@
  * Rules gate `get` on membership, so a group the user has left, was removed from, or never
  * joined arrives as a missing document. There is nothing more specific this screen could
  * honestly say, and the state it shows offers a way back rather than a dead end (docs/15 rule 6).
+ *
+ * ## A denial is not always a real answer
+ *
+ * `permission-denied` is different from a missing document, and it has one cause the user did
+ * nothing to deserve: `isMember()` reads `groups/{gid}/members/{uid}`, which only
+ * `onGroupCreated` ever writes, so a group whose trigger never ran is unopenable by its own
+ * creator while still sitting in their group list (`allow list` reads `memberIds` and needs no
+ * member document). Every group created on dev before the Functions deploy is in exactly that
+ * state.
+ *
+ * So a denial gets ONE automatic `repairGroupMembership` attempt before this screen calls it a
+ * failure. That callable is idempotent and refuses unless `memberIds` already names the caller,
+ * so the worst case for a genuine denial — someone poking at a group they were removed from — is
+ * one wasted round trip that returns `permission-denied` again.
+ *
+ * 🔴 One attempt per group id, tracked in a ref, and never in a `catch` that re-triggers itself.
+ *    A retry loop here would be a self-inflicted denial-of-wallet: the failing case is the one
+ *    that would spin (Article XI).
  */
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 
 import { useGroup, useGroupBalances } from '@splitsutra/core/hooks';
+import { repairGroupMembership } from '@splitsutra/core/repositories';
 import type { GroupType, MinorUnits } from '@splitsutra/core';
 
 import { AvatarStack } from '../components/Avatar';
@@ -43,12 +63,71 @@ const TYPE_LABEL: Readonly<Record<GroupType, string>> = {
   couple: 'Couple',
 };
 
+/**
+ * Is this the denial a missing member document produces?
+ *
+ * Duck-typed on `code` rather than `instanceof FirestoreError`: Article VIII forbids a screen
+ * importing the Firebase SDK at all, and `depcruise` enforces it. The string is part of the
+ * Firestore error contract, not an implementation detail.
+ */
+function isPermissionDenied(error: Error | null): boolean {
+  return (error as { readonly code?: unknown } | null)?.code === 'permission-denied';
+}
+
 export function GroupDetailScreen() {
   const { gid } = useParams();
   const groupId = gid ?? '';
 
-  const { group, loading, error } = useGroup(groupId);
-  const { activeMembers, myBalanceMinor, loading: membersLoading } = useGroupBalances(groupId);
+  const { group, loading, error, retry: retryGroup } = useGroup(groupId);
+  const {
+    activeMembers,
+    myBalanceMinor,
+    loading: membersLoading,
+    retry: retryMembers,
+  } = useGroupBalances(groupId);
+
+  const [repairing, setRepairing] = useState(false);
+  // The group id already attempted, not a boolean: react-router reuses this component across
+  // /groups/:gid changes, so a boolean would spend its one attempt on the first group and leave
+  // every later one unrepaired.
+  const attemptedFor = useRef<string | null>(null);
+
+  const reload = useCallback(() => {
+    attemptedFor.current = null;
+    retryGroup();
+    retryMembers();
+  }, [retryGroup, retryMembers]);
+
+  useEffect(() => {
+    if (!isPermissionDenied(error)) return;
+    if (attemptedFor.current === groupId) return;
+    attemptedFor.current = groupId;
+
+    // Guards the state writes, not the call: the repair itself must finish even if the screen
+    // unmounts — abandoning it half way would leave the group bricked for the next visit.
+    let mounted = true;
+    setRepairing(true);
+
+    void repairGroupMembership({ groupId })
+      .then(() => {
+        if (!mounted) return;
+        setRepairing(false);
+        // Both listeners died on the same denial, and one member document revives both.
+        retryGroup();
+        retryMembers();
+      })
+      .catch(() => {
+        // Swallowed deliberately. The reason the group would not load is already on screen in
+        // `error`; replacing it with the repair's own message would report the failure of the
+        // fix instead of the problem.
+        if (!mounted) return;
+        setRepairing(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [error, groupId, retryGroup, retryMembers]);
 
   const header = <ScreenHeader title={group?.name ?? 'Group'} backTo={paths.GroupList()} />;
 
@@ -64,7 +143,16 @@ export function GroupDetailScreen() {
     return (
       <Screen header={header}>
         <Stack gap="sm" aria-live="polite">
-          <Text tone="danger">Could not load this group. {error.message}</Text>
+          {repairing ? (
+            <Text tone="secondary">Finishing setting up this group…</Text>
+          ) : (
+            <>
+              <Text tone="danger">Could not load this group. {error.message}</Text>
+              <Button variant="secondary" onPress={reload}>
+                Try again
+              </Button>
+            </>
+          )}
         </Stack>
       </Screen>
     );

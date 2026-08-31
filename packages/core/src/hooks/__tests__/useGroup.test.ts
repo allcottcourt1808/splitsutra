@@ -102,10 +102,23 @@ const react = vi.hoisted(() => {
     return value;
   }
 
+  /**
+   * `useCallback(fn, deps)` is `useMemo(() => fn, deps)` — React's own relationship between the
+   * two. Defined in terms of `useMemo` rather than given its own slot array so the ordered-slot
+   * bookkeeping stays in one place.
+   */
+  function useCallback<T>(fn: T, deps?: readonly unknown[]): T {
+    // The `useMemo` below is the local harness above, not React's. The rule matches on the
+    // name and has nothing real to check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useMemo(() => fn, deps);
+  }
+
   return {
     useState,
     useEffect,
     useMemo,
+    useCallback,
     mount(render: () => unknown): void {
       states = [];
       effectSlots = [];
@@ -128,6 +141,7 @@ vi.mock('react', () => ({
   useState: react.useState,
   useEffect: react.useEffect,
   useMemo: react.useMemo,
+  useCallback: react.useCallback,
 }));
 
 const auth = vi.hoisted(() => ({ uid: null as string | null }));
@@ -192,14 +206,24 @@ describe('useGroup', () => {
 
     expect(repo.watchGroup).toHaveBeenCalledTimes(1);
     expect(latest().groupId).toBe('g1');
-    expect(view()).toEqual({ group: null, loading: true, error: null });
+    expect(view()).toEqual({
+      group: null,
+      loading: true,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('resolves to the emitted group', () => {
     mount();
     latest().emit(goa);
 
-    expect(view()).toEqual({ group: goa, loading: false, error: null });
+    expect(view()).toEqual({
+      group: goa,
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('treats a missing document as a resolved answer, not loading', () => {
@@ -207,7 +231,12 @@ describe('useGroup', () => {
     mount();
     latest().emit(null);
 
-    expect(view()).toEqual({ group: null, loading: false, error: null });
+    expect(view()).toEqual({
+      group: null,
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('surfaces a subscription failure and stops loading', () => {
@@ -216,7 +245,12 @@ describe('useGroup', () => {
     mount();
     latest().fail(boom);
 
-    expect(view()).toEqual({ group: null, loading: false, error: boom });
+    expect(view()).toEqual({
+      group: null,
+      loading: false,
+      error: boom,
+      retry: expect.any(Function),
+    });
   });
 
   it('does not subscribe when signed out', () => {
@@ -224,7 +258,12 @@ describe('useGroup', () => {
     mount();
 
     expect(repo.watchGroup).not.toHaveBeenCalled();
-    expect(view()).toEqual({ group: null, loading: false, error: null });
+    expect(view()).toEqual({
+      group: null,
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('does not subscribe without a group id', () => {
@@ -232,7 +271,12 @@ describe('useGroup', () => {
     mount();
 
     expect(repo.watchGroup).not.toHaveBeenCalled();
-    expect(view()).toEqual({ group: null, loading: false, error: null });
+    expect(view()).toEqual({
+      group: null,
+      loading: false,
+      error: null,
+      retry: expect.any(Function),
+    });
   });
 
   it('unsubscribes on unmount', () => {
@@ -254,7 +298,7 @@ describe('useGroup', () => {
     expect(first.unsubscribe).toHaveBeenCalledTimes(1);
     expect(repo.watchGroup).toHaveBeenCalledTimes(2);
     expect(latest().groupId).toBe('g2');
-    expect(view()).toEqual({ group: goa, loading: true, error: null });
+    expect(view()).toEqual({ group: goa, loading: true, error: null, retry: expect.any(Function) });
   });
 
   it('keeps the result referentially stable across an inert rerender', () => {

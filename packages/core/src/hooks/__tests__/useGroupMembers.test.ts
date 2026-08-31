@@ -102,10 +102,23 @@ const react = vi.hoisted(() => {
     return value;
   }
 
+  /**
+   * `useCallback(fn, deps)` is `useMemo(() => fn, deps)` — React's own relationship between the
+   * two. Defined in terms of `useMemo` rather than given its own slot array so the ordered-slot
+   * bookkeeping stays in one place.
+   */
+  function useCallback<T>(fn: T, deps?: readonly unknown[]): T {
+    // The `useMemo` below is the local harness above, not React's. The rule matches on the
+    // name and has nothing real to check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useMemo(() => fn, deps);
+  }
+
   return {
     useState,
     useEffect,
     useMemo,
+    useCallback,
     mount(render: () => unknown): void {
       states = [];
       effectSlots = [];
@@ -128,6 +141,7 @@ vi.mock('react', () => ({
   useState: react.useState,
   useEffect: react.useEffect,
   useMemo: react.useMemo,
+  useCallback: react.useCallback,
 }));
 
 const auth = vi.hoisted(() => ({ uid: null as string | null }));
