@@ -252,8 +252,17 @@ shared by the accept path and the mutual auto-accept.
 creator and admin. Accepting must not silently redenominate a group around the accepter's
 preference, and the currency is immutable after creation (T10, AC-C1.1).
 
-🔴 A decline is terminal rather than rate-limited. See AC-B1.8 for why, and for the
-recipient-initiated escape hatch that makes that safe.
+🔴 A decline is terminal rather than rate-limited. See AC-B1.8 for why.
+
+**The escape hatch, concretely:** the guard reads only the caller's OWN outgoing document, and
+the auto-accept in step 4a fires only on an incoming request that is `pending`. So a `declined`
+document blocks nothing in the other direction — `friendRequests/{from}__{to}` is derived from
+the pair _in order_, and `{to}__{from}` is a different document. **The person who declined can
+ask.** That is the only route back, and it is the right one: consent flows from whoever said no.
+
+This is not a theoretical path. It is what a real user hit on the dev backend — a decline made
+while testing left them unable to re-send, reading an accurate but unactionable error as a
+broken app. `ALREADY_DECLINED` now names the way out.
 
 #### 🔴 `undoDeclineFriendRequest` is not a second chance for the sender
 
