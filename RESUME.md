@@ -90,12 +90,23 @@ Three findings that were **not** known before, each verified rather than suspect
    `pnpm test:smoke` and `pnpm test:integration` all **pass by matching zero files**. Every E2E
    item in phases 05–09 and the `axe-core` sweep are blocked on this.
 
-2. 🔴 **The main chunk is 418,408 B gzipped against NFR-2's 350 KB ceiling** — measured on a
-   real build, one chunk, 1,426,786 B raw. Nothing in `routes.tsx` is `lazy()`, so **`firebaseui`
-   - `firebase/compat` ship to every signed-in user** to render a screen they will never see
-     again. `chunkSizeWarningLimit: 300` warns, but **CI never builds the web app**, so nothing
-     went red. The `optimizeDeps` comment in `vite.config.ts` claiming FirebaseUI had been dropped
-     was **stale and wrong** — the removal was reversed — and is corrected on `feat/pwa-install`.
+2. ✅ **The main chunk was 419,269 B gzipped against NFR-2's 350 KB ceiling.** **Fixed** —
+   `/login` is now the one `lazy()` route, moving `firebaseui` + `firebase/compat` into a
+   74.7 KB chunk that only a visitor to `/login` fetches. **419,269 → 346,051 B.**
+
+   🔴 **One claim in the original write-up was wrong, and is corrected here: CI has always
+   run `pnpm build`.** The gap was never "CI does not build the app" — it was that nothing
+   _measured the output_. `chunkSizeWarningLimit: 300` printed a warning, warnings do not fail
+   a build, and it sat in the log of a green job. `scripts/bundle-budget.mjs` now asserts it in
+   CI, and its failure path was exercised before it was trusted.
+
+   ⚠️ Headroom is **10.6 KB**, and route splitting cannot buy more: measured, the screens are
+   2–7 KB gzipped each and the rest is one shared vendor chunk every route needs. Splitting the
+   other 17 screens would save ~23 KB for seventeen `<Suspense>` boundaries, five of them on the
+   tab bar. The next real lever is Firebase entry points, or dropping `firebaseui`.
+
+   The `optimizeDeps` comment in `vite.config.ts` claiming FirebaseUI had been dropped was
+   **stale and wrong** — the removal was reversed — and is why this read as already-answered.
 
 3. 🔴 **`watchMembers` has no `limit()` and the `members` subcollection is unbounded.** Two
    comments in `groupRepo.ts` justified that with "capped at 50 documents (Q2)". They were

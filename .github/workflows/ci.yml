@@ -74,6 +74,16 @@ jobs:
       - run: pnpm depcruise # NFR-10: core stays platform-agnostic
       - run: pnpm test:unit # Phase 02b flips this to `pnpm test:unit --coverage`
       - run: pnpm build
+      # 🔴 NFR-2, and the reason it was breached by 69 KB without anything going red.
+      #
+      # The step above has always run, so the bundle was rebuilt on every push — nothing ever
+      # LOOKED at it. Vite's `chunkSizeWarningLimit: 300` printed a warning, warnings do not
+      # fail a build, and the warning sat in the log of a green job. `firebaseui` +
+      # `firebase/compat` shipped to every signed-in user for months on exactly that basis.
+      #
+      # Must stay AFTER `pnpm build` — it reads `apps/web/dist` and fails loudly if it is
+      # absent, rather than passing by finding nothing to measure.
+      - run: node scripts/bundle-budget.mjs
 
       # ── Enabled in Phase 02b / Phase 10, once the harnesses and suites exist ───────────
       # Uncomment together with the checklist item that creates them:

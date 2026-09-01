@@ -46,9 +46,13 @@ Worst first. Each is written up where it lives.
    at two directories that were never created, so `pnpm test:e2e`, `pnpm test:smoke` and
    `pnpm test:integration` all pass by matching nothing. Every E2E item in phases 05–09 and the
    `axe-core` sweep are blocked on this. phase-09 §11.
-3. 🔴 **Main chunk is 418 KB gzipped against a 350 KB budget (NFR-2).** No route-level code
-   splitting, so `firebaseui` + `firebase/compat` ship to every signed-in user. **CI never
-   builds the web app**, which is why nothing went red. phase-09 §6.
+3. ✅ ~~**Main chunk is 418 KB gzipped against a 350 KB budget (NFR-2).**~~ **Fixed.** `/login`
+   is now the one code-split route, which takes `firebaseui` + `firebase/compat` off the
+   critical path: **419,269 B → 346,051 B gzipped.** `node scripts/bundle-budget.mjs` runs in
+   CI and fails the build on a breach.
+   ⚠️ Only **10.6 KB** of headroom, and route splitting cannot buy more — measured, the screens
+   are 2–7 KB each and the rest is one shared vendor chunk. The next lever is Firebase entry
+   points or dropping `firebaseui`. phase-09 §6.
 4. 🟡 **Unbounded reads.** `GroupMembersScreen` genuinely has no `limit()` (and two comments in
    `groupRepo.ts` wrongly say it is "capped at 50"); `watchComments` is unbounded;
    `SettleUpScreen` renders the member list twice. phase-10 §Discovered.
