@@ -21,6 +21,19 @@
  *
  * The typed amount is turned into minor units by `parseAmountToMinor` in core — string
  * arithmetic on the digits, no `parseFloat`, no multiplication by 100.
+ *
+ * ## One member list on screen at a time
+ *
+ * "Who paid" and "who they paid" are two questions over the same people, and rendering both as
+ * full lists put up to 99 rows on a 390px phone for a 50-person group — every one of them an
+ * `<Avatar>` and a 44px touch target — to collect two taps (checklists/phase-10 §5b). So the
+ * payer collapses to the single row that answers it as soon as there is an answer, and there
+ * always is one: the payer defaults to the signed-in user. Tapping that row reopens the picker,
+ * and while it is open the payee list is hidden — otherwise reopening it is exactly the 99 rows
+ * again. The ceiling is now the group's member count, not twice it.
+ *
+ * This is a rendering change and nothing more: both lists were always the same `activeMembers`,
+ * and which of the two a row belongs to was never a separate read.
  */
 
 import { useMemo, useState } from 'react';
@@ -76,6 +89,8 @@ export function SettleUpScreen() {
 
   const [chosenFrom, setChosenFrom] = useState<string | null>(null);
   const [chosenTo, setChosenTo] = useState<string | null>(null);
+  /** `true` while the payer picker is open. See "One member list on screen at a time" above. */
+  const [pickingPayer, setPickingPayer] = useState(false);
   const [amount, setAmount] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [day, setDay] = useState(() => isoDay(new Date()));
@@ -225,6 +240,12 @@ export function SettleUpScreen() {
     );
   }
 
+  // The prefill and the default both name a uid rather than a row, so this can be `undefined`
+  // for a moment while the member list catches up with a `?from=` that is no longer in the
+  // group — in which case the picker opens rather than the screen claiming somebody is paying.
+  const payer = activeMembers.find((member) => member.uid === fromUid);
+  const choosingPayer = pickingPayer || payer === undefined;
+
   if (activeMembers.length < 2) {
     return (
       <Screen header={header}>
@@ -255,63 +276,85 @@ export function SettleUpScreen() {
           <Text weight="semibold">Who paid</Text>
           <Card flush>
             <List
-              data={activeMembers}
+              data={choosingPayer ? activeMembers : [payer]}
               aria-label="Who paid"
               keyExtractor={(member) => member.uid}
-              renderItem={(member) => (
-                <ListRow
-                  title={
-                    member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
-                  }
-                  subtitle={member.uid === fromUid ? 'Paying' : undefined}
-                  leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
-                  chevron={false}
-                  trailing={
-                    <Text aria-hidden tone={member.uid === fromUid ? 'primary' : 'secondary'}>
-                      {member.uid === fromUid ? '✓' : ''}
-                    </Text>
-                  }
-                  label={`${member.displayName} paid`}
-                  onPress={() => {
-                    setChosenFrom(member.uid);
-                    if (member.uid === toUid) setChosenTo(null);
-                    setAmount(null);
-                  }}
-                />
-              )}
+              renderItem={(member) =>
+                choosingPayer ? (
+                  <ListRow
+                    title={
+                      member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
+                    }
+                    subtitle={member.uid === fromUid ? 'Paying' : undefined}
+                    leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
+                    chevron={false}
+                    trailing={
+                      <Text aria-hidden tone={member.uid === fromUid ? 'primary' : 'secondary'}>
+                        {member.uid === fromUid ? '✓' : ''}
+                      </Text>
+                    }
+                    label={`${member.displayName} paid`}
+                    onPress={() => {
+                      setChosenFrom(member.uid);
+                      if (member.uid === toUid) setChosenTo(null);
+                      setAmount(null);
+                      setPickingPayer(false);
+                    }}
+                  />
+                ) : (
+                  <ListRow
+                    title={
+                      member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
+                    }
+                    subtitle="Paying"
+                    leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
+                    trailing={
+                      <Text variant="caption" tone="secondary" aria-hidden>
+                        Change
+                      </Text>
+                    }
+                    label="Change who paid"
+                    onPress={() => {
+                      setPickingPayer(true);
+                    }}
+                  />
+                )
+              }
             />
           </Card>
         </Stack>
 
-        <Stack gap="sm">
-          <Text weight="semibold">Who they paid</Text>
-          <Card flush>
-            <List
-              data={activeMembers.filter((member) => member.uid !== fromUid)}
-              aria-label="Who they paid"
-              keyExtractor={(member) => member.uid}
-              renderItem={(member) => (
-                <ListRow
-                  title={
-                    member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
-                  }
-                  subtitle={member.uid === toUid ? 'Receiving' : undefined}
-                  leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
-                  chevron={false}
-                  trailing={
-                    <Text aria-hidden tone={member.uid === toUid ? 'primary' : 'secondary'}>
-                      {member.uid === toUid ? '✓' : ''}
-                    </Text>
-                  }
-                  label={`Paid to ${member.displayName}`}
-                  onPress={() => {
-                    setChosenTo(member.uid);
-                  }}
-                />
-              )}
-            />
-          </Card>
-        </Stack>
+        {!choosingPayer && (
+          <Stack gap="sm">
+            <Text weight="semibold">Who they paid</Text>
+            <Card flush>
+              <List
+                data={activeMembers.filter((member) => member.uid !== fromUid)}
+                aria-label="Who they paid"
+                keyExtractor={(member) => member.uid}
+                renderItem={(member) => (
+                  <ListRow
+                    title={
+                      member.uid === user?.uid ? `${member.displayName} (you)` : member.displayName
+                    }
+                    subtitle={member.uid === toUid ? 'Receiving' : undefined}
+                    leading={<Avatar name={member.displayName} photoURL={member.photoURL} />}
+                    chevron={false}
+                    trailing={
+                      <Text aria-hidden tone={member.uid === toUid ? 'primary' : 'secondary'}>
+                        {member.uid === toUid ? '✓' : ''}
+                      </Text>
+                    }
+                    label={`Paid to ${member.displayName}`}
+                    onPress={() => {
+                      setChosenTo(member.uid);
+                    }}
+                  />
+                )}
+              />
+            </Card>
+          </Stack>
+        )}
 
         <Input
           label={`Amount (${currency})`}

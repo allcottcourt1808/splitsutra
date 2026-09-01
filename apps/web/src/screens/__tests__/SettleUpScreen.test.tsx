@@ -211,9 +211,21 @@ describe('<SettleUpScreen>', () => {
 
     const container = visit('?from=u3&to=u2&amountMinor=1250');
 
-    expect(rows(container, 'Who paid')[2]?.textContent).toContain('Paying');
+    expect(rows(container, 'Who paid')).toHaveLength(1);
+    expect(rows(container, 'Who paid')[0]?.textContent).toContain('Anita Rao');
+    expect(rows(container, 'Who paid')[0]?.textContent).toContain('Paying');
     expect(field(container, 'Amount').value).toBe('12.50');
     expect(container.textContent).toContain('Anita Rao paid Ravi Kumar $12.50.');
+  });
+
+  it('opens the payer picker on a ?from= that is not in the group any more', () => {
+    threeMembers();
+
+    // Rather than claiming a stranger is paying, or showing an empty "Paying" row.
+    const container = visit('?from=u9');
+
+    expect(rows(container, 'Who paid')).toHaveLength(3);
+    expect(container.textContent).not.toContain('Paying');
   });
 
   it('keeps the payer out of the payee list, and drops a payee who becomes the payer', async () => {
@@ -221,15 +233,38 @@ describe('<SettleUpScreen>', () => {
 
     const container = visit();
 
-    expect(rows(container, 'Who paid')).toHaveLength(3);
     expect(rows(container, 'Who they paid')).toHaveLength(2);
 
     await press(container, 'Paid to Ravi Kumar');
     expect(rows(container, 'Who they paid')[0]?.textContent).toContain('Receiving');
 
+    await press(container, 'Change who paid');
     await press(container, 'Ravi Kumar paid');
     expect(rows(container, 'Who they paid')).toHaveLength(2);
     expect(container.textContent).not.toContain('Receiving');
+  });
+
+  it('🟡 never has both member lists on screen at once (checklists/phase-10 §5b)', async () => {
+    threeMembers();
+
+    const container = visit();
+
+    // Three members, three rows — the collapsed payer plus everyone they could pay. Rendering
+    // both lists in full was 3 + 2 here and 50 + 49 for a full group, on a 390px phone, to
+    // collect two taps.
+    expect(rows(container, 'Who paid')).toHaveLength(1);
+    expect(rows(container, 'Who they paid')).toHaveLength(2);
+
+    // Reopening the picker has to HIDE the other list, not add to it — otherwise the expensive
+    // state is one tap away and the fix is cosmetic.
+    await press(container, 'Change who paid');
+    expect(rows(container, 'Who paid')).toHaveLength(3);
+    expect(rows(container, 'Who they paid')).toHaveLength(0);
+
+    await press(container, 'Anita Rao paid');
+    expect(rows(container, 'Who paid')).toHaveLength(1);
+    expect(rows(container, 'Who paid')[0]?.textContent).toContain('Anita Rao');
+    expect(rows(container, 'Who they paid')).toHaveLength(2);
   });
 
   it('🔴 parses the typed amount into minor units without ever touching a float', async () => {
@@ -351,6 +386,7 @@ describe('<SettleUpScreen>', () => {
     threeMembers();
 
     const container = visit();
+    await press(container, 'Change who paid');
     await press(container, 'Anita Rao paid');
     await press(container, 'Paid to Ravi Kumar');
     type(field(container, 'Amount'), '5');

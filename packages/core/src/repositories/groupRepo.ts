@@ -40,6 +40,7 @@ import {
 
 import {
   DEFAULT_CURRENCY,
+  MAX_GROUP_MEMBERS,
   createInviteSchema,
   deleteGroupSchema,
   groupBaseSchema,
@@ -68,6 +69,16 @@ import { watchDoc, watchQuery, type OnError, type OnNext, type Unsubscribe } fro
 
 /** docs/03 §Query patterns: `… orderBy lastActivityAt desc limit 50`. */
 export const MY_GROUPS_PAGE_SIZE = 50;
+
+/**
+ * The ceiling on one `members` snapshot.
+ *
+ * Twice `MAX_GROUP_MEMBERS`, and derived from it rather than written as `100` so the two cannot
+ * drift apart: the first `MAX_GROUP_MEMBERS` slots are spoken for by the current members — see
+ * {@link watchMembers} for why they can never be the rows that fall off the end — and the rest is
+ * headroom for the tombstones a departure leaves behind.
+ */
+export const MEMBERS_PAGE_SIZE = MAX_GROUP_MEMBERS * 2;
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
  * Reads
@@ -166,12 +177,14 @@ export function watchGroup(
  * Sorted client-side because `displayName` is a denormalized snapshot the profile fan-out
  * rewrites, so ordering by it server-side would need an index Firestore keeps re-writing.
  *
- * 🔴 This used to say "a group is capped at 50 members (Q2), so this is not where the cost is".
- *    That is false, and it is the reason `watchMembers` below has no `limit()`. `MAX_GROUP_MEMBERS`
- *    is enforced against `group.memberIds.length` — CURRENT members — in `createInvite` and
- *    `redeemInvite`. `leaveGroup` sets `leftAt` and deliberately keeps the member document, so
- *    this subcollection grows with every departure and is bounded by nothing.
- *    See checklists/phase-10-hardening.md §5b.
+ * 🔴 This used to say "a group is capped at 50 members (Q2), so this is not where the cost is",
+ *    and that was false — it is what let {@link watchMembers} ship with no `limit()` at all.
+ *    `MAX_GROUP_MEMBERS` is enforced against `group.memberIds.length` — CURRENT members — in
+ *    `createInvite` and `redeemInvite`. `leaveGroup`, `removeMember` and `deleteAccount` each set
+ *    `leftAt` and deliberately KEEP the member document (Article V: historical expenses still
+ *    have to resolve), so the subcollection grows with every departure and nothing bounds it.
+ *    What bounds the read is now the `limit()` on {@link watchMembers}; this comparator still
+ *    runs over whatever that page returns. checklists/phase-10-hardening.md §5b.
  */
 function byMembership(a: GroupMember, b: GroupMember): number {
   const left = a.leftAt === null ? 0 : 1;
@@ -180,14 +193,51 @@ function byMembership(a: GroupMember, b: GroupMember): number {
   return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' });
 }
 
-/** Every member document in the group, including people who have left. */
+/**
+ * Every member document in the group, including people who have left — one
+ * {@link MEMBERS_PAGE_SIZE} page of an otherwise unbounded subcollection, ordered so that every
+ * current member is inside it.
+ *
+ * ## `orderBy('leftAt','asc')` is what makes the limit correct
+ *
+ * A cap over an arbitrary order would eventually drop a CURRENT member, and a current member
+ * missing here is not a slow screen — it is somebody who cannot be named on an expense or a
+ * settlement, and whose balance disappears out of a list that is supposed to sum to zero.
+ *
+ * `leftAt` is the ordering that rules that out. Firestore sorts `null` before every other value,
+ * `leftAt` is `null` for exactly the current members, and it is written explicitly on every
+ * member document (`functions/src/lib/groups.ts` — "a missing field would read as has left"), so
+ * ascending order puts every current member at the front of the page. There are at most
+ * `MAX_GROUP_MEMBERS` of them: `memberIds` is capped at that number by the schema, by Rules and
+ * by both invite Functions. With the page at twice that, no current member can be the row that
+ * falls off the end, and {@link watchActiveMembers} is complete at any group size.
+ *
+ * ## What it can hide, said plainly
+ *
+ * Only tombstones. `null` sorts first and timestamps sort ascending after it, so the departures
+ * that survive the cut are the OLDEST ones: once a group has more than `MEMBERS_PAGE_SIZE` minus
+ * its current head-count departures, `GroupMembersScreen` lists the earliest departures and omits
+ * the later ones. That is the wrong half to keep if the roster ever has to be read as history —
+ * it is kept only because it is the same `leftAt` ordering that protects the current members, and
+ * there is no single order that does both. Two things to know before changing it:
+ *
+ * - `useGroupBalances` keeps a departed member whose balance is not zero so the displayed list
+ *   still sums to zero (AC-E1.3), and dropping such a row would break that sum on screen. It
+ *   cannot arise from leaving: `leaveGroup`, `removeMember` and `deleteAccount` all refuse at a
+ *   non-zero balance, re-checked inside the transaction. It can only arise from drift, and
+ *   {@link recomputeGroupBalances} is the repair valve for exactly that.
+ * - Nothing here is authorization. Rules decide membership from the member document itself
+ *   (`exists(...)`), never from this query, so a row outside the page grants and revokes nothing.
+ *
+ * A group that outgrows the page wants a paged "former members" view, not a bigger constant.
+ */
 export function watchMembers(
   groupId: string,
   onNext: OnNext<readonly GroupMember[]>,
   onError: OnError,
 ): Unsubscribe {
   return watchQuery(
-    membersCollection(groupId),
+    query(membersCollection(groupId), orderBy('leftAt', 'asc'), limit(MEMBERS_PAGE_SIZE)),
     (members) => {
       onNext([...members].sort(byMembership));
     },
@@ -204,7 +254,10 @@ export function watchMembers(
  * only difference is which rows the caller wants.
  *
  * 🔴 This too used to justify itself with "capped at 50 documents (Q2)". It is not — departed
- *    members are tombstoned, not deleted. See {@link watchMembers}.
+ *    members are tombstoned, not deleted. The list is nonetheless COMPLETE, for a reason that
+ *    has nothing to do with that cap: {@link watchMembers} orders by `leftAt` ascending, and
+ *    `leftAt === null` is exactly the rows this filter keeps, so every one of them is inside the
+ *    page by construction. Read that comment before changing either the order or the limit.
  * `byMembership` already places current members before departed ones, so the filtered list is
  * exactly name order.
  */
