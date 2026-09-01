@@ -60,16 +60,29 @@ export interface ScreenProps {
  * Height comes from the flex chain that starts at `#root`, never from `100vh`
  * (contract rule 3) — mobile browser chrome makes `vh` overshoot and hides the tab bar
  * behind the address bar.
+ *
+ * ## Why `<main>` and not `<section>`
+ *
+ * It was a `<section>`, and axe's `landmark-one-main` failed on every route: a document with
+ * no `<main>` gives a screen-reader user no way to skip the chrome and jump to the content
+ * (NFR-5). A screen IS the route's primary content, so `<main>` is the honest element.
+ *
+ * 🔴 That makes "exactly one `<Screen>` renders at a time" a real invariant rather than a
+ * coincidence — two `<main>` elements is its own axe failure (`landmark-no-duplicate-main`).
+ * It holds today because every screen's multiple `<Screen>` returns are mutually exclusive
+ * early returns (loading / error / empty / loaded), `ExpenseForm` renders the caller's only
+ * one, and the `<Suspense>` fallback in `routes.tsx` unmounts before its child mounts.
+ * Rendering one `<Screen>` inside another would compile, look fine, and break this.
  */
 export function Screen({ children, header, footer, padded = true, label }: ScreenProps) {
   return (
-    <section className={styles.screen} aria-label={label}>
+    <main className={styles.screen} aria-label={label}>
       {header}
       <div className={cx(styles.screenBody, padded === true && styles.screenPadded)}>
         {children}
       </div>
       {footer}
-    </section>
+    </main>
   );
 }
 
