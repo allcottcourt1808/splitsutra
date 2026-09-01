@@ -53,10 +53,12 @@ Worst first. Each is written up where it lives.
    ⚠️ Only **10.6 KB** of headroom, and route splitting cannot buy more — measured, the screens
    are 2–7 KB each and the rest is one shared vendor chunk. The next lever is Firebase entry
    points or dropping `firebaseui`. phase-09 §6.
-4. 🟡 **Unbounded reads.** `GroupMembersScreen` genuinely has no `limit()` (and two comments in
-   `groupRepo.ts` wrongly say it is "capped at 50"); `watchComments` is unbounded;
-   `SettleUpScreen` renders the member list twice. phase-10 §Discovered.
-5. 🟡 **`auditBalances` is listed in the function inventory and was never written.**
+4. ✅ **Unbounded reads — fixed in #53.** `watchMembers` is now `orderBy('leftAt','asc')` +
+   `limit(100)` and the wrong "capped at 50" comments are corrected; `watchComments` is
+   `limitToLast(50)`; `SettleUpScreen` renders the member list once. Still open in phase-10 §5b:
+   composer split rows, and `retry()` missing on 9 of 13 core hooks.
+5. 🟡 **`auditBalances` was written in #51 but is not running.** It needs a deploy, a Cloud
+   Scheduler job, and the log-based drift alert before it is actually a canary. phase-10 §6.
 6. 🟡 **Add-to-Home-Screen is unverified on a real device** — the only part of the PWA work
    that could not be checked from here. phase-09 §5.
 
