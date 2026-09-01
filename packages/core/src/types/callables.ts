@@ -77,7 +77,15 @@ export const friendLookupSchema = z
     phoneNumber: z
       .string()
       .trim()
-      .regex(/^\+[1-9]\d{7,14}$/, 'Phone number must be E.164, e.g. +14155550123')
+      // 🔴 The message is what a USER reads, so it says what to do, not what the rule is called.
+      //    It used to read "Phone number must be E.164, e.g. +14155550123" — E.164 is the ITU
+      //    name for this format, it is correct, and it means nothing to the person who just
+      //    typed their own number. The standard's name belongs in this comment; the field needs
+      //    the instruction. (The pattern is E.164: `+`, country code, up to 15 digits total.)
+      .regex(
+        /^\+[1-9]\d{7,14}$/,
+        'Start with + and the country code, e.g. +14155550123 for the US.',
+      )
       .optional(),
   })
   .refine(
@@ -85,6 +93,45 @@ export const friendLookupSchema = z
     'Provide exactly one of email or phoneNumber',
   );
 export type FriendLookupInput = z.infer<typeof friendLookupSchema>;
+
+/**
+ * Why this lookup value will not be accepted, in words, or `null` when it is fine.
+ *
+ * 🔴 Exists because a `ZodError`'s `.message` is the JSON-encoded issue array, and a screen that
+ *    catches a failed `.parse()` and renders `error.message` puts THIS in front of a user:
+ *
+ *      [ { "origin": "string", "code": "invalid_format", "format": "regex",
+ *          "pattern": "/^\\+[1-9]\\d{7,14}$/", "path": ["phoneNumber"], ... } ]
+ *
+ *    which is what `AddFriendScreen` did, and only on submit. Validation belongs on the field
+ *    while it is being typed (docs/07 §Interaction rules 3, docs/15 rule 6) — so this returns a
+ *    sentence, and the caller shows it under the input rather than after a round trip.
+ *
+ * Empty input returns `null` on purpose: a field the user has not finished typing is not yet
+ * wrong, and marking it so is nagging.
+ */
+export function describeFriendLookup(mode: 'email' | 'phone', value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const result = friendLookupSchema.safeParse(
+    mode === 'email' ? { email: trimmed } : { phoneNumber: trimmed },
+  );
+  if (result.success) return null;
+
+  // The first issue is the only useful one: there is exactly one field in play, so a second
+  // issue would restate the same rejection.
+  const issue = result.error.issues[0];
+  if (issue === undefined) return 'That does not look like a usable email or phone number.';
+
+  // A phone rejected by the regex is almost always a local number typed without the country
+  // code — by far the most common way this fails, and the schema's own message says what to do.
+  if (mode === 'phone') return issue.message;
+
+  // Zod's default for a bad email is "Invalid email", which tells the user nothing they had
+  // not already guessed.
+  return 'That does not look like an email address.';
+}
 
 /**
  * `sendFriendRequest` — resolve a contact by email or phone and ask them to be friends.

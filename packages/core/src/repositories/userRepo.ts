@@ -28,7 +28,13 @@
  * so a normal launch performs one read and zero writes.
  */
 
-import { getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  type DocumentReference,
+} from 'firebase/firestore';
 
 import {
   DEFAULT_CURRENCY,
@@ -38,7 +44,8 @@ import {
   type User,
 } from '../types/index.js';
 import type { AuthUser } from './authRepo.js';
-import { userDoc } from './refs.js';
+import { sha256 } from '../utils/crypto.js';
+import { userDoc, usernameDoc } from './refs.js';
 import { watchDoc, type OnError, type OnNext, type Unsubscribe } from './subscribe.js';
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
@@ -166,9 +173,62 @@ export async function upsertUserProfile(
   // Nothing changed — and the common case is that nothing ever changes. Writing anyway would
   // re-fire `onUserProfileWritten` (which rebuilds the `usernames/` index and fans display
   // names out to every group member document) on every launch, for every user, for nothing.
-  if (Object.keys(patch).length === 0) return;
+  //
+  // 🔴 But "nothing changed" is not the same as "everything is correct", and the difference
+  //    was a real bug: a profile whose trigger never ran — created before the Functions were
+  //    deployed, or during a failed invocation — has NO `usernames/` entry, and this early
+  //    return meant it never got one. Not on launch, not on sign-in, not ever. That person is
+  //    permanently unfindable, and the searcher is told "No SplitSutra account is registered
+  //    with that email", which is FALSE and unactionable for both of them.
+  if (Object.keys(patch).length === 0) {
+    await healUsernameIndex(user, reference);
+    return;
+  }
 
   await updateDoc(reference, { ...patch, updatedAt: serverTimestamp() });
+}
+
+/**
+ * Give the trigger a reason to run when — and only when — this user's index entry is wrong.
+ *
+ * Costs one document READ per launch and, in the broken case only, one write. That write is a
+ * no-op patch whose whole purpose is to fire `onUserProfileWritten`, which owns the index
+ * (Article III: the client cannot write `usernames/` itself, and must not be able to — a client
+ * that could would point any lookup at itself).
+ *
+ * 🔴 THE KEY MUST BE DERIVED EXACTLY AS THE SERVER DERIVES IT. `sha256` from `utils/crypto.ts`
+ *    is the client half of the cross-runtime contract that file documents; the normalisation
+ *    below is the same `trim().toLowerCase()` as `normalizeEmail` in
+ *    `firebase/functions/src/lib/identity.ts`. Disagree by one character and this reads a key
+ *    that never exists, concludes the index is broken, and writes on EVERY launch for EVERY
+ *    user — turning a repair into permanent per-launch write amplification that also re-fans
+ *    the display name across every group. That is the failure mode to test for, and
+ *    `__tests__/userRepo.test.ts` pins it against a digest computed by Node.
+ *
+ * Failures are swallowed. This is a background repair on a path whose actual job is signing in;
+ * a user who cannot read the index should still reach their groups.
+ */
+async function healUsernameIndex(user: AuthUser, reference: DocumentReference): Promise<void> {
+  const email = user.email?.trim().toLowerCase();
+  // Only email is checked. A phone-only account has the same hazard, but `phoneNumber` is
+  // already E.164 from Auth and needs no normalisation, so it is folded in the same way the
+  // moment there is a second key to check — see `indexKeys` on the server.
+  if (email === undefined || email.length === 0) return;
+
+  try {
+    const key = await sha256(email);
+    const indexed = await getDoc(usernameDoc(key));
+
+    // Present and pointing here: nothing to do, which is the overwhelmingly common case and
+    // the reason this costs a read rather than a write.
+    if (indexed.exists() && indexed.data()?.['uid'] === user.uid) return;
+
+    // Missing, or pointing at somebody else. Either way the trigger is the only thing that can
+    // put it right, and only a write to this profile wakes it.
+    await updateDoc(reference, { updatedAt: serverTimestamp() });
+  } catch {
+    // Deliberately silent. See the doc comment.
+  }
 }
 
 /** The fields a user may edit on their own profile (phase-03 §5). */
