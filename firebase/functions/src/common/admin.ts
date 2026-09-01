@@ -28,6 +28,10 @@ export const db = getFirestore();
 export const adminAuth = getAuth();
 
 export {
+  // `FieldPath.documentId()` is the only way to order a query by document ID:
+  // the string '__name__' is a reserved name the SDK rejects as a field path.
+  // Paging a collection scan needs it (see scheduled/auditBalances.ts).
+  FieldPath,
   FieldValue,
   Timestamp,
   type DocumentReference,
