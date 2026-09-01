@@ -123,13 +123,11 @@ which is a genuinely usable stopgap "mobile app" before Phase 12.
 - [x] 🔴 ⚠️ Bundle analysis; main chunk under 350 KB gzipped — **now under: 346,051 B**
       (was 419,269 B; 1,428,731 B raw). Enforced by `node scripts/bundle-budget.mjs`, wired into
       CI **after** `pnpm build`, and its failure path was exercised before being trusted.
-
       🔴 The gap this closes is narrower than it first looked, and worth stating correctly:
-              **CI has always run `pnpm build`.** What it never did was *measure the output*.
-              `chunkSizeWarningLimit: 300` printed a warning, warnings do not fail a build, and it sat
-              in the log of a green job. The fix is the assertion, not the build.
-
-              ⚠️ Headroom is **10.6 KB**. Route splitting cannot buy more — see the item above.
+      **CI has always run `pnpm build`.** What it never did was _measure the output_.
+      `chunkSizeWarningLimit: 300` printed a warning, warnings do not fail a build, and it sat in
+      the log of a green job. The fix is the assertion, not the build.
+      ⚠️ Headroom is **10.6 KB**. Route splitting cannot buy more — see the item above.
 
 - [ ] 🟡 Lighthouse: performance ≥ 90, accessibility ≥ 95
 - [ ] 🟡 FCP < 1.8s on simulated 4G
