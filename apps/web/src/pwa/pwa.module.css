@@ -1,0 +1,28 @@
+/**
+ * The update prompt's placement.
+ *
+ * `position: fixed` is the one thing in this app that genuinely needs it: the bar floats over
+ * whatever route is mounted, on top of the tab bar, and belongs to no screen's flex column.
+ * The mobile-portability contract (docs/02 rule 1) bans `position: absolute` **for layout** —
+ * this is an overlay, which is the exception the contract names, and React Native expresses it
+ * the same way with an absolutely-positioned sibling.
+ */
+
+.updateBar {
+  position: fixed;
+  /* Above the tab bar, plus the home-indicator strip on a notched phone (contract rule 10 —
+     safe area via a token, never a magic number). */
+  inset-block-end: calc(var(--splitsutra-size-tab-bar) + var(--splitsutra-safe-area-bottom));
+  inset-inline: 0;
+  z-index: var(--splitsutra-z-toast);
+
+  /* Centred and capped like the phone column, so the bar does not stretch across a desktop
+     window while the app it belongs to stays 640px wide. */
+  align-items: center;
+  padding: var(--splitsutra-space-md);
+}
+
+.updateBar > * {
+  inline-size: 100%;
+  max-inline-size: var(--splitsutra-size-content-max-width);
+}

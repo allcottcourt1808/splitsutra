@@ -3,6 +3,23 @@
 **Est. 2.5 days.** Depends on 06.
 Covers **Epic E**. Reference: [../docs/04-split-engine.md](../docs/04-split-engine.md) §4
 
+> **Status 2026-08-31 — shipped; the boxes below lag the code.** `simplify.ts` is in
+> `packages/core/src/domain/` under the same 100% branch-coverage gate as the rest of the money
+> math, and `GroupBalancesScreen` / `SettleUpScreen` are live. **ADR-12** then amended AC-E3.3 so
+> simplification is **on by default for new groups** — the default lives in `createGroup`, not in
+> `groupSchema`, because the schema also decodes stored documents and a default there would
+> silently opt every existing group in.
+>
+> Two things worth knowing before re-reading this phase:
+>
+> 1. 🔴 **"Instead of N payments" was removed rather than fixed.** The claim compared
+>    `transfers.length` against the number of people who owe money — but every debtor must
+>    discharge their own balance, so `transfers.length >= owing` is an **identity**, and the
+>    comparison could never show a saving. The honest number is the count of pairwise debts,
+>    which docs/03 stores nowhere by design. Do not re-add the banner without that number.
+> 2. 🟡 `SettleUpScreen` renders the member list **twice** — up to 99 rows for a 50-person group.
+>    See checklists/phase-10-hardening.md §5b.
+
 ---
 
 ## 1. Debt simplification (pure domain)

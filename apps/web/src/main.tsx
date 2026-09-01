@@ -31,6 +31,7 @@ import './styles/global.css';
 import { startApp } from './platform/startup';
 import { router } from './routes';
 import { SetupRequiredScreen } from './screens/SetupRequiredScreen';
+import { UpdatePrompt } from './pwa/UpdatePrompt';
 
 const startup = startApp();
 
@@ -50,5 +51,15 @@ createRoot(container).render(
     ) : (
       <SetupRequiredScreen error={startup.error} />
     )}
+    {/* 🔴 ABOVE the router, and that placement is load-bearing rather than tidy.
+        Mounting this component is what REGISTERS the service worker (it is the only caller of
+        `useRegisterSW`). Inside `AppShell` — where it started — the shell sits behind the auth
+        guard, so the worker registered only after sign-in: a first-time visitor sitting on
+        /login could never install the app, and the shell was never cached. Here it runs on
+        every route, signed in or not.
+
+        It renders nothing until an update is waiting, and uses `onPress` rather than `to`, so
+        it needs no router context. */}
+    <UpdatePrompt />
   </StrictMode>,
 );

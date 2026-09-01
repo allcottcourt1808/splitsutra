@@ -78,8 +78,39 @@ Write a script using the raw SDK — no UI — and confirm each of these **fails
       feed collection is actually needed
 - [ ] 🟡 Confirm no unindexed queries (watch the console for index warnings)
 
+## 5b. Unbounded reads found by audit, 2026-08-31 🔴 _Not measured — read off the code_
+
+These are not "might be slow one day". Each one is a query with no ceiling, or a list rendered
+more times than it is needed, and all four were found by reading the repositories rather than
+by profiling. They are listed worst first.
+
+- [ ] 🔴 **`watchMembers` has no `limit()`, and the `members` subcollection is unbounded.**
+      Two comments in `packages/core/src/repositories/groupRepo.ts` (above `byMembership`, and
+      above the filtered-members subscription) assert the collection is "capped at 50 documents
+      (Q2)" and use that to justify sorting and filtering client-side. **The comments are
+      wrong.** `MAX_GROUP_MEMBERS` is enforced against `group.memberIds.length` — _current_
+      members — in `createInvite` and `redeemInvite`, while `leaveGroup` sets `leftAt` and
+      deliberately **does not delete the member document**. So a group that has churned through
+      200 people holds 200 documents, all of them fetched and re-sorted on every snapshot, and
+      the cap that is supposed to bound this bounds something else. Fix the comments first, then
+      the query — a wrong comment is what stops the next person looking.
+- [ ] 🔴 **`watchComments` is unbounded** — `orderBy('createdAt', 'asc')` with no `limit()`, so
+      a long dispute thread is re-delivered in full on every new comment. It also loads
+      oldest-first, which is the wrong end to page from.
+- [ ] 🟡 **`SettleUpScreen` renders the member list twice** — up to 99 rows for a 50-person
+      group, where 50 would do.
+- [ ] 🟡 **Split rows are rebuilt one-per-participant on every add and edit** in the expense
+      composer.
+- [ ] 🟡 `useComposerGroups` and `useComposerMembers` expose no `retry()`, so a failed composer
+      subscription has no recovery short of a reload. (9 of 13 core hooks are in the same
+      position — phase-09 §1.)
+
 ## 6. Data integrity
 
+- [ ] 🔴 `auditBalances` — **listed in the function inventory and never written.** The inventory
+      names it; `firebase/functions/src/` has no such file and nothing schedules one. Promoted
+      from 🟡 because the item below calls it "the canary for silent money bugs", and there is
+      currently no canary.
 - [ ] 🟡 `auditBalances` scheduled function running daily
 - [ ] 🟡 Log-based alert on drift — **this is the canary for silent money bugs**
 - [ ] 🟡 Verify auto-repair works: corrupt a balance by hand, confirm the audit fixes it
