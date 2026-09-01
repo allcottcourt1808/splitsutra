@@ -41,10 +41,11 @@
  * `/invite/:token` on the way past, so that is exactly what happens.
  */
 
-import type { ComponentType } from 'react';
+import { lazy, Suspense, type ComponentType } from 'react';
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 
 import { RedirectIfAuthed, RequireAuth } from './auth/AuthGuards';
+import { Screen } from './components/Layout';
 import { AppShell } from './navigation/AppShell';
 import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
 import { AccountScreen } from './screens/AccountScreen';
@@ -64,7 +65,59 @@ import { GroupSettingsScreen } from './screens/GroupSettingsScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
 import { JoinGroupScreen } from './screens/JoinGroupScreen';
 import { SettleUpScreen } from './screens/SettleUpScreen';
-import { SignInScreen } from './screens/SignInScreen';
+
+/* -------------------------------------------------------------------------- */
+/* The one lazy screen                                                        */
+/* -------------------------------------------------------------------------- */
+/**
+ * 🔴 `SignInScreen` is the **only** code-split route, and it is split for one specific reason
+ * rather than as a general policy.
+ *
+ * It reaches `auth/FirebaseUIMount.tsx`, which imports `firebaseui`, `firebase/compat/app`,
+ * `firebase/compat/auth` and a stylesheet. Statically imported, that lands in the main chunk —
+ * so **every signed-in user downloaded the entire sign-in widget and the compat SDK on every
+ * visit, to render a screen they will never see again.** Measured: the main chunk was
+ * 419,269 B gzipped against NFR-2's 350 KB ceiling.
+ *
+ * ⚠️ The other seventeen screens are deliberately NOT split, and that is a **measured** decision
+ * rather than a cautious one. Making every screen lazy was tried and thrown away:
+ *
+ *   | build              | what a signed-in user loads to see /groups |
+ *   |--------------------|--------------------------------------------|
+ *   | before             | 419,269 B gzipped, one chunk               |
+ *   | this file          | **346,051 B**                              |
+ *   | every screen lazy  | ~323,000 B (66,306 + 208,293 + 47,187 + 2) |
+ *
+ * The screens are **tiny** — 2 KB to 7 KB gzipped each. Nearly all the remaining weight is one
+ * shared vendor chunk (the Firebase SDK, core, React, the design system), which route splitting
+ * cannot touch because every route needs it. So seventeen more lazy boundaries buy ~23 KB and
+ * cost a fallback flash on every tab switch. Not worth it.
+ *
+ * If the budget is breached again, the honest lever is that vendor chunk — trimming Firebase
+ * entry points, or removing `firebaseui` — **not** more route splitting. Re-measure before
+ * assuming otherwise; the numbers above are reproducible with `node scripts/bundle-budget.mjs`.
+ *
+ * `React.lazy` wants a module whose `default` is the component; the screens use named exports,
+ * hence the mapping. Keep the `import()` specifier a **literal** — a computed one gives the
+ * bundler nothing to statically analyse and it silently stops splitting.
+ */
+const SignInScreen = lazy(async () => {
+  const module = await import('./screens/SignInScreen');
+  return { default: module.SignInScreen };
+});
+
+/**
+ * What renders while a split chunk is in flight.
+ *
+ * An empty `<Screen>` rather than a spinner: docs/07 §Interaction rules 2 asks for skeletons
+ * over spinners, and a spinner for something that is usually a few milliseconds off a precached
+ * service worker is more visual noise than information. It paints the app background, so the
+ * transition is a beat of empty app rather than a flash of white.
+ *
+ * TODO(phase-09): replace with `<Skeleton>` once that primitive exists
+ *   (checklists/phase-04-design-system.md §2).
+ */
+const chunkFallback = <Screen>{null}</Screen>;
 
 /** Rendered without the tab bar. See the note above before adding to this. */
 const OUTSIDE_SHELL: ReadonlySet<ScreenName> = new Set<ScreenName>(['SignIn', 'JoinGroup']);
@@ -103,9 +156,24 @@ const SCREENS: Record<ScreenName, ComponentType> = {
   EditProfile: EditProfileScreen,
 };
 
+/**
+ * Every screen is wrapped in `<Suspense>`, not only the split ones.
+ *
+ * A component that never suspends makes its boundary inert, so this costs nothing for the
+ * seventeen eager screens — and it means marking another screen `lazy()` is a one-line change
+ * here instead of two, which is exactly the kind of second edit that gets forgotten and
+ * surfaces as a blank screen in production rather than a compile error.
+ */
 const routeFor = (name: ScreenName): RouteObject => {
-  const Screen = SCREENS[name];
-  return { path: ROUTE_PATTERNS[name], element: <Screen /> };
+  const RouteScreen = SCREENS[name];
+  return {
+    path: ROUTE_PATTERNS[name],
+    element: (
+      <Suspense fallback={chunkFallback}>
+        <RouteScreen />
+      </Suspense>
+    ),
+  };
 };
 
 /** Guarded, no tab bar — `JoinGroup` today, and anything else that opts out of the shell. */

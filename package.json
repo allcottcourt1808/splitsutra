@@ -30,6 +30,8 @@
     "test:e2e:ui": "playwright test --project e2e-mobile --ui",
     "test:smoke": "playwright test --project smoke",
     "depcruise": "node scripts/depcruise.mjs",
+    "//bundle:budget": "NFR-2. Needs a build first; deliberately NOT in `verify`, which is the fast local gate and does not build. CI runs it right after `pnpm build`.",
+    "bundle:budget": "node scripts/bundle-budget.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm test:unit",
     "emulators": "node scripts/emulators.mjs",
     "seed": "tsx firebase/seed.ts",

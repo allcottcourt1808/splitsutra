@@ -104,24 +104,33 @@ which is a genuinely usable stopgap "mobile app" before Phase 12.
 
 ## 6. Performance (NFR-1, NFR-2)
 
-- [ ] 🔴 Route-level code splitting — **not done.** `routes.tsx` imports every screen eagerly;
-      there is no `lazy()` and no `<Suspense>` anywhere. This is the direct cause of the
-      overage below.
-- [ ] 🔴 Confirm `/login` (and therefore `firebase/compat` + `firebaseui`) is split out —
-      **not split, and still present.** `apps/web/package.json` depends on `firebaseui@6.1.0`,
-      and `auth/FirebaseUIMount.tsx` imports `firebase/compat/app`, `firebase/compat/auth`,
-      `firebaseui` and `firebaseui/dist/firebaseui.css` eagerly. `SignInScreen` imports that,
-      `routes.tsx` imports `SignInScreen`, and nothing is lazy — so **every signed-in user
-      downloads the entire sign-in widget and the compat SDK on every visit**, to render a
-      screen they will never see again.
-      ⚠️ The comment in `vite.config.ts` `optimizeDeps` asserting FirebaseUI was dropped is
-      **wrong** — it describes a removal that was reversed. Corrected in this branch.
-- [ ] 🔴 ⚠️ Bundle analysis; main chunk under 350 KB gzipped — **OVER BUDGET.** Measured on a
-      real `pnpm build`: one chunk, `1,426,786 B` raw / **418,408 B gzipped**, against the
-      NFR-2 ceiling of 350 KB. **68 KB over.** It is one chunk because nothing is lazy, and the
-      two items above are the likely bulk of the excess. `chunkSizeWarningLimit: 300` is set so
-      the build warns, but nothing fails — **CI never builds the web app**, which is why this
-      sat unnoticed. Splitting `/login` is the first thing to try, then re-measure.
+- [x] 🔴 Route-level code splitting — **done, and deliberately only for `/login`.** Splitting
+      every screen was tried and measured: initial load would be ~323 KB against 346 KB for the
+      one split, because the screens are **2–7 KB gzipped each** and nearly all the weight is a
+      shared vendor chunk every route needs. Seventeen more `<Suspense>` boundaries — five of
+      them on the tab bar — to save ~23 KB is a bad trade. The numbers are recorded in
+      `routes.tsx` so the next person does not re-run the experiment.
+- [x] 🔴 Confirm `/login` (and therefore `firebase/compat` + `firebaseui`) is split out —
+      **now split.** `firebaseui@6.1.0` is still a dependency and `auth/FirebaseUIMount.tsx`
+      still imports `firebase/compat/app`, `firebase/compat/auth`, `firebaseui` and its
+      stylesheet — but `SignInScreen` is `lazy()` in `routes.tsx`, so all of it moved into a
+      **74.7 KB gzipped chunk fetched only by someone who visits `/login`**. Before this, every
+      signed-in user downloaded the whole sign-in widget on every visit to render a screen they
+      would never see again.
+      ⚠️ The `vite.config.ts` `optimizeDeps` comment asserting FirebaseUI had been dropped was
+      **wrong** — it described a removal that was reversed, and it is why this item read as
+      already-answered. Corrected.
+- [x] 🔴 ⚠️ Bundle analysis; main chunk under 350 KB gzipped — **now under: 346,051 B**
+      (was 419,269 B; 1,428,731 B raw). Enforced by `node scripts/bundle-budget.mjs`, wired into
+      CI **after** `pnpm build`, and its failure path was exercised before being trusted.
+
+      🔴 The gap this closes is narrower than it first looked, and worth stating correctly:
+              **CI has always run `pnpm build`.** What it never did was *measure the output*.
+              `chunkSizeWarningLimit: 300` printed a warning, warnings do not fail a build, and it sat
+              in the log of a green job. The fix is the assertion, not the build.
+
+              ⚠️ Headroom is **10.6 KB**. Route splitting cannot buy more — see the item above.
+
 - [ ] 🟡 Lighthouse: performance ≥ 90, accessibility ≥ 95
 - [ ] 🟡 FCP < 1.8s on simulated 4G
 - [ ] 🟢 Preconnect to Firebase origins
@@ -193,10 +202,12 @@ not a suspicion.
 - [ ] 🔴 **`firebase/tests/integration/` does not exist.** `pnpm test:integration` matches no
       files. The rules suite is real (9 files under `firebase/tests/rules/`); the integration
       suite the trigger items in phase-06 §8 and phase-07 depend on was never started.
-- [ ] 🟡 **CI does not build the web app.** `pnpm verify` is typecheck + lint + depcruise +
-      unit tests. Nothing runs `pnpm build`, which is why a 418 KB main chunk (§6) could sit
-      68 KB over budget without anything going red. A build step in CI is the cheap fix; a
-      gzipped-size assertion is the real one.
+- [x] 🟡 ~~CI does not build the web app.~~ **That was wrong — CI has always run `pnpm build`.**
+      The real gap was that nothing measured the result: Vite's size warning does not fail a
+      build, so a 69 KB breach lived in the log of a green job. Closed by
+      `scripts/bundle-budget.mjs`, which reads what `dist/index.html` tells the browser to fetch
+      before first paint and exits non-zero over budget. `pnpm verify` still does not build —
+      that is deliberate, it is the fast local gate — so this check lives in CI only.
 - [ ] 🟡 **Service-worker activation cannot be verified in the Browser pane.** Registration
       fails there with "An unknown error occurred when fetching the script", and a one-line
       control worker fails identically, so it is the sandbox and not the app. Every static
