@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#48 merged. One branch open: `feat/pwa-install`.
+## State: PRs #1–#53 merged. No branch open.
 
 **#48** (`fix/friend-lookup-validation`) is merged. It fixed two bugs reported off the live dev
 backend, both on Add Friend:
@@ -74,6 +74,80 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-08-31 — Lighthouse said 58, and the cause was not the bundle
+
+Ran Lighthouse against a production build served the way Hosting serves it
+(`scripts/serve-dist.mjs`, new in #52 — `vite preview` serves uncompressed, so it reports
+"enable text compression" against 1.4 MB and makes the whole bundle effort invisible).
+Performance 58–60, and **the biggest single cost had nothing to do with chunk size**.
+
+🔴 **~133 KiB of Google auth iframe was loading on every page**, including `/groups` for a
+signed-in user who will never see a popup — `/__/auth/iframe.js` 92.5 KiB plus `apis.google.com`
+gapi 45.8 KiB. Nearly twice what the route split in #50 saved, and the source of the 17
+third-party cookies holding best-practices at 77. Cause: `popupRedirectResolver` passed eagerly
+into `initFirebase()`, which makes auth check for a pending redirect during startup, which
+initialises the resolver, which loads the iframe. Fixed in #52.
+
+🪤 **The trap in fixing it:** dropping the resolver is only safe because FirebaseUI is the sole
+popup consumer and reaches auth through `firebase/compat`. Do **not** take that on faith — it was
+verified in the installed packages, three links: `auth-compat`'s `Auth` constructor early-returns
+when our modular instance exists (so it installs no resolver of its own), every compat popup call
+site passes `CompatPopupRedirectResolver` explicitly anyway, and `_withDefaultResolver` in
+`@firebase/auth` prefers that argument over the instance. **Put the resolver back the moment
+anything calls modular `signInWithPopup`/`signInWithRedirect`/`getRedirectResult` directly** —
+replacing FirebaseUI is exactly that change, there is no compile error for it, and the failure is
+a runtime error on a button nobody clicks in development. `startup.ts` says all this at length.
+
+⚠️ **A grep is not evidence here.** The gapi strings stay in the index chunk either way — the
+resolver code is shared, so the bundler keeps it. What changed is whether it is _executed_. The
+only proof is runtime: `/login` now renders all three providers in **nine requests, none** to
+`apis.google.com`, `gapi` or `/__/auth/iframe`. So the iframe is not merely moved into the lazy
+`/login` chunk — it is deferred to the actual "Sign in with Google" click.
+
+🪤 **I nearly reported a service-worker bug that does not exist.** Lighthouse never requested
+`sw.js` in either run, and a real build in the test browser registered nothing. It looked
+conclusive. It was not: a **trivial 41-byte service worker also fails to register there**, same
+"unknown error occurred when fetching the script" — the sandboxed browser blocks SW registration
+outright. Nothing is wrong with `sw.js` or workbox. Add-to-Home-Screen on a real device
+(phase-09 §5) remains genuinely unverified, but that is unchanged, not newly broken.
+**Test the harness before believing what it tells you about the app.**
+
+Also in #52: `<Screen>` renders `<main>` not `<section>` (`landmark-one-main` was failing on every
+route); `index.html` is `no-cache` not `no-store`, because `no-store` alone bars the back/forward
+cache and made every in-app Back a full reboot of the bundle; and `sw.js` finally has its own
+`no-cache` rule, having been served `max-age=3600` — an hour in which a shipped update could not
+reach anyone, because the browser would not re-fetch the worker that announces it.
+
+**#51 — `auditBalances`**, listed in the docs/06 inventory and never written. It repairs, not just
+reports (docs/06, `common/logging.ts` and phase-10 §6 all agree), and is a thin orchestrator over
+the existing `findBalanceDrift` + `recomputeBalances` rather than a second money path (Article VI).
+Written is **not** running: it still needs a deploy, a Cloud Scheduler job, and the drift alert.
+
+**#53 — the two unbounded subscriptions.** `watchMembers` is `orderBy('leftAt','asc')` +
+`limit(100)`; the ordering is the real fix, because Firestore sorts `null` first and `leftAt` is
+`null` for exactly the current members, so no current member can be the row that falls off.
+🔴 **That depends on `leftAt` being written explicitly — `orderBy` silently excludes documents
+where the field is absent.** Verified closed before merging: clients cannot write `members` at all
+and the sole creation factory writes `leftAt: null`. `watchComments` is `limitToLast(50)`.
+
+### 🔴 Found while doing the above, not fixed
+
+- **`users/{uid}/friends/{fid}.balanceMinor` has no maintainer.** `establishFriendship` seeds it
+  to `{}` and nothing in the codebase ever writes it again. `auditBalances` deliberately excludes
+  it — auditing it would fire the drift alarm every night on every friendship with activity.
+- **Missing-field hole in `firestore.rules`.** `data.deletedAt == null` is true for an _absent_
+  field, so a create passes validation, but `where('deletedAt','==',null)` does not match that
+  document. `auditBalances` routes around it; the same filter inside the balance pipeline would
+  silently drop a malformed expense from the money.
+- **`.claude/` is untracked but not in `.gitignore`**, so only care stops `git add -A` from staging
+  it, and it is not in `.prettierignore` either — `pnpm format:check` fails locally whenever agent
+  worktrees exist. CI is unaffected.
+- Still open from the same Lighthouse run, deliberately deferred to the production-deploy pass:
+  LCP 5.9–6.3 s and Speed Index 8.7–10.9 s (needs the prerendering in phase-09 §6), 178 KiB of the
+  main chunk unused on `/groups` (Firebase SDK surface, not screens), `color-contrast` failing
+  inside FirebaseUI's own `.firebaseui-idp-text`, and a render-blocking Roboto `.woff` — not
+  woff2, via the v1 `css?family=` API — pulled in by firebaseui's stylesheet on `/login` only.
 
 ### 2026-08-31 — the checklists were lying, and three things were found by reading them
 

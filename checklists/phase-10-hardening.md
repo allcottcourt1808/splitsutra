@@ -84,7 +84,7 @@ These are not "might be slow one day". Each one is a query with no ceiling, or a
 more times than it is needed, and all four were found by reading the repositories rather than
 by profiling. They are listed worst first.
 
-- [ ] 🔴 **`watchMembers` has no `limit()`, and the `members` subcollection is unbounded.**
+- [x] 🔴 **`watchMembers` has no `limit()`, and the `members` subcollection is unbounded.**
       Two comments in `packages/core/src/repositories/groupRepo.ts` (above `byMembership`, and
       above the filtered-members subscription) assert the collection is "capped at 50 documents
       (Q2)" and use that to justify sorting and filtering client-side. **The comments are
@@ -94,11 +94,27 @@ by profiling. They are listed worst first.
       200 people holds 200 documents, all of them fetched and re-sorted on every snapshot, and
       the cap that is supposed to bound this bounds something else. Fix the comments first, then
       the query — a wrong comment is what stops the next person looking.
-- [ ] 🔴 **`watchComments` is unbounded** — `orderBy('createdAt', 'asc')` with no `limit()`, so
+      **Done, #53.** Comments corrected first, then `orderBy('leftAt','asc'), limit(100)`
+      (`MAX_GROUP_MEMBERS * 2`, written as the expression so the two cannot drift). The
+      ordering is the actual fix: Firestore sorts `null` before every other value and
+      `leftAt` is `null` for exactly the current members, so no current member can be the
+      row that falls off the end. ⚠️ That invariant depends on `leftAt` being written
+      **explicitly** on every member document — `orderBy` silently excludes docs where the
+      field is absent. Verified closed: clients cannot write `members` at all
+      (`allow write: if false`, both the nested and collection-group paths), and the only
+      creation factory (`firebase/functions/src/lib/groups.ts`) writes `leftAt: null`.
+      Accepted cost: the tombstones the cap drops are the _most recent_ departures.
+- [x] 🔴 **`watchComments` is unbounded** — `orderBy('createdAt', 'asc')` with no `limit()`, so
       a long dispute thread is re-delivered in full on every new comment. It also loads
       oldest-first, which is the wrong end to page from.
-- [ ] 🟡 **`SettleUpScreen` renders the member list twice** — up to 99 rows for a 50-person
-      group, where 50 would do.
+      **Done, #53** — `limitToLast(50)`, not `limit()`: `limit()` would keep the _opening_
+      of an argument and never show how it ended, and an unacknowledged `serverTimestamp()`
+      sorts after every resolved one locally, so an optimistic post would fall outside a
+      `limit()` page on a thread at the cap. 🔴 Still owed: comments older than the page are
+      not delivered and nothing says so — that wants an `endBefore` "load earlier" control.
+- [x] 🟡 **`SettleUpScreen` renders the member list twice** — up to 99 rows for a 50-person
+      group, where 50 would do. **Done, #53** — the payer collapses to the one row that
+      answers it, and reopening that picker hides the payee list.
 - [ ] 🟡 **Split rows are rebuilt one-per-participant on every add and edit** in the expense
       composer.
 - [ ] 🟡 `useComposerGroups` and `useComposerMembers` expose no `retry()`, so a failed composer
@@ -107,10 +123,18 @@ by profiling. They are listed worst first.
 
 ## 6. Data integrity
 
-- [ ] 🔴 `auditBalances` — **listed in the function inventory and never written.** The inventory
+- [x] 🔴 `auditBalances` — **listed in the function inventory and never written.** The inventory
       names it; `firebase/functions/src/` has no such file and nothing schedules one. Promoted
       from 🟡 because the item below calls it "the canary for silent money bugs", and there is
-      currently no canary.
+      currently no canary. **Written in #51** as `firebase/functions/src/scheduled/`
+      `auditBalances.ts`: logs drift at ERROR with per-uid deltas, then repairs (docs/06,
+      `common/logging.ts` and §6 below all say repair). It is a thin orchestrator over the
+      existing `findBalanceDrift` + `recomputeBalances` — no second money path (Article VI).
+      🔴 Written is not running: the two items below still need a deploy and a schedule.
+      ⚠️ Scope deliberately excludes `users/{uid}/friends/{fid}.balanceMinor`, which
+      `establishFriendship` seeds to `{}` and nothing ever writes again — auditing it would
+      fire the canary every night. Those maps have no maintainer at all; that is its own
+      open item.
 - [ ] 🟡 `auditBalances` scheduled function running daily
 - [ ] 🟡 Log-based alert on drift — **this is the canary for silent money bugs**
 - [ ] 🟡 Verify auto-repair works: corrupt a balance by hand, confirm the audit fixes it
