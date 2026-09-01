@@ -13,51 +13,59 @@ Covers **Epic D**. Reference: [../docs/04-split-engine.md](../docs/04-split-engi
 
 ### Money
 
-- [ ] 🔴 `domain/money.ts`: branded `MinorUnits`, `toMinor`, `toMajor`
-- [ ] 🔴 `CURRENCIES` table with `exponent` per currency
+- [x] 🔴 `domain/money.ts`: branded `MinorUnits`, `toMinor`, `toMajor`
+      — split across `types/money.ts` (the brand and the bound), `types/currency.ts` (the table)
+      and `utils/money.ts` (formatting), not one `domain/money.ts`. `domain/` is reserved for
+      the pure split and balance math, which is what the 100% coverage gate below targets.
+- [x] 🔴 `CURRENCIES` table with `exponent` per currency
 - [ ] 🔴 `parseAmount(input, currency)` — accepts `"1,234.5"`, rejects excess decimals,
       **throws rather than rounds**
-- [ ] 🔴 `formatAmount(minor, currency)` via `Intl.NumberFormat`
-- [ ] 🔴 `MAX_AMOUNT_MINOR = 1_000_000_000`, enforced at every entry point
+      — 🔴 **written and correct, but in the wrong package.** It lives as `parseAmountInput` in
+      `apps/web/src/screens/expense/amount.ts` (14 tests, including `'1.234'` throwing for USD
+      and parsing to `1234` for KWD), which means Cloud Functions and the Phase 12 mobile app
+      cannot reach the one function that turns typed text into money. Moving it to
+      `packages/core` is a cut-and-paste plus an import swap. See phase-04 §2 `<AmountInput>`.
+- [x] 🔴 `formatAmount(minor, currency)` via `Intl.NumberFormat`
+- [x] 🔴 `MAX_AMOUNT_MINOR = 1_000_000_000`, enforced at every entry point
       (keeps `amount × weight` inside `MAX_SAFE_INTEGER` — see the doc's derivation)
-- [ ] 🔴 ESLint rule banning `parseFloat` in `domain/` (NFR-8)
+- [x] 🔴 ESLint rule banning `parseFloat` in `domain/` (NFR-8)
 
 ### The allocator
 
-- [ ] 🔴 `domain/allocate.ts` — **one** function all four split methods funnel into:
+- [x] 🔴 `domain/allocate.ts` — **one** function all four split methods funnel into:
       `allocate(total, weights, tieBreakSeed)`
-- [ ] 🔴 Largest-remainder method: floors, remainders, distribute leftover units
-- [ ] 🔴 Deterministic tie-break on ascending uid
-- [ ] 🔴 Guarantee: output sums to `total` **exactly**, all non-negative integers
+- [x] 🔴 Largest-remainder method: floors, remainders, distribute leftover units
+- [x] 🔴 Deterministic tie-break on ascending uid
+- [x] 🔴 Guarantee: output sums to `total` **exactly**, all non-negative integers
 
 ### The four methods
 
-- [ ] 🔴 `splitEqual` — base + remainder, rotation seeded by `expenseId` so the extra
+- [x] 🔴 `splitEqual` — base + remainder, rotation seeded by `expenseId` so the extra
       cent moves around instead of always taxing the same person
-- [ ] 🔴 `splitExact` — validation only, no computation, no auto-adjusting the last person
-- [ ] 🔴 `splitPercent` — **basis points as integers**, must total exactly 10000
-- [ ] 🔴 `splitShares` — non-negative integer shares, at least one > 0
+- [x] 🔴 `splitExact` — validation only, no computation, no auto-adjusting the last person
+- [x] 🔴 `splitPercent` — **basis points as integers**, must total exactly 10000
+- [x] 🔴 `splitShares` — non-negative integer shares, at least one > 0
 
 ### Balances
 
-- [ ] 🔴 `domain/balances.ts` → `computeBalances({ expenses, settlements, memberIds })`
-- [ ] 🔴 Sign convention: **positive = owed to them**
-- [ ] 🔴 `assertZeroSum(balances)` — throws on violation
+- [x] 🔴 `domain/balances.ts` → `computeBalances({ expenses, settlements, memberIds })`
+- [x] 🔴 Sign convention: **positive = owed to them**
+- [x] 🔴 `assertZeroSum(balances)` — throws on violation
 
 ### Tests 🔴 _Non-negotiable, and the highest-value work in the project_
 
-- [ ] 🔴 Property: `allocate` output always sums to total, for random inputs
-- [ ] 🔴 Property: all outputs are non-negative integers
-- [ ] 🔴 Property: same input → same output (determinism)
-- [ ] 🔴 Property: **balances always sum to zero** over random ledgers
-- [ ] 🔴 Unit: $100/3 → `3334, 3333, 3333`
-- [ ] 🔴 Unit: $10 at 33.33/33.33/33.34% → `333, 333, 334`
-- [ ] 🔴 Unit: $100 at 2:1:1 → `5000, 2500, 2500`
-- [ ] 🔴 Unit: equal-split rotation differs across `expenseId`s
-- [ ] 🔴 Unit: percentages not totalling 100% throw
-- [ ] 🔴 Unit: `parseAmount("1.234")` with exponent 2 throws
-- [ ] 🔴 Unit: `MAX_AMOUNT_MINOR + 1` rejected
-- [ ] 🔴 **100% branch coverage on `domain/`**, gated in CI
+- [x] 🔴 Property: `allocate` output always sums to total, for random inputs
+- [x] 🔴 Property: all outputs are non-negative integers
+- [x] 🔴 Property: same input → same output (determinism)
+- [x] 🔴 Property: **balances always sum to zero** over random ledgers
+- [x] 🔴 Unit: $100/3 → `3334, 3333, 3333`
+- [x] 🔴 Unit: $10 at 33.33/33.33/33.34% → `333, 333, 334`
+- [x] 🔴 Unit: $100 at 2:1:1 → `5000, 2500, 2500`
+- [x] 🔴 Unit: equal-split rotation differs across `expenseId`s
+- [x] 🔴 Unit: percentages not totalling 100% throw
+- [x] 🔴 Unit: `parseAmount("1.234")` with exponent 2 throws
+- [x] 🔴 Unit: `MAX_AMOUNT_MINOR + 1` rejected
+- [x] 🔴 **100% branch coverage on `domain/`**, gated in CI
 
 ## 2. Expense data layer
 

@@ -4,32 +4,48 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#45 merged. **#46 is open — it NEEDS A FUNCTIONS DEPLOY.**
+## State: PRs #1–#48 merged. One branch open: `feat/pwa-install`.
 
-**#46** (`feat/simplify-by-default`) turns debt simplification on for new groups (**ADR-12**,
-which amends AC-E3.3 — the spec previously said display-only by default).
+**#48** (`fix/friend-lookup-validation`) is merged. It fixed two bugs reported off the live dev
+backend, both on Add Friend:
 
-🔴 **It touches `firebase/functions/src/lib/friendship.ts`, so it is not web-only.** Until that
-deploys, a group created through the web app defaults simplification on and an implicit 1:1
-friend group still writes `false`. Harmless — with two people the greedy algorithm returns the
-same single transfer the raw view shows — but the two paths disagree until:
+1. 🔴 **"No SplitSutra account is registered with that email" — for an account that existed.**
+   Reproduced, not guessed: `usernames/{sha256('allcottcourt1808@gmail.com')}` read **404** while
+   the reporter's own key read 200. The `usernames/` index is written **only** by
+   `onUserProfileWritten`, which fires only on a write to `users/{uid}` — and
+   `upsertUserProfile` deliberately writes nothing when email and phone already match Auth. So a
+   profile whose trigger never ran had no index entry and **could never acquire one**.
+   `healUsernameIndex` now reads the entry its own key points at and forces a no-op `updatedAt`
+   touch only when it is missing or points elsewhere.
 
-🔴 **Both callables, not one.** `establishFriendship` is reached from `respondToFriendRequest`
-(the normal accept) _and_ from `sendFriendRequest` (the mutual auto-accept, when the other person
-already had a request out to you). Deploying only the first leaves the second writing the old
-value.
+   🔴 **The repair's failure mode is worse than the bug.** If the client's key disagrees with the
+   server's by one character, the lookup always misses, the repair always fires, and every user
+   pays a profile write — plus a display-name fan-out to every group — on **every launch**. The
+   test pins the derived key against a digest computed by Node's `createHash`, and the healthy
+   case asserts **zero** writes, not "few".
 
-```bash
-FUNCTIONS_DISCOVERY_TIMEOUT=120 npx firebase-tools@latest deploy --only functions:respondToFriendRequest,functions:sendFriendRequest
-```
+2. **A raw `ZodError` was rendered to the user.** A `ZodError` **is** an `Error` and its
+   `.message` is the JSON-encoded issue array. Validation now runs live on the field, and
+   `describeSendError` refuses to render serialised issues whatever throws them.
 
-The default lives in `createGroup`, **not** in `groupSchema`. That is deliberate: the schema also
-decodes stored documents, so a default there would silently rewrite every pre-existing group into
-one that opts in. Existing groups keep whatever they had.
+   "E.164" is gone from both phone messages — correct name for the format, meaningless to
+   someone typing their own number. The standard's name lives in the code comments now.
 
-Also fixes the AC-E3.4 miscount recorded below — see "Open decisions" item 2.
+⚠️ **The index is repaired only for people who sign in again.** Accounts already broken and never
+reopened stay broken. A backfill over `users/` is a separate one-off job, not written.
+
+### Open: `feat/pwa-install`
+
+Installable-to-home-screen, plus the **checklist reconciliation** that came with it. See
+"2026-08-31 — the checklists were lying" below.
 
 ### Previously merged
+
+**#46** (`feat/simplify-by-default`, ADR-12) and **#47** (`feat/composer-pickers`) are both
+merged **and #46's functions are deployed** — `respondToFriendRequest` and `sendFriendRequest`
+both answered an unauthenticated POST with `401` and the app's own JSON, proving the Cloud Run
+invoker binding survived the update. ADR-12 was then verified end to end against the live dev
+backend: a group created through the app read "Simplify debts: On".
 
 **#45** (`fix/ui-polish-expense-form`) is merged: layout vars no longer inherit, one focus ring
 instead of two, a `compact` Button size for modal headers, the group member strip slimmed from
@@ -58,6 +74,41 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-08-31 — the checklists were lying, and three things were found by reading them
+
+`checklists/README.md` said **"Not started"** for all fifteen phases while the app had five
+working tabs and 801 tests. That is worse than having no tracker: it is why nothing could be
+answered from the checklists and everything had to be re-derived from the code. Reconciled
+against the tree; status is now what the code does, not what the boxes say.
+
+Three findings that were **not** known before, each verified rather than suspected:
+
+1. 🔴 **`e2e/` and `firebase/tests/integration/` do not exist.** `playwright.config.ts` names
+   `./e2e/specs` and `./e2e/smoke`; the `integration` Vitest project names
+   `tests/integration/**`. None of those directories were ever created, so `pnpm test:e2e`,
+   `pnpm test:smoke` and `pnpm test:integration` all **pass by matching zero files**. Every E2E
+   item in phases 05–09 and the `axe-core` sweep are blocked on this.
+
+2. 🔴 **The main chunk is 418,408 B gzipped against NFR-2's 350 KB ceiling** — measured on a
+   real build, one chunk, 1,426,786 B raw. Nothing in `routes.tsx` is `lazy()`, so **`firebaseui`
+   - `firebase/compat` ship to every signed-in user** to render a screen they will never see
+     again. `chunkSizeWarningLimit: 300` warns, but **CI never builds the web app**, so nothing
+     went red. The `optimizeDeps` comment in `vite.config.ts` claiming FirebaseUI had been dropped
+     was **stale and wrong** — the removal was reversed — and is corrected on `feat/pwa-install`.
+
+3. 🔴 **`watchMembers` has no `limit()` and the `members` subcollection is unbounded.** Two
+   comments in `groupRepo.ts` justified that with "capped at 50 documents (Q2)". They were
+   false: `MAX_GROUP_MEMBERS` is checked against `group.memberIds.length` — _current_ members —
+   while `leaveGroup` sets `leftAt` and deliberately keeps the document. A group that has churned
+   through 200 people holds 200 documents, all re-fetched and re-sorted on every snapshot. Both
+   comments are fixed; the query is not.
+
+Also confirmed absent, all load-bearing later: `<Skeleton>` and `<Toast>` (so phase-09's skeleton
+loaders and 5-second undo-before-commit have nowhere to live), `<ErrorBoundary>`, a 404 screen,
+the offline banner, `auditBalances`, and `packages/core/src/testing/factories.ts`. `parseAmount`
+is written and correct but lives in `apps/web/src/screens/expense/amount.ts`, so Functions and
+the future mobile app cannot reach the one function that turns typed text into money.
 
 ### 2026-08-31 — the binding is 11 of 15, a deploy that times out, and links that stop being tickets
 

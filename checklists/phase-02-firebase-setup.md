@@ -56,13 +56,13 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
 
 ## 5. Local repo config
 
-- [ ] 🔴 `firebase/firebase.json` with emulator ports (auth 9099, firestore 8080,
+- [x] 🔴 `firebase/firebase.json` with emulator ports (auth 9099, firestore 8080,
       functions 5001, hosting 5000, UI 4000) and the SPA rewrite `** → /index.html`
-- [ ] 🔴 `firebase/.firebaserc` with both aliases
-- [ ] 🔴 `firebase/firestore.rules` — start with **deny-all**, then build up in later phases
-- [ ] 🔴 `firebase/firestore.indexes.json` — empty array for now; indexes added in
+- [x] 🔴 `firebase/.firebaserc` with both aliases
+- [x] 🔴 `firebase/firestore.rules` — start with **deny-all**, then build up in later phases
+- [x] 🔴 `firebase/firestore.indexes.json` — empty array for now; indexes added in
       Phases 05–08 as queries appear
-- [ ] 🟡 `firebase/functions/` scaffolded as `@splitsutra/functions` (Node 24, TS, Gen 2),
+- [x] 🟡 `firebase/functions/` scaffolded as `@splitsutra/functions` (Node 24, TS, Gen 2),
       with `@splitsutra/core` as a workspace dependency
 
 ## 6. Emulators
@@ -73,8 +73,8 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
   ```bash
   firebase emulators:start --import=./.emulator-data --export-on-exit
   ```
-- [ ] 🟡 `pnpm emulators` script wrapping the above
-- [ ] 🟡 Add `.emulator-data/` to `.gitignore`
+- [x] 🟡 `pnpm emulators` script wrapping the above
+- [x] 🟡 Add `.emulator-data/` to `.gitignore`
 
 ## 7. Seed script 🟡 _30 minutes now, saved hundreds of times later_
 

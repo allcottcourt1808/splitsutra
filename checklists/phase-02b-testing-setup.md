@@ -13,32 +13,37 @@ Reference: [../docs/16-testing-setup.md](../docs/16-testing-setup.md)
 
 ## 1. Install
 
-- [ ] 🔴 Runner + coverage (root, `-w`):
+- [x] 🔴 Runner + coverage (root, `-w`):
       `vitest`, `@vitest/coverage-v8`
-- [ ] 🔴 Property testing: `fast-check`
-- [ ] 🔴 Rules: `@firebase/rules-unit-testing`
-- [ ] 🔴 Integration: `firebase-admin`
+- [x] 🔴 Property testing: `fast-check`
+- [x] 🔴 Rules: `@firebase/rules-unit-testing`
+- [x] 🔴 Integration: `firebase-admin`
 - [ ] 🟡 Component: `@testing-library/react`, `@testing-library/user-event`,
       `@testing-library/jest-dom`, `happy-dom`
-- [ ] 🟡 E2E: `@playwright/test`, then `pnpm exec playwright install --with-deps chromium`
-- [ ] 🟡 A11y: `@axe-core/playwright`
-- [ ] 🔴 Architecture: `dependency-cruiser`
-- [ ] 🟢 Install latest of each; pin nothing except where a doc says to
+      — **deliberately not taken.** `happy-dom` is installed; no `@testing-library/*` package is.
+      `apps/web/src/__tests__/helpers/render.tsx` drives `react-dom/client` and `act` directly,
+      wrapped in a `MemoryRouter`, and registers its own `afterEach` cleanup. Worth revisiting
+      only if the hand-rolled helper starts growing query APIs — at that point it is
+      Testing Library with fewer users.
+- [x] 🟡 E2E: `@playwright/test`, then `pnpm exec playwright install --with-deps chromium`
+- [x] 🟡 A11y: `@axe-core/playwright`
+- [x] 🔴 Architecture: `dependency-cruiser`
+- [x] 🟢 Install latest of each; pin nothing except where a doc says to
 
 ## 2. Vitest projects config
 
-- [ ] 🔴 Root `vitest.config.ts` with four projects: `unit`, `component`, `rules`,
+- [x] 🔴 Root `vitest.config.ts` with four projects: `unit`, `component`, `rules`,
       `integration`
-- [ ] 🔴 ⚠️ Check whether your Vitest version wants `test.projects` (current) or a separate
+- [x] 🔴 ⚠️ Check whether your Vitest version wants `test.projects` (current) or a separate
       `vitest.workspace.ts` (older). Same concept, different filename.
-- [ ] 🔴 `unit` → `node` environment, `packages/core`
-- [ ] 🟡 `component` → `happy-dom`, `apps/web`, with a setup file
-- [ ] 🔴 `rules` → `firebase/`, `testTimeout: 15_000`
-- [ ] 🔴 `integration` → `firebase/`, `testTimeout: 30_000`, `hookTimeout: 30_000`
-- [ ] 🔴 ⚠️ **`fileParallelism: false` on `rules` and `integration`** — they share one
+- [x] 🔴 `unit` → `node` environment, `packages/core`
+- [x] 🟡 `component` → `happy-dom`, `apps/web`, with a setup file
+- [x] 🔴 `rules` → `firebase/`, `testTimeout: 15_000`
+- [x] 🔴 `integration` → `firebase/`, `testTimeout: 30_000`, `hookTimeout: 30_000`
+- [x] 🔴 ⚠️ **`fileParallelism: false` on `rules` and `integration`** — they share one
       emulator, and parallel `clearFirestore()` calls wipe each other's fixtures. This
       produces failures that don't reproduce locally.
-- [ ] 🔴 **Coverage threshold: 100% branches on `packages/core/src/domain/**`**
+- [x] 🔴 **Coverage threshold: 100% branches on `packages/core/src/domain/**`**
       (Article VII / NFR-8)
 - [ ] 🟡 Verify the gate works: delete a domain test, confirm coverage fails the build
 
@@ -85,6 +90,15 @@ run is not a harness.
 
 ## 6. Integration test harness
 
+> 🔴 **Status 2026-08-31: `firebase/tests/integration/` does not exist.** The `integration`
+> Vitest project points at `tests/integration/**/*.test.ts` and matches nothing, so
+> `pnpm test:integration` boots the emulators, runs zero tests, and exits 0. Nothing in §6
+> below has been started. Every integration item in phases 06–08 — "`onExpenseWritten`
+> produces the expected balances", "firing the trigger twice is idempotent" — is blocked here.
+>
+> `firebase/tests/rules/` **is** real (9 suites), so the emulator plumbing itself works; what
+> is missing is the admin-SDK harness and the `waitFor` helper.
+
 - [ ] 🔴 `firebase/tests/integration/setup.ts` setting `FIRESTORE_EMULATOR_HOST` and
       `FIREBASE_AUTH_EMULATOR_HOST` **before** importing `firebase-admin`
 - [ ] 🔴 `initializeApp({ projectId: 'demo-integration' })`
@@ -104,14 +118,23 @@ run is not a harness.
 
 ## 8. Playwright harness
 
-- [ ] 🟡 `playwright.config.ts` — `testDir: e2e/specs`, `globalSetup`, `webServer` running
+> 🔴 **Status 2026-08-31: the config is written; `e2e/` was never created.** `playwright.config.ts`
+> names `./e2e/specs` and `./e2e/smoke` and **neither directory exists**, so `pnpm test:e2e` and
+> `pnpm test:smoke` pass by matching no files. This is the most misleading state on the project:
+> two green commands that assert nothing at all.
+>
+> It blocks more than this phase — every E2E item in phases 05–09, and the `axe-core` sweep that
+> phase-09 §3 marks 🔴. `@playwright/test` and `@axe-core/playwright` are already installed, so
+> the first spec is the expensive one and the rest are cheap.
+
+- [x] 🟡 `playwright.config.ts` — `testDir: e2e/specs`, `globalSetup`, `webServer` running
       the Vite dev server with `VITE_USE_EMULATORS=true`
-- [ ] 🟡 ⚠️ **`fullyParallel: false`** — shared emulator
-- [ ] 🟡 Two device projects: **`mobile` (Pixel 7) first**, then `desktop`. The phone
-      viewport is the design target.
+- [x] 🟡 ⚠️ **`fullyParallel: false`** — shared emulator
+- [x] 🟡 Two device projects: **`mobile` (Pixel 7) first**, then `desktop`. The phone
+      viewport is the design target. (Plus a third, `smoke`, aimed at a deployed environment.)
 - [ ] 🟡 `trace: 'on-first-retry'`, `video: 'retain-on-failure'` — traces are how you debug
       failures that only happen in CI
-- [ ] 🟡 `retries: 2` **in CI only**; locally a flake must fail loudly
+- [x] 🟡 `retries: 2` **in CI only**; locally a flake must fail loudly
 - [ ] 🟡 `e2e/fixtures/auth.ts` — create users via the **Auth emulator REST API**
       (`/accounts:signUp?key=fake-api-key`), save a `storageState`
 - [ ] 🔴 ⚠️ **Do not drive the FirebaseUI widget in every test.** It's slow and couples

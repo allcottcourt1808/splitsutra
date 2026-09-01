@@ -136,9 +136,17 @@ export default defineConfig(({ command }) => ({
   },
 
   optimizeDeps: {
-    /* FirebaseUI was dropped (docs/19-qa-log.md Q17/R7), and with it the firebase/compat
-       shim it required. Auth now uses the modular firebase/auth SDK, which Vite discovers
-       by crawling like any other ESM dependency — so nothing needs pre-bundling here. */
+    /* 🔴 This block used to claim FirebaseUI had been dropped (docs/19-qa-log.md Q17/R7) along
+       with the firebase/compat shim it requires. That removal was REVERSED — `firebaseui@6.1.0`
+       is a dependency of this package and `src/auth/FirebaseUIMount.tsx` imports
+       `firebase/compat/app`, `firebase/compat/auth`, `firebaseui` and its stylesheet. The
+       comment outlived the decision it described, which is worse than no comment: it is why
+       "is /login split out?" read as already-answered.
+
+       Nothing needs pre-bundling here — Vite crawls all four specifiers like any other
+       dependency — but they are NOT split, and `SignInScreen` is imported eagerly by
+       `routes.tsx`, so they land in the main chunk for every user.
+       See checklists/phase-09-polish-pwa.md §6. */
   },
 
   build: {

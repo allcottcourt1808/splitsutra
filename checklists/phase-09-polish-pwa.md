@@ -8,33 +8,53 @@ which is a genuinely usable stopgap "mobile app" before Phase 12.
 
 ## 1. Loading & empty states
 
-- [ ] 🟡 Skeleton loaders on every list screen — **not spinners**
-- [ ] 🟡 Every empty state offers the next action; no dead ends
-- [ ] 🟡 Error states with a real retry, not just an error string
+- [ ] 🟡 Skeleton loaders on every list screen — **not spinners**. `<Skeleton>` was never
+      built (phase-04 §2); list screens currently render nothing while loading.
+- [x] 🟡 Every empty state offers the next action; no dead ends — enforced by the type, not by
+      discipline: `EmptyStateProps.action` is **required**, so an empty state with no way out
+      does not compile. Used on 11 screens.
+- [ ] 🟡 Error states with a real retry, not just an error string — **4 of 13** subscription
+      hooks expose `retry` (`useExpenses`, `useGroup`, `useGroupMembers`, `useSettlements`).
+      The rest surface the error with no way to re-subscribe, so the only recovery is a reload.
 - [ ] 🟡 Offline banner from Firestore's connection state
-- [ ] 🟢 Illustrations for the main empty states
+- [ ] 🟢 Illustrations for the main empty states — `EmptyState.glyph` is a single character
+      standing in for one, with the TODO recorded on the prop.
 
 ## 2. Interaction polish
 
 - [ ] 🟡 Optimistic UI on every write
-- [ ] 🟡 Undo toasts on destructive actions (5s window before commit)
+- [ ] 🟡 Undo toasts on destructive actions (5s window before commit) — there is no `<Toast>`
+      host. Undo exists where it is a **server** operation (`undoDeclineFriendRequest`), not as
+      a client-side hold-before-commit.
 - [ ] 🟡 Confirmation dialogs only for genuinely destructive, non-undoable actions
 - [ ] 🟡 Pull-to-refresh on list screens
 - [ ] 🟡 Haptic-style press feedback (scale/opacity) on `<Pressable>`
-- [ ] 🟢 Page transition animations, respecting `prefers-reduced-motion`
+- [x] 🟢 Page transition animations, respecting `prefers-reduced-motion` — no transitions to
+      animate yet, but the global honouring of the query is in `styles/reset.css` and is
+      held by a test, so anything added later inherits it.
 - [ ] 🟢 Keyboard-aware scrolling on the Add Expense form
 
 ## 3. Accessibility audit (NFR-4/5/6)
 
-- [ ] 🔴 ⚠️ **Re-verify the palette.** `#1CC29F` on white is ~2.3:1 and fails AA for body
-      text. Confirm `primaryDark` (`#159E82`) is used for text-sized elements.
-- [ ] 🔴 `axe-core` clean on every screen — wire it into the Playwright run
-- [ ] 🔴 Colour is never the only signal — pair with "you owe" / "owes you" wording
+- [x] 🔴 ⚠️ **Re-verify the palette.** Done in Phase 04, and **this item's own recommendation
+      was wrong**: `primaryDark` `#159E82` measures **3.36:1**, which also fails AA for body
+      text — it only clears the 3:1 bar for large text and non-text UI. The palette is instead
+      split into two roles: `primary`/`positive`/`negative`/`neutral`/`danger` for fills, icons
+      ≥24px and borders; `primaryText`/`positiveText`/… (e.g. `primaryText` `#0B7C63`, 5.15:1)
+      as the **only** colours permitted for text. Every ratio is tabulated in
+      `packages/core/src/theme/tokens.ts` against both `bg` and `bgSubtle`.
+- [ ] 🔴 `axe-core` clean on every screen — wire it into the Playwright run.
+      `@axe-core/playwright` and `playwright.config.ts` are both present, but **`e2e/` does not
+      exist**, so `pnpm test:e2e` and `pnpm test:smoke` currently run against nothing. See §11.
+- [x] 🔴 Colour is never the only signal — pair with "you owe" / "owes you" wording
 - [ ] 🟡 Full keyboard-only journey: sign in → create group → add expense → settle up
 - [ ] 🟡 Screen-reader pass on the core loop (NVDA or VoiceOver)
 - [ ] 🟡 Balance changes announced via a polite live region
-- [ ] 🟡 Every icon-only button has an accessible name
-- [ ] 🟡 Verify all touch targets are ≥ 44×44
+- [ ] 🟡 Every icon-only button has an accessible name — 94 `aria-label`s across the app, but
+      this has not been audited screen by screen, so it is not ticked.
+- [x] 🟡 Verify all touch targets are ≥ 44×44 — enforced in `controls.module.css` rather than
+      per-screen: `.pressable` sets the minimum, and the one documented relaxation (a full-row
+      target) relaxes **width only**, never height. Held by `Pressable.test.tsx`.
 
 ## 4. Responsive
 
@@ -46,22 +66,62 @@ which is a genuinely usable stopgap "mobile app" before Phase 12.
 
 ## 5. PWA
 
-- [ ] 🟡 `vite-plugin-pwa` with an app manifest: name, short name, icons (192/512),
+- [x] 🟡 `vite-plugin-pwa` with an app manifest: name, short name, icons (192/512),
       `display: standalone`, theme colour
-- [ ] 🟡 Service worker caching the **app shell only**
-- [ ] 🔴 ⚠️ **Do not cache Firestore data in the service worker.** Firestore's own
+      — `apps/web/vite.config.ts`. Icons are **generated** by `apps/web/scripts/make-icons.mjs`
+      (a dependency-free PNG encoder), so the marks are reproducible from source instead of
+      checked in as binaries nobody can regenerate.
+- [x] 🟡 A **separate** `maskable` icon entry, never `purpose: 'any maskable'` on one file —
+      Android crops a maskable icon to 80% diameter, so one image cannot be right for both.
+- [x] 🟡 Service worker caching the **app shell only** — 13 precache entries, verified against
+      a real `pnpm build`.
+- [x] 🔴 ⚠️ **Do not cache Firestore data in the service worker.** Firestore's own
       persistence already does this correctly; two caching layers will disagree and produce
       stale balances.
-- [ ] 🟡 `apple-touch-icon` + iOS splash screens
-- [ ] 🟡 Verify "Add to Home Screen" on iOS Safari and Android Chrome
-- [ ] 🟡 Update prompt when a new service worker is waiting
-- [ ] 🟢 Offline fallback page
+      — verified: **zero** `firestore`/`googleapis` references in the emitted `sw.js`. There is
+      no `runtimeCaching` block at all, and the config says why so nobody adds one.
+- [x] 🟡 `apple-touch-icon` + `apple-mobile-web-app-*` meta tags — iOS ignores the manifest for
+      Add to Home Screen, so these are not redundant with §5.1.
+- [ ] 🟢 iOS splash screens (`apple-touch-startup-image`) — needs one PNG per device size;
+      deferred, the app launches without them.
+- [x] 🟡 Update prompt when a new service worker is waiting — `apps/web/src/pwa/UpdatePrompt.tsx`.
+      `registerType: 'prompt'`, never `autoUpdate`: this app's central screen is a form, and a
+      silent bundle swap mid-edit is the one update behaviour it must not have.
+- [x] 🟡 ⚠️ Mount the prompt **above the router**, not inside `<AppShell>` — inside the shell it
+      sits behind the auth guard, so the worker only registers after sign-in and a first-time
+      visitor on `/login` (exactly the person most likely to install) never could. Found by
+      inspection, fixed in `main.tsx`.
+- [ ] 🟡 🔴 **Verify "Add to Home Screen" on a real iOS Safari and a real Android Chrome.**
+      NOT DONE and not doable from here: service-worker registration fails inside the Browser
+      pane with "An unknown error occurred when fetching the script." That was proven
+      environmental — a one-line control worker fails identically — and everything reachable
+      _was_ checked (manifest served with `display: standalone` and `start_url: /groups`, three
+      icons including the maskable, `apple-touch-icon` 200, shell-only precache). **Activation
+      on a real device is untested.** This is the item that decides whether §5 actually shipped.
+- [ ] 🟢 Offline fallback page — `navigateFallback: '/index.html'` means a deep link opened
+      offline reaches the shell and the router, which is most of the value. A dedicated
+      "you're offline" page is still unwritten.
 
 ## 6. Performance (NFR-1, NFR-2)
 
-- [ ] 🟡 Route-level code splitting
-- [ ] 🟡 Confirm `/login` (and therefore `firebase/compat` + `firebaseui`) is split out
-- [ ] 🟡 Bundle analysis; main chunk under 350 KB gzipped
+- [ ] 🔴 Route-level code splitting — **not done.** `routes.tsx` imports every screen eagerly;
+      there is no `lazy()` and no `<Suspense>` anywhere. This is the direct cause of the
+      overage below.
+- [ ] 🔴 Confirm `/login` (and therefore `firebase/compat` + `firebaseui`) is split out —
+      **not split, and still present.** `apps/web/package.json` depends on `firebaseui@6.1.0`,
+      and `auth/FirebaseUIMount.tsx` imports `firebase/compat/app`, `firebase/compat/auth`,
+      `firebaseui` and `firebaseui/dist/firebaseui.css` eagerly. `SignInScreen` imports that,
+      `routes.tsx` imports `SignInScreen`, and nothing is lazy — so **every signed-in user
+      downloads the entire sign-in widget and the compat SDK on every visit**, to render a
+      screen they will never see again.
+      ⚠️ The comment in `vite.config.ts` `optimizeDeps` asserting FirebaseUI was dropped is
+      **wrong** — it describes a removal that was reversed. Corrected in this branch.
+- [ ] 🔴 ⚠️ Bundle analysis; main chunk under 350 KB gzipped — **OVER BUDGET.** Measured on a
+      real `pnpm build`: one chunk, `1,426,786 B` raw / **418,408 B gzipped**, against the
+      NFR-2 ceiling of 350 KB. **68 KB over.** It is one chunk because nothing is lazy, and the
+      two items above are the likely bulk of the excess. `chunkSizeWarningLimit: 300` is set so
+      the build warns, but nothing fails — **CI never builds the web app**, which is why this
+      sat unnoticed. Splitting `/login` is the first thing to try, then re-measure.
 - [ ] 🟡 Lighthouse: performance ≥ 90, accessibility ≥ 95
 - [ ] 🟡 FCP < 1.8s on simulated 4G
 - [ ] 🟢 Preconnect to Firebase origins
@@ -109,11 +169,41 @@ Protocol and targets: [../docs/15-usability.md](../docs/15-usability.md).
 
 ## 10. Copy & content
 
-- [ ] 🟡 Consistent, human error messages — never a raw Firebase error code
+- [ ] 🟡 Consistent, human error messages — never a raw Firebase error code. Substantially
+      done and still not audited end to end. Landed so far: the HTTP status no longer leaks
+      into callable errors (#44); a `ZodError`'s serialised issue array can no longer reach a
+      screen, and validation now runs on the field while it is typed rather than on submit
+      (#48); "E.164" was removed from both phone messages in favour of the instruction, since
+      naming the standard tells the user nothing they can act on (#48).
 - [ ] 🟡 ⚠️ Every settle-up surface makes clear **no real money moves**
 - [ ] 🟡 Currency formatting verified for all eight supported currencies
 - [ ] 🟢 First-run onboarding (2–3 screens)
-- [ ] 🟢 Favicon, OG tags, page titles per route
+- [ ] 🟢 Favicon, OG tags, page titles per route — favicon done (`favicon.svg`, generated with
+      the app icons); OG tags and per-route titles still missing.
+
+## 11. Discovered while building §5 — not in the original plan
+
+Found by inspection or measurement during the PWA work, 2026-08-31. Each one is a real gap,
+not a suspicion.
+
+- [ ] 🔴 **`e2e/` does not exist.** `playwright.config.ts` names `./e2e/specs` and `./e2e/smoke`
+      and both directories are absent, so `pnpm test:e2e` and `pnpm test:smoke` are green by
+      vacuum. Every E2E item in phases 05–09, and the `axe-core` sweep in §3, is blocked on
+      this. `@axe-core/playwright` and `@playwright/test` are already installed.
+- [ ] 🔴 **`firebase/tests/integration/` does not exist.** `pnpm test:integration` matches no
+      files. The rules suite is real (9 files under `firebase/tests/rules/`); the integration
+      suite the trigger items in phase-06 §8 and phase-07 depend on was never started.
+- [ ] 🟡 **CI does not build the web app.** `pnpm verify` is typecheck + lint + depcruise +
+      unit tests. Nothing runs `pnpm build`, which is why a 418 KB main chunk (§6) could sit
+      68 KB over budget without anything going red. A build step in CI is the cheap fix; a
+      gzipped-size assertion is the real one.
+- [ ] 🟡 **Service-worker activation cannot be verified in the Browser pane.** Registration
+      fails there with "An unknown error occurred when fetching the script", and a one-line
+      control worker fails identically, so it is the sandbox and not the app. Every static
+      artefact was verified instead. Real-device confirmation is the outstanding half of §5.
+- [ ] 🟢 `apps/web/scripts/make-icons.mjs` has no test. It is deterministic and its output is
+      committed, so a silent regression is visible in `git diff` — but nothing asserts the PNGs
+      it writes are decodable.
 
 ---
 

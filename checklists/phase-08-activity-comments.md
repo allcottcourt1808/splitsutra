@@ -3,6 +3,20 @@
 **Est. 1.5 days.** Depends on 06.
 Covers **Epic F** and **D4**.
 
+> **Status 2026-08-31 — shipped; the boxes below lag the code.** The Activity tab landed in
+> PR #31, and comments are implemented once in `packages/core/src/repositories/commentRepo.ts`
+> (Article VI — `expenseRepo`'s `watchExpenseComments` / `addExpenseComment` /
+> `deleteExpenseComment` are aliases onto it, holding no Firestore call of their own).
+>
+> Two open items, one of them the user's call:
+>
+> - 🟡 **`watchComments` is unbounded** — `orderBy('createdAt', 'asc')` with no `limit()`, so a
+>   long thread is re-delivered in full on every new comment, oldest-first. phase-10 §5b.
+> - ❓ **Comment tombstones vs `allow update: if false`** is still undecided. Rules deny `update`
+>   outright today (AC-D4.4, threat T12: an editable comment in a dispute thread destroys the
+>   record of what was said). Whether a _deleted_ comment leaves a visible tombstone is the part
+>   nobody has ruled on.
+
 ---
 
 ## 1. Activity writing (Cloud Functions)

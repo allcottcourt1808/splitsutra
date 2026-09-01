@@ -163,8 +163,15 @@ export function watchGroup(
 /**
  * Current members first, then departed ones, each block ordered by display name.
  *
- * Sorted client-side: `displayName` is a denormalized snapshot the profile fan-out rewrites, and
- * a group is capped at 50 members (Q2), so this is not where the cost is (Article XII).
+ * Sorted client-side because `displayName` is a denormalized snapshot the profile fan-out
+ * rewrites, so ordering by it server-side would need an index Firestore keeps re-writing.
+ *
+ * 🔴 This used to say "a group is capped at 50 members (Q2), so this is not where the cost is".
+ *    That is false, and it is the reason `watchMembers` below has no `limit()`. `MAX_GROUP_MEMBERS`
+ *    is enforced against `group.memberIds.length` — CURRENT members — in `createInvite` and
+ *    `redeemInvite`. `leaveGroup` sets `leftAt` and deliberately keeps the member document, so
+ *    this subcollection grows with every departure and is bounded by nothing.
+ *    See checklists/phase-10-hardening.md §5b.
  */
 function byMembership(a: GroupMember, b: GroupMember): number {
   const left = a.leftAt === null ? 0 : 1;
@@ -192,9 +199,12 @@ export function watchMembers(
  * Only the people still in the group, ordered by display name — who an expense or a settlement
  * may name.
  *
- * A filter over {@link watchMembers} rather than a second query: `members` is capped at 50
- * documents (Q2) and `allow write: if false` makes it read-only in every direction, so the
- * subscription is the same one either way and the difference is which rows the caller wants.
+ * A filter over {@link watchMembers} rather than a second query: it is the same subscription
+ * either way, and `allow write: if false` makes `members` read-only in every direction, so the
+ * only difference is which rows the caller wants.
+ *
+ * 🔴 This too used to justify itself with "capped at 50 documents (Q2)". It is not — departed
+ *    members are tombstoned, not deleted. See {@link watchMembers}.
  * `byMembership` already places current members before departed ones, so the filtered list is
  * exactly name order.
  */
