@@ -19,9 +19,51 @@
  * a blank page with a console message, which reads exactly like a broken build. Returning the
  * failure lets `main.tsx` mount a panel that says which variables are missing and where to put
  * them — the same information, in the place the person is actually looking.
+ *
+ * ## 🔴 Why no `popupRedirectResolver` — and when you MUST put it back
+ *
+ * This used to pass `browserPopupRedirectResolver` into `initFirebase()`, because
+ * `initializeAuth()` — unlike `getAuth()` — installs no resolver, and without one
+ * `signInWithPopup` fails with `auth/operation-not-supported-in-this-environment`.
+ *
+ * The cost of installing it eagerly was invisible until it was measured. Handing a resolver to
+ * `initializeAuth` makes auth check for a pending redirect result during startup, which
+ * initialises the resolver, which loads Google's cross-origin auth iframe **on every page
+ * load**: `/__/auth/iframe.js` (92.5 KiB) plus `apis.google.com` gapi (40 KiB + 5.8 KiB). A
+ * Lighthouse run on `/groups` — an already-signed-in user who will never see a sign-in popup —
+ * showed ~133 KiB and 17 third-party cookies bought for nothing. That is nearly twice what the
+ * route split (`routes.tsx`) saved.
+ *
+ * It is safe to drop **only because FirebaseUI is the sole popup consumer**, and it reaches auth
+ * through `firebase/compat`, which supplies its own resolver per call rather than relying on the
+ * instance. Three links, each read off the installed packages rather than assumed:
+ *
+ * ```js
+ * // 1. @firebase/auth-compat, Auth constructor. Our modular instance already exists, so compat
+ * //    takes this branch and never installs a resolver of its own:
+ * if (provider.isInitialized()) { this._delegate = provider.getImmediate(); return; }
+ *
+ * // 2. …but every compat popup/redirect call site passes one explicitly anyway:
+ * exp.signInWithPopup(this._delegate, provider, CompatPopupRedirectResolver)
+ *
+ * // 3. …and @firebase/auth prefers that argument over the instance, so the assert that would
+ * //    have thrown `operation-not-supported-in-this-environment` is never reached:
+ * function _withDefaultResolver(auth, resolverOverride) {
+ *   if (resolverOverride) { return _getInstance(resolverOverride); }
+ *   _assert(auth._popupRedirectResolver, auth, AuthErrorCode.ARGUMENT_ERROR);
+ * ```
+ *
+ * Measured after the change, on a production build served with Hosting's headers: `/login`
+ * renders all three providers and makes **nine** requests, none of them to `apis.google.com`,
+ * `gapi`, or `/__/auth/iframe`. So the iframe is not merely moved to the lazy `/login` chunk —
+ * it is deferred to the moment someone actually clicks "Sign in with Google", which is the only
+ * moment it is worth anything.
+ *
+ * ⚠️ **Put it back the moment anything calls modular `signInWithPopup`, `signInWithRedirect` or
+ * `getRedirectResult` directly** — replacing FirebaseUI is exactly that change. There is no
+ * compile error for this: the failure is a runtime auth error on a button nobody clicks in
+ * development. `initFirebase()` still accepts the option; only this call site stopped passing it.
  */
-
-import { browserPopupRedirectResolver } from 'firebase/auth';
 
 import { setPlatformAdapter } from '@splitsutra/core';
 // `src/firebase` is deliberately absent from the root barrel — a runtime Firebase import there
@@ -53,18 +95,7 @@ export function startApp(): StartupResult {
       config: readFirebaseConfig(),
       useEmulators: emulators,
       emulators: EMULATOR,
-      /**
-       * 🔴 Required, and easy to miss. Core calls `initializeAuth()` rather than `getAuth()`
-       * because it is the only entry point that accepts a persistence strategy — but
-       * `initializeAuth` does NOT install a popup/redirect resolver, where `getAuth` does.
-       * Without this, Google sign-in fails at runtime with
-       * `auth/operation-not-supported-in-this-environment` and nothing earlier complains.
-       *
-       * It is passed from here rather than imported inside core because it is a DOM
-       * implementation, and importing it there would put `window` in the mobile bundle's
-       * dependency graph (Article II).
-       */
-      popupRedirectResolver: browserPopupRedirectResolver,
+      /* 🔴 `popupRedirectResolver` is deliberately NOT passed here. See below. */
     });
 
     return { ok: true, emulators };
