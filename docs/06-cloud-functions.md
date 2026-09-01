@@ -28,7 +28,7 @@ code** the client runs. There is never a second implementation of the money math
 | `recomputeGroupBalances`   | Callable  | client/admin call                      | Self-heal: rebuild balances from the ledger          |
 | `repairGroupMembership`    | Callable  | client call                            | Self-heal: reseed a member doc a trigger never wrote |
 | `deleteAccount`            | Callable  | client call                            | Anonymise profile, remove memberships                |
-| `auditBalances`            | Scheduled | daily 03:00 IST                        | ⚠️ **NOT IMPLEMENTED** — see the section below       |
+| `auditBalances`            | Scheduled | daily 03:00 IST                        | Nightly drift check against the ledger; auto-repairs |
 
 ---
 
@@ -401,21 +401,33 @@ On create/update of users/{uid}:
 
 ## `auditBalances` (scheduled)
 
-🔴 **This does not exist yet.** There is no `scheduled/` directory and nothing exports it, so it
-is not deployed and the drift check is not running. It was listed in the inventory above as
-though it were live, which it never was — corrected. By this file's own rule, restated in
-`index.ts` ("export it when it works, not before"), an entry here is a claim about the deployed
-system and this one was wrong.
-
-The two hard parts are already built and unused:
+Implemented in `scheduled/auditBalances.ts` and exported from `index.ts`, so it deploys as the
+Cloud Scheduler job `auditBalances`. It reuses the two pieces that were already built:
 
 - `findBalanceDrift(gid)` in `common/balances.ts` — a read-only recompute that _reports_ drift
   rather than repairing it, so the discrepancy can be logged before the evidence is overwritten,
   and which calls `assertZeroSum` independently of the write path.
 - `AUDIT_SCHEDULE` (`'0 3 * * *'`) and `AUDIT_TIMEZONE` (`'Asia/Kolkata'`) in `common/config.ts`.
 
-What remains is the `onSchedule` wrapper, the iteration over active groups, and the decision
-below about repairing versus only reporting.
+It **repairs**, per the intended behaviour below — report first, then rebuild — and it reuses
+`recomputeBalances` to do it (Article VI: there is no second recompute). `maxInstances` is
+`SCHEDULED_MAX_INSTANCES` (1) and the write is diff-guarded: a group with no drift is read and
+not written.
+
+Two shape decisions worth knowing:
+
+- **Groups are listed, not filtered.** The scan pages `groups` ordered by document ID and skips
+  soft-deleted ones in code rather than with `where('deletedAt', '==', null)`. A Firestore
+  equality filter skips documents that lack the field entirely, and Rules accept a create with
+  `deletedAt` absent — a filtered scan would hide exactly the malformed groups worth auditing.
+- **One bad group does not stop the run.** A group whose ledger fails `assertZeroSum` is logged
+  at `ERROR` and left alone (no recompute can fix a ledger that does not sum to zero); the audit
+  moves on to the next group.
+
+Still owed: the log-based alert on the drift `ERROR` (Phase 11), and an emulator test that
+corrupts a balance by hand and confirms the audit fixes it (phase-10 §6). This package has no
+unit-test harness — `vitest.config.ts` has no project rooted at `firebase/functions` — so the
+behaviour below is unverified by any automated test today.
 
 ---
 

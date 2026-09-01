@@ -70,3 +70,7 @@ export { onExpenseWritten } from './triggers/onExpenseWritten.js';
 export { onGroupCreated } from './triggers/onGroupCreated.js';
 export { onSettlementWritten } from './triggers/onSettlementWritten.js';
 export { onUserProfileWritten } from './triggers/onUserProfileWritten.js';
+
+/* ── Scheduled: Cloud Scheduler-driven. Article V — the ledger is the truth, so a nightly ──
+ *    rebuild from it is always safe to run and is the backstop docs/12 Q2 depends on. */
+export { auditBalances } from './scheduled/auditBalances.js';
