@@ -1,7 +1,12 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { FieldPath, db, type QueryDocumentSnapshot } from '../common/admin.js';
-import { findBalanceDrift, recomputeBalances, type BalanceDrift } from '../common/balances.js';
+import {
+  findBalanceDrift,
+  hasFriendProjectionDrift,
+  recomputeBalances,
+  type BalanceDrift,
+} from '../common/balances.js';
 import {
   AUDIT_SCHEDULE,
   AUDIT_TIMEZONE,
@@ -227,8 +232,36 @@ async function auditGroup(gid: string, tally: AuditTally): Promise<void> {
   }
 
   if (drift.length === 0) {
-    // Deliberately silent. An INFO line per clean group would be one log entry
-    // per group per night, which buries the entries that mean something.
+    // 🔴 Member balances agreeing is NOT the whole answer for a friendship.
+    //
+    // `users/{uid}/friends/{fid}.balanceMinor` is projected from these same numbers so the
+    // Friends LIST can show them — rules deny a collection-group read on `members`, so there
+    // is no other way to ask. The projection is written in the same transaction, so it cannot
+    // be lost independently; what it CAN be is historical. Every friendship last computed
+    // before the projection existed still holds an empty map, and its member balances are
+    // perfectly correct — so without this check the audit would call the system clean while
+    // the list told someone they were settled up with a person who owes them money.
+    //
+    // This is therefore both the ongoing check and the one-time migration: the first nightly
+    // run after the deploy repairs every friendship that predates it.
+    if (await hasFriendProjectionDrift(gid)) {
+      tally.groupsWithDrift++;
+      logWarn(
+        ctx,
+        'FRIEND BALANCE PROJECTION STALE — member balances are correct; refreshing the ' +
+          'friends/{fid}.balanceMinor the Friends list reads',
+      );
+      try {
+        // Idempotent (ADR-07). The member balances it rewrites are the values already
+        // there; the projection is the part that actually changes.
+        await recomputeBalances(gid);
+      } catch (err) {
+        tally.groupsFailed++;
+        logError(ctx, 'friend projection refresh failed — the Friends list stays stale', err);
+      }
+    }
+    // Otherwise deliberately silent. An INFO line per clean group would be one log
+    // entry per group per night, which buries the entries that mean something.
     return;
   }
 

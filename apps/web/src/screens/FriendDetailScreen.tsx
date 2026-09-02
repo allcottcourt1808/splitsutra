@@ -13,21 +13,26 @@
  * (`!group.isImplicit`) so a friendship does not appear as a card in Groups; this screen is
  * where it appears instead.
  *
- * ## 🔴 Why the balance does NOT come from `friend.balanceMinor`
+ * ## 🔴 Why the balance comes from the member document, not `friend.balanceMinor`
  *
- * `users/{uid}/friends/{fid}` carries a `balanceMinor` map, and it is **not maintained**.
- * `establishFriendship` seeds it and nothing in the codebase ever writes it again —
- * `recomputeBalances` writes `groups/{gid}/members/{uid}.balanceMinor` and touches no friend
- * document. Reading it meant this screen said "Settled up" no matter what anyone spent.
+ * Both now hold the same number, and they are not the same kind of thing.
  *
- * That field is not being fixed by giving it a writer. A second trigger fanning group balances
- * into friend documents would be a second cache of the same money, free to drift from the
- * ledger — exactly what Article VI forbids and the reason `auditBalances` deliberately excludes
- * it. The balance below comes from the implicit group's member document, which IS the one cache
- * the server maintains (Article III), so there is nothing new to keep in step.
+ * `groups/{gid}/members/{uid}.balanceMinor` is the **authoritative cache** — the value
+ * `recomputeBalances` computes from the ledger (Article III). `users/{uid}/friends/{fid}
+ * .balanceMinor` is a **projection of it**, written in the same transaction, and it exists for
+ * one reason: the Friends LIST cannot reach member documents at all, because `firestore.rules`
+ * denies collection-group reads on `members` (T9). A list of N friendships would otherwise need
+ * N subscriptions.
  *
- * ⚠️ `friend.balanceMinor` is therefore now read by nothing. Removing it is a schema change and
- * a migration, so it stays for the moment — but do not reach for it.
+ * This screen is already reading one specific friendship, so it reads the authoritative value
+ * and skips the copy. A projection can be stale in ways the source cannot — it is skipped when
+ * the friend document does not yet exist, and every friendship predating the projection carried
+ * an empty map until `auditBalances` repaired it.
+ *
+ * ⚠️ That is also why the list and this screen once disagreed: the list read the projection back
+ * when nothing wrote it, and said "Settled up" to someone who was owed money. If they ever
+ * disagree again, the member document is right and the projection is stale — look at
+ * `hasFriendProjectionDrift` in `common/balances.ts`.
  *
  * ## Sparse, not zero
  *

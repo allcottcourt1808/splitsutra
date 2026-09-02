@@ -1,4 +1,4 @@
-import { db } from './admin.js';
+import { FieldValue, db } from './admin.js';
 import { RECOMPUTE_THRESHOLD } from './config.js';
 import { assertZeroSum, computeBalances } from './contracts.js';
 import type { Expense, Settlement } from './contracts.js';
@@ -48,6 +48,41 @@ export async function recomputeBalances(gid: string): Promise<void> {
       db.collection(`groups/${gid}/settlements`).where('deletedAt', '==', null),
     );
     const membersSnap = await tx.get(db.collection(`groups/${gid}/members`));
+    const groupSnap = await tx.get(db.doc(`groups/${gid}`));
+
+    // 🔴 The friend projection, read here so that EVERY read still happens before ANY write.
+    //
+    // A friendship IS a group (D2), and its balance lives on that group's member documents
+    // like anyone else's. But the Friends LIST cannot reach them: `firestore.rules` denies
+    // collection-group reads on `members` (T9), so a client has no way to ask "my balance in
+    // each of my friendships" in one query — and `settlements` is denied too, so it cannot
+    // derive them from the ledger either. Without a projection the list can only show names.
+    //
+    // So `users/{uid}/friends/{fid}.balanceMinor` is written here, from the number this
+    // function just computed. It is a PROJECTION, not a second computation: there is still
+    // exactly one implementation of the money math (Article VI) and one authoritative cache
+    // (the member document, Article III). This copies that answer where a query can see it.
+    //
+    // ⚠️ It can still go stale if this write is ever lost, which is why `auditBalances` now
+    // checks it. Do not add a second *computation* here — recompute and project, always.
+    const memberIds = membersSnap.docs.map((d) => d.id);
+    const groupCurrency = groupSnap.data()?.['currency'];
+    const projectToFriends =
+      groupSnap.data()?.['isImplicit'] === true &&
+      typeof groupCurrency === 'string' &&
+      // An implicit group is 1:1 by construction. Anything else is not a friendship, and
+      // guessing which two of three people it projects onto is not this function's job.
+      memberIds.length === 2;
+
+    const friendTargets = projectToFriends
+      ? memberIds.map((uid, index) => ({
+          uid,
+          ref: db.doc(`users/${uid}/friends/${String(memberIds[1 - index])}`),
+        }))
+      : [];
+    // Only documents that already exist are updated. `set({merge:true})` would conjure a
+    // half-built friend document out of a balance write if the pair were ever mid-repair.
+    const friendSnaps = await Promise.all(friendTargets.map((target) => tx.get(target.ref)));
 
     // Q2 / docs/18 R5 — the one operation whose cost scales with group size.
     // Above the threshold ADR-07 calls for incremental deltas plus the nightly
@@ -91,6 +126,20 @@ export async function recomputeBalances(gid: string): Promise<void> {
     for (const m of membersSnap.docs) {
       tx.update(m.ref, { balanceMinor: balances[m.id] ?? 0 });
     }
+
+    friendTargets.forEach((target, index) => {
+      if (friendSnaps[index]?.exists !== true) return;
+      tx.update(target.ref, {
+        // 🔴 Sparse, exactly as `establishFriendship` seeds it: a settled pair is an EMPTY
+        //    map, never `{ USD: 0 }`. Core's `balanceByCurrencySchema` is a sparse record and
+        //    D6 forbids summing across it, so "no entries" has to keep meaning "settled".
+        balanceMinor:
+          (balances[target.uid] ?? 0) === 0
+            ? {}
+            : { [String(groupCurrency)]: balances[target.uid] ?? 0 },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
   });
 }
 
@@ -99,6 +148,61 @@ export interface BalanceDrift {
   storedMinor: number;
   computedMinor: number;
   deltaMinor: number;
+}
+
+/**
+ * Does a friendship's `users/{uid}/friends/{fid}.balanceMinor` still agree with the member
+ * documents it was projected from?
+ *
+ * 🔴 Why this needs checking even though the projection is written in the SAME transaction as
+ * the member balances — which makes them atomic, so one cannot be lost without the other:
+ *
+ *   1. **Historical data.** Every friendship whose balance was last computed before the
+ *      projection existed has a stale (usually empty) map, and a full recompute is the only
+ *      thing that fixes it. Without this check the nightly audit skips exactly those groups,
+ *      because their MEMBER balances are perfectly correct — the audit would report a clean
+ *      system while the Friends list showed "Settled up" to someone who is owed money.
+ *   2. **The existence skip.** `recomputeBalances` only updates friend documents that already
+ *      exist, so a pair caught mid-repair projects onto one side and not the other.
+ *
+ * Read-only, and cheap: two document reads per friendship. Returns `false` for anything that
+ * is not a 1:1 implicit group, so callers can run it over every group without filtering first.
+ */
+export async function hasFriendProjectionDrift(gid: string): Promise<boolean> {
+  const groupSnap = await db.doc(`groups/${gid}`).get();
+  const currency = groupSnap.data()?.['currency'];
+  if (groupSnap.data()?.['isImplicit'] !== true || typeof currency !== 'string') return false;
+
+  const membersSnap = await db.collection(`groups/${gid}/members`).get();
+  if (membersSnap.size !== 2) return false;
+
+  const uids = membersSnap.docs.map((d) => d.id);
+  const stored = new Map(
+    membersSnap.docs.map((d) => [d.id, (d.data()['balanceMinor'] as number | undefined) ?? 0]),
+  );
+
+  for (const [index, uid] of uids.entries()) {
+    const other = uids[1 - index];
+    if (other === undefined) return false;
+
+    const friendSnap = await db.doc(`users/${uid}/friends/${other}`).get();
+    // A friendship with no friend document is a different problem — `repairGroupMembership`
+    // territory — and not something a balance recompute can mend, so it is not drift here.
+    if (!friendSnap.exists) continue;
+
+    const amount = stored.get(uid) ?? 0;
+    const expected = amount === 0 ? {} : { [currency]: amount };
+    const actual = (friendSnap.data()?.['balanceMinor'] as Record<string, number>) ?? {};
+
+    // Compared as sparse maps: `{}` and `{ USD: 0 }` are NOT the same document, and treating
+    // them as equal here would let a `{ USD: 0 }` written by an older version survive forever.
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const key of keys) {
+      if (expected[key] !== actual[key]) return true;
+    }
+  }
+
+  return false;
 }
 
 /**
