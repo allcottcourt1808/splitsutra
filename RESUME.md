@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#55 merged. No branch open. **PROD IS DEPLOYED — <https://splitsutra.web.app>**
+## State: PRs #1–#56 merged. No branch open. **PROD IS DEPLOYED — <https://splitsutra.web.app>**
 
 **#48** (`fix/friend-lookup-validation`) is merged. It fixed two bugs reported off the live dev
 backend, both on Add Friend:
@@ -74,6 +74,39 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-02 — three things the live app taught us that no local run could
+
+**#56 — the phone column was welded to the tab bar.** `<AppShell>` supplied both, and
+`routes.tsx` renders `SignIn` and `JoinGroup` outside it, so opting out of the tab bar opted
+out of the 640px column too and both screens rendered full-bleed. ⚠️ **Invisible on a phone** —
+docs/07 makes the column full-bleed below 640px anyway, so below the breakpoint the bug and the
+design agree. Only a desktop window showed it. `PlainShell` now supplies the column without the
+tab bar, and a `size.formMaxWidth` token (360px) **matches FirebaseUI's own
+`.firebaseui-container` cap** rather than overriding their stylesheet. Measured at 1400px:
+heading, widget and footer all `520 → 880`; at 375px all three `16 → 359`, unchanged.
+
+🔴 **`auth/configuration-not-found` was NOT "the Google provider is off".** Firebase
+Authentication had **never been provisioned on `splitsutra-prod` at all** — creating a project
+does not create it. Proven with a differential check rather than guessed: the public endpoint
+`identitytoolkit.googleapis.com/v1/projects?key=<web api key>` returned
+`{"error":{"code":400,"message":"CONFIGURATION_NOT_FOUND"}}` for prod and a normal config for
+dev. **Same request, two projects — that is what turned a guess into a diagnosis.**
+
+🔴 **A named Hosting site is not an authorized auth domain.** Once Auth was provisioned, prod's
+`authorizedDomains` read `localhost`, `splitsutra-prod.firebaseapp.com`,
+`splitsutra-prod.web.app` — the project defaults. **`splitsutra.web.app`, the domain the app is
+actually served from, is not among them** and has to be added by hand under Authentication →
+Settings. That is the standing cost of the clean URL, and the failure it causes
+(`auth/unauthorized-domain`) looks like an unrelated bug.
+
+🪤 **A deploy does not reach an existing visitor, and that is deliberate.** After deploying #56
+the CDN served the new chunk (`index-BNn2yn9z.js`, confirmed by curl) while the browser kept
+rendering the old one (`index-DrOdkJQE.js`). Not a bad deploy: `registerType: 'prompt'` in
+`vite.config.ts`, on purpose — "a silent swap can replace the running bundle mid-edit, and this
+app's central screen is a form." `UpdatePrompt.tsx` offers the refresh instead. **So verifying a
+deploy through a browser that has already visited measures the service worker, not the deploy.**
+Compare `curl`'s view of `index.html` against the browser's; they are allowed to disagree.
 
 ### 2026-09-02 — splitsutra-prod is live
 
