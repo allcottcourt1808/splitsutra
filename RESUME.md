@@ -75,6 +75,33 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
 
+### 2026-09-02 — sign-in works on prod; two quotas that are not the same thing
+
+Auth is provisioned on `splitsutra-prod` and the Google flow resolves end to end.
+`accounts:createAuthUri` returns **200** with a real `authUri`, client id
+`832720027790-87ik4qa5ej43d89piq1duta4790std4r…`, and
+`redirect_uri=https://splitsutra.web.app/login` **accepted** — which is the authorized-domain
+fix proving itself. `authorizedDomains` now carries `splitsutra.web.app` alongside the two
+project defaults. ⚠️ Sign-in itself is **not** verified: completing it means signing into an
+account, which is not something to do on the owner's behalf. Everything up to Google's handoff
+is verified.
+
+🔴 **"Sign-up quota" is not the SMS cap, and mistaking them leaves SMS spend uncapped while
+looking done.** Firebase's Authentication → Settings page has **no SMS-volume field at all**.
+Its "Sign-up quota" limits new **Email/Password and Anonymous** accounts **per IP per hour**
+(default 100) — by its own description, phone is not in scope. The 50 SMS/day cap is a **GCP
+quota** under Google Cloud → IAM & Admin → Quotas, service **Identity Toolkit API**. Still
+unset. ⚠️ Unverified whether an editable per-day SMS quota is even exposed on every project;
+Google enforces internal limits and does not always surface an adjustable one.
+
+✅ **SMS region policy set: allow-list, `US` + `IN`.** The checklist said "US only"; India is
+where the app is actually used (`auditBalances` runs `Asia/Kolkata`), so US-only would have
+locked out its real users — recorded in phase-02 §3 rather than quietly satisfied. **Allow-list,
+never deny-list**: a deny-list permits every region nobody thought to name, which is exactly
+where premium-rate ranges live. This is the control that removes the toll-fraud attack surface
+regardless of volume, so it matters more than the cap. ⚠️ Still unset on
+`splitsutra-dev-eac96`.
+
 ### 2026-09-02 — three things the live app taught us that no local run could
 
 **#56 — the phone column was welded to the tab bar.** `<AppShell>` supplied both, and
@@ -120,9 +147,10 @@ named Hosting **site**, resolved through the `app` target in `.firebaserc`.
 | Firestore rules + indexes                   | ✅ released                                                    |
 | 12 callables + 4 triggers + `auditBalances` | ✅ 17 live                                                     |
 | Artifact Registry cleanup                   | ✅ 30 days (phase-11 §2b)                                      |
-| Auth providers                              | 🔴 **none enabled — nobody can sign in**                       |
+| Auth providers                              | ✅ Email/Password, Google, Phone — provisioned 2026-09-02      |
 | App Check                                   | 🔴 does not exist; Rules are the only boundary on a public URL |
-| SMS region policy + 50/day                  | 🔴 unset                                                       |
+| SMS region policy                           | ✅ allow-list: US + IN                                         |
+| SMS 50/day cap                              | 🔴 unset — a GCP quota, NOT a Firebase setting (see below)     |
 | Budget alerts + kill switch                 | 🔴 unset                                                       |
 
 ✅ **The invoker binding applied on its own, and that is the whole point of a fresh project.**
