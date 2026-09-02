@@ -345,6 +345,27 @@ Gen 2 triggers are awkward to unit-test in isolation. Testing them **through the
 is both simpler and more realistic: write a document with the Admin SDK, then wait for the
 trigger's effect.
 
+> ⚠️ **What was actually built differs from the sketch below, deliberately.** The suite in
+> `firebase/tests/integration/` writes as a **real client SDK app holding a real ID token from
+> the Auth emulator**, and reaches for privilege only through `@firebase/rules-unit-testing`'s
+> `withSecurityRulesDisabled`.
+>
+> An admin-SDK harness bypasses Rules entirely, and the claims worth making here are precisely
+> the ones that need Rules in the loop: that a client's write to `balanceMinor` is _refused_
+> and the Function-computed value survives it (Article III), and that holding a real invite id
+> handed back by `createInvite` still buys a client nothing on `invites/{id}`. Those are
+> pipeline claims, not rule claims — a rules test can only deny a made-up id. Privileged
+> access is still there for setup and for polling, which is all the sketch used it for.
+>
+> 🔴 **Do not run `emulators:exec` for this directly.** Function discovery has a 10s budget and
+> the cold import is 65s on Windows; it fails with
+> `Cannot determine backend specification. Timeout after 10000` and then **runs the tests
+> anyway** against zero registered functions, so every test dies on its own `waitFor` and it
+> reads as broken tests rather than a missing backend. Go through
+> `scripts/test-integration.mjs`, which raises the budget to 120s and rebuilds the esbuild
+> bundle first — `pnpm build` overwrites it with a tsc version that cannot resolve
+> `@splitsutra/core` at runtime.
+
 ```ts
 // firebase/tests/integration/setup.ts
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';

@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#53 merged. No branch open.
+## State: PRs #1–#54 merged. One branch open: `test/firestore-integration`.
 
 **#48** (`fix/friend-lookup-validation`) is merged. It fixed two bugs reported off the live dev
 backend, both on Add Friend:
@@ -74,6 +74,68 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-01 — the integration suite was fine; the emulator never loaded the functions
+
+`firebase/tests/integration/` now exists: **19 tests, 2 files, green**, covering the balance
+pipeline (`onGroupCreated`, `onExpenseWritten`, `onSettlementWritten`, `recomputeGroupBalances`,
+the Q1-Option-A forgery quarantine) and the invite round-trip. `test:rules` and
+`test:integration` are both un-commented in CI.
+
+🪤 **It was written a session ago and nearly lost.** The agent that wrote it was stopped at the
+usage limit; the work existed only as **untracked files inside its worktree**, never committed,
+never pushed. Salvaged from `.claude/worktrees/agent-ac4d51b4a7a3d646e/` before that directory
+was deleted. If an agent is killed mid-task, look in its worktree before pruning it.
+
+🔴 **The bug was never in the tests.** `emulators:exec` gives function discovery a **10 second**
+budget. Cold import here is **65s** (2.1s warm — pnpm's node_modules is thousands of small files
+and Windows reads them one at a time the first time). It fails with
+`Cannot determine backend specification. Timeout after 10000` — **and then runs the tests
+anyway**, against a suite with every other emulator green and zero functions registered. All ten
+tests died 20s apart on their own `waitFor`. That reads as ten broken tests. It was one missing
+backend. **`scripts/emulators.mjs` had already diagnosed and fixed this months ago** for
+`pnpm emulators`; `test:integration` called the CLI directly and never got the fix. It now goes
+through `scripts/test-integration.mjs` (120s budget).
+
+🔴 **Two things write `firebase/functions/lib/index.js`, and only one is loadable.** `pnpm build`
+runs the package's own `tsc`, which emits a module importing `@splitsutra/core` as a bare
+specifier that does not resolve at runtime (core is deliberately absent from its dependencies).
+`scripts/build-functions.mjs` runs esbuild and inlines core. Same path, last writer wins — so
+`pnpm build` after a functions build silently replaces a working bundle with a broken one. The
+wrapper rebuilds it itself rather than trusting call order.
+
+🪤 **`spawnSync(cmd, argv, { shell: true })` mangles a quoted argument.** `emulators:exec` needs
+`"vitest run --project integration"` as one word; Node joins argv with spaces and hands it to the
+shell, so the quotes come out wrong. The symptom is **not** an error — `cmd` just sits there, no
+emulator binds a port, and the run hangs. Pass the whole command line as a single string.
+
+🪤 **Two commands silently ran from the wrong directory this session.** The Bash cwd resets
+between turns, and `pnpm verify` "passed" without running at all —
+`ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND` in a log nobody read, while the harness reported exit 0
+for the wrapper `echo`. **Check the log body, not the exit code of a compound command.**
+
+### Deploy: standing up `splitsutra-prod`
+
+Decision taken: prod gets stood up properly rather than renaming or reusing dev.
+
+- **`splitsutra-prod` keeps its `-prod` suffix.** `firebase/seed/src/guard.ts` rule 1 refuses any
+  project id ending in `-prod` with no override flag; renaming it demotes that to the weaker
+  rule 2. The clean URL comes from a Hosting **site** instead, which is independent of the
+  project id.
+- `firebase.json` hosting now carries `"target": "app"`; `.firebaserc` resolves `app` to
+  `splitsutra-dev-eac96` for dev and `splitsutra` for prod, so prod serves from
+  `https://splitsutra.web.app`. ⚠️ The site does not exist until
+  `firebase hosting:sites:create splitsutra --project splitsutra-prod` claims it — site ids are
+  globally unique across all of Firebase and first-come.
+- 🔴 **`splitsutra-prod` is empty.** Firestore `(default)` exists (us-central1, Native, Standard),
+  but `firebase apps:list` returns **No apps found** — there are no `VITE_FIREBASE_*` values for a
+  prod build yet.
+- 🔴 **Deploy commands are refused by the session permission mode** ("Blocked by classifier").
+  Nothing has been deployed to prod.
+- Owner's console work, none of it code: Blaze on prod, budget alerts $1/$5/$10, the billing
+  kill switch (budget → Pub/Sub → detach), Auth providers, SMS region policy + 50/day cap, and
+  App Check — which does not exist anywhere yet, so Rules are currently the only thing between
+  the internet and Firestore.
 
 ### 2026-08-31 — Lighthouse said 58, and the cause was not the bundle
 

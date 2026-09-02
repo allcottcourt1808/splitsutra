@@ -90,24 +90,53 @@ run is not a harness.
 
 ## 6. Integration test harness
 
-> 🔴 **Status 2026-08-31: `firebase/tests/integration/` does not exist.** The `integration`
-> Vitest project points at `tests/integration/**/*.test.ts` and matches nothing, so
-> `pnpm test:integration` boots the emulators, runs zero tests, and exits 0. Nothing in §6
-> below has been started. Every integration item in phases 06–08 — "`onExpenseWritten`
-> produces the expected balances", "firing the trigger twice is idempotent" — is blocked here.
+> ✅ **Built. 19 tests across `balances.test.ts` and `invites.test.ts`, green against the
+> emulator suite**, and wired into CI alongside `test:rules`.
 >
-> `firebase/tests/rules/` **is** real (9 suites), so the emulator plumbing itself works; what
-> is missing is the admin-SDK harness and the `waitFor` helper.
+> ⚠️ **Deviation from the harness sketched below, and it is deliberate.** §6 and docs/16 §4
+> both describe an **admin-SDK** harness: set `FIRESTORE_EMULATOR_HOST`, `initializeApp`, write
+> documents as the server. The suite instead drives **real client SDK apps holding real ID
+> tokens from the Auth emulator**, and reaches for privilege only through
+> `@firebase/rules-unit-testing`'s `withSecurityRulesDisabled`.
+>
+> The reason is that an admin-SDK harness bypasses Rules entirely, so it cannot express the
+> claims that matter most here: that a client's write is _refused_ and the Function-computed
+> value survives it. Those are pipeline claims, not rule claims, and they need a client that
+> Rules actually judge. Privileged access is still available for setup and for polling —
+> `serverDoc` / `serverBalances` — which is all the sketch used it for anyway.
+>
+> 🔴 **The trap that cost the first attempt.** `emulators:exec` starts the Functions emulator,
+> fails to load the code inside a **10 second** discovery budget, prints
+> `Cannot determine backend specification. Timeout after 10000` — and then **runs the tests
+> anyway**, against a suite with zero functions registered. All ten tests failed 20 seconds
+> apart on their own `waitFor`, which reads as ten broken tests rather than one missing
+> backend. Cold import measured at **65s** on Windows (2.1s warm — pnpm's node_modules is
+> thousands of small files). `scripts/emulators.mjs` had already diagnosed and fixed this for
+> `pnpm emulators`; `test:integration` called the CLI directly and never got the fix. It now
+> goes through `scripts/test-integration.mjs`, which sets the timeout to 120s **and** rebuilds
+> the esbuild bundle first.
 
-- [ ] 🔴 `firebase/tests/integration/setup.ts` setting `FIRESTORE_EMULATOR_HOST` and
-      `FIREBASE_AUTH_EMULATOR_HOST` **before** importing `firebase-admin`
-- [ ] 🔴 `initializeApp({ projectId: 'demo-integration' })`
-- [ ] 🔴 **`waitFor(fn, check, {timeout, interval})`** helper — polls until an assertion
-      holds, with the last observed value in the timeout message
-- [ ] 🔴 ⚠️ **Never `sleep()` waiting for a trigger.** Flaky when CI is slow, wasteful when
-      it's fast. Emulator trigger latency is ~1–3s and varies.
-- [ ] 🟡 Helper to reset Firestore between integration tests
-- [ ] 🟡 One proving test: write a doc, confirm it reads back
+- [x] 🔴 `firebase/tests/integration/helpers.ts` — emulator wiring, actors, builders, waits.
+      Supersedes the `setup.ts` + `initializeApp` pair above; see the deviation note.
+- [x] 🔴 **`waitFor(label, read, ready, timeoutMs)`** helper — polls until an assertion holds,
+      with the last observed value in the timeout message, because "timed out" alone cannot
+      tell "the trigger never fired" from "it fired and computed the wrong number".
+- [x] 🔴 ⚠️ **Never `sleep()` waiting for a trigger.** Held. There is also a `staysAt()`, which
+      is the opposite assertion and had to be written separately: `waitFor` returns on its
+      first read, so it cannot express "nothing happened" — needed for "the denied write did
+      not move the balance" and "the quarantined expense never entered the money".
+- [x] 🟡 Reset between tests — **deliberately NOT per-test.** `clearFirestore()` runs once per
+      file and isolation comes from a unique group id per test instead. Triggers are
+      asynchronous and at-least-once, so wiping between tests deletes documents a still-queued
+      invocation is about to write, surfacing as `5 NOT_FOUND: no entity to update`.
+- [x] 🟡 One proving test: 19 of them.
+
+🔴 **Still owed here.** Waits poll with rules OFF, never through an authenticated client. That
+is not tidiness: `isMember()` is an `exists()` on the member document, so polling for it as the
+client means a burst of `permission-denied` reads on one gRPC channel, which the Web SDK treats
+as permanent stream errors and backs off exponentially — the poll that finally succeeds is
+sitting in a 20–60s retry delay by then. Assertions still read as the client; only the waiting
+does not. Do not "simplify" a wait onto an authenticated read.
 
 ## 7. Component test harness
 

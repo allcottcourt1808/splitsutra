@@ -85,13 +85,25 @@ jobs:
       # absent, rather than passing by finding nothing to measure.
       - run: node scripts/bundle-budget.mjs
 
-      # ── Enabled in Phase 02b / Phase 10, once the harnesses and suites exist ───────────
-      # Uncomment together with the checklist item that creates them:
-      #   test:rules, test:integration  -> checklists/phase-02b-testing-setup.md §5, §6
-      #   test:e2e                      -> checklists/phase-02b-testing-setup.md §8
+      # ── Emulator-backed suites ────────────────────────────────────────────────────────
       #
-      # - run: pnpm test:rules          # emulator-backed security rules
-      # - run: pnpm test:integration    # emulator-backed Cloud Functions
+      # Both were commented out here while `firebase/tests/integration/` did not exist. That
+      # was worse than it looks: `pnpm test:integration` did not fail, it PASSED — vitest
+      # matched no files and exited 0 — so the script existed, looked green when anyone ran
+      # it, and proved nothing. A gate that cannot fail is not a gate.
+      #
+      # 🔴 test:integration MUST come after `pnpm build`, not before. Both write
+      # firebase/functions/lib/index.js: `pnpm build` emits the tsc version, which imports
+      # @splitsutra/core as a bare specifier that does not resolve at runtime, and
+      # scripts/build-functions.mjs emits the esbuild bundle with core inlined, which is the
+      # only loadable one. Last writer wins. scripts/test-integration.mjs rebuilds the bundle
+      # itself for exactly this reason, so the order here is belt and braces rather than the
+      # only thing holding it up.
+      - run: pnpm test:rules # emulator-backed security rules
+      - run: pnpm test:integration # emulator-backed Cloud Functions
+      #
+      # Still absent, so still commented — `e2e/` does not exist and `playwright.config.ts`
+      # points at it. checklists/phase-02b-testing-setup.md §8.
       #
       # ⚠️ Cache the Playwright browsers or CI re-downloads ~400 MB on every run.
       # - uses: actions/cache@v4
