@@ -1,12 +1,45 @@
+/**
+ * `/friends/:uid` — one friendship, its balance, and the expenses behind it.
+ *
+ * ## 🔴 A friendship IS a group, and that is where the money lives
+ *
+ * D2: accepting a friend request creates an **implicit** 1:1 group (`isImplicit: true`,
+ * `type: 'friend'`), written by `establishFriendship` through the Admin SDK. Adding an expense
+ * "with a friend" writes it to `groups/{friend.implicitGroupId}/expenses/…` like any other
+ * group expense, and `recomputeBalances` folds it into that group's member documents.
+ *
+ * So this screen reads the implicit group. It is not a special case of the money model — it is
+ * the ordinary one, reached by a different door. `groupRepo`'s list filter drops implicit groups
+ * (`!group.isImplicit`) so a friendship does not appear as a card in Groups; this screen is
+ * where it appears instead.
+ *
+ * ## 🔴 Why the balance does NOT come from `friend.balanceMinor`
+ *
+ * `users/{uid}/friends/{fid}` carries a `balanceMinor` map, and it is **not maintained**.
+ * `establishFriendship` seeds it and nothing in the codebase ever writes it again —
+ * `recomputeBalances` writes `groups/{gid}/members/{uid}.balanceMinor` and touches no friend
+ * document. Reading it meant this screen said "Settled up" no matter what anyone spent.
+ *
+ * That field is not being fixed by giving it a writer. A second trigger fanning group balances
+ * into friend documents would be a second cache of the same money, free to drift from the
+ * ledger — exactly what Article VI forbids and the reason `auditBalances` deliberately excludes
+ * it. The balance below comes from the implicit group's member document, which IS the one cache
+ * the server maintains (Article III), so there is nothing new to keep in step.
+ *
+ * ⚠️ `friend.balanceMinor` is therefore now read by nothing. Removing it is a schema change and
+ * a migration, so it stays for the moment — but do not reach for it.
+ *
+ * ## Sparse, not zero
+ *
+ * Article I: a settled balance is an **absent** entry, not `0`. An implicit group has exactly
+ * one currency, so there is at most one row here — built only when the balance is non-zero, so
+ * "settled up" stays the empty case rather than a row displaying nothing.
+ */
+
 import { useParams } from 'react-router';
 
-import { useFriend } from '@splitsutra/core/hooks';
-import {
-  CURRENCIES,
-  type BalanceByCurrency,
-  type CurrencyCode,
-  type MinorUnits,
-} from '@splitsutra/core';
+import { useAuth, useFriend, useGroup, useGroupMembers } from '@splitsutra/core/hooks';
+import { CURRENCIES, type CurrencyCode, type MinorUnits } from '@splitsutra/core';
 
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -18,13 +51,9 @@ import { Money } from '../components/Money';
 import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
+import { ExpenseLedger } from './group/ExpenseLedger';
 
 type BalanceEntry = readonly [CurrencyCode, MinorUnits];
-
-// D6 — one row per currency. Never summed, and never rendered as a total.
-function balanceEntries(balanceMinor: BalanceByCurrency): readonly BalanceEntry[] {
-  return Object.entries(balanceMinor) as BalanceEntry[];
-}
 
 function directionLabel(amount: MinorUnits): string | undefined {
   if (amount > 0) return 'owes you';
@@ -34,7 +63,15 @@ function directionLabel(amount: MinorUnits): string | undefined {
 
 export function FriendDetailScreen() {
   const { uid } = useParams();
+  const { user } = useAuth();
   const { friend, loading, error } = useFriend(uid ?? '');
+
+  // 🔴 Called unconditionally and BEFORE the early returns below, because hooks are not
+  // allowed after one. Both tolerate `''` by not subscribing at all, which is exactly the
+  // right behaviour while the friend document is still loading or turns out not to exist.
+  const implicitGroupId = friend?.implicitGroupId ?? '';
+  const { group } = useGroup(implicitGroupId);
+  const { activeMembers, me } = useGroupMembers(implicitGroupId);
 
   const header = (
     <ScreenHeader title={friend?.displayName ?? 'Friend'} backTo={paths.FriendList()} />
@@ -71,7 +108,11 @@ export function FriendDetailScreen() {
     );
   }
 
-  const balances = balanceEntries(friend.balanceMinor);
+  // Sparse — see the header. At most one row, because an implicit group has one currency.
+  const balances: readonly BalanceEntry[] =
+    group !== null && me !== null && me.balanceMinor !== 0
+      ? [[group.currency, me.balanceMinor] as BalanceEntry]
+      : [];
 
   return (
     <Screen header={header} label={friend.displayName}>
@@ -84,11 +125,7 @@ export function FriendDetailScreen() {
                 {friend.displayName}
               </Text>
               <Text variant="caption" tone="secondary">
-                {balances.length === 0
-                  ? 'Settled up'
-                  : balances.length === 1
-                    ? 'Outstanding in 1 currency'
-                    : `Outstanding in ${String(balances.length)} currencies`}
+                {balances.length === 0 ? 'Settled up' : 'Outstanding in 1 currency'}
               </Text>
             </Stack>
           </Row>
@@ -134,11 +171,22 @@ export function FriendDetailScreen() {
           <Text variant="caption" tone="secondary" weight="semibold">
             Shared expenses
           </Text>
-          <Card>
-            <Text variant="caption" tone="secondary">
-              {`Expenses you share with ${friend.displayName} will appear here once you add one.`}
-            </Text>
-          </Card>
+          {group === null ? (
+            <Card>
+              <Text variant="caption" tone="secondary">
+                Loading…
+              </Text>
+            </Card>
+          ) : (
+            // The same component `GroupDetailScreen` renders, pointed at the implicit group.
+            // Deliberately not a second, friend-shaped expense list: one ledger, one renderer.
+            <ExpenseLedger
+              groupId={implicitGroupId}
+              currency={group.currency}
+              selfUid={user?.uid ?? ''}
+              members={activeMembers}
+            />
+          )}
         </Stack>
       </Stack>
     </Screen>
