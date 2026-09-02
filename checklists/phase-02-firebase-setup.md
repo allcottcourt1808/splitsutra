@@ -27,12 +27,25 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
 - [ ] 🔴 Authorized domains: add `localhost` and both `*.web.app` domains
       — Google sign-in fails opaquely without this
 - [ ] 🟡 Enable **email enumeration protection** (Auth → Settings)
-- [ ] 🔴 ⚠️ **SMS region policy: deny all, allow `US` only.** Authentication → Settings.
+- [x] 🔴 ⚠️ **SMS region policy: allow-list.** Authentication → Settings.
       SMS toll fraud is the largest realistic cost risk on this project — attackers drive
       phone-auth flows to premium-rate international numbers and take a cut. Restricting
       destinations removes nearly the whole attack surface.
       See [../docs/18-cost-control.md](../docs/18-cost-control.md) §5.
+      **Done on `splitsutra-prod` 2026-09-02: Allow `US` + `IN`.** This item used to say
+      "US only"; India is where the app is actually used (`auditBalances` runs on
+      `Asia/Kolkata`), so US-only would have blocked its real users. Recorded rather than
+      quietly satisfied — a checklist that says one thing while the project does another is
+      how this file got reconciled once already.
+      🔴 **Allow-list, never deny-list.** A deny-list permits every region nobody thought to
+      name, which is exactly where premium-rate ranges live. An allow-list fails closed.
+      ⚠️ Still unset on `splitsutra-dev-eac96`.
 - [ ] 🔴 **Phone auth quota limit: 50 SMS/day** to start
+      🔴 **Not in the Firebase console.** Authentication → Settings has no SMS-volume field —
+      its "Sign-up quota" is new _account creations per hour_, a different control that caps
+      no SMS at all. The daily cap is a GCP quota: Google Cloud → IAM & Admin → Quotas,
+      service **Identity Toolkit API**. Mistaking the two leaves SMS spend uncapped while
+      looking done.
 - [ ] 🟡 **Add phone test numbers in the dev project** (e.g. `+1 5555555555` → `123456`).
       Use these for **all** development; real SMS costs money and is only needed for final
       device testing in Phase 11.
@@ -115,7 +128,8 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
 
 - [ ] Both Firebase projects exist, **on the free Spark plan** — no billing linked, $0 spent
 - [ ] Firestore created in **`us-central1`** in both
-- [ ] SMS region policy set to US-only; phone quota capped
+- [x] SMS region policy set (prod: allow US + IN). 🔴 Phone SMS/day quota still uncapped —
+      it is a GCP quota, not a Firebase setting; see §3.
 - [ ] All three sign-in providers enabled; test phone numbers configured in dev
 - [ ] `firebase emulators:start` runs clean and the web app talks to it
 - [ ] Deny-all rules deploy successfully to dev
