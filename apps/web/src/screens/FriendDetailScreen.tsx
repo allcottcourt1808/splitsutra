@@ -43,7 +43,7 @@
 
 import { useParams } from 'react-router';
 
-import { useAuth, useFriend, useGroup, useGroupMembers } from '@splitsutra/core/hooks';
+import { useAuth, useFriend, useGroup, useGroupMembers, useGroups } from '@splitsutra/core/hooks';
 import { CURRENCIES, type CurrencyCode, type MinorUnits } from '@splitsutra/core';
 
 import { Avatar } from '../components/Avatar';
@@ -57,6 +57,7 @@ import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
 import { ExpenseLedger } from './group/ExpenseLedger';
+import { SharedGroupRow } from './friend/SharedGroupRow';
 
 type BalanceEntry = readonly [CurrencyCode, MinorUnits];
 
@@ -77,6 +78,7 @@ export function FriendDetailScreen() {
   const implicitGroupId = friend?.implicitGroupId ?? '';
   const { group } = useGroup(implicitGroupId);
   const { activeMembers, me } = useGroupMembers(implicitGroupId);
+  const { groups } = useGroups();
 
   const header = (
     <ScreenHeader title={friend?.displayName ?? 'Friend'} backTo={paths.FriendList()} />
@@ -112,6 +114,18 @@ export function FriendDetailScreen() {
       </Screen>
     );
   }
+
+  /**
+   * The real groups both of you are in.
+   *
+   * `useGroups` already excludes implicit groups and soft-deleted ones, so this cannot pick up
+   * the friendship's own group and show it twice — once as "Balance" above and again as a row
+   * pretending to be an ordinary group.
+   */
+  const sharedGroups = groups.filter(
+    (candidate) =>
+      candidate.id !== implicitGroupId && candidate.memberIds.includes(friend.friendUid),
+  );
 
   // Sparse — see the header. At most one row, because an implicit group has one currency.
   const balances: readonly BalanceEntry[] =
@@ -170,6 +184,41 @@ export function FriendDetailScreen() {
               />
             )}
           />
+        </Stack>
+
+        <Stack gap="sm">
+          <Text variant="caption" tone="secondary" weight="semibold">
+            In shared groups
+          </Text>
+          {/* 🔴 The caption is load-bearing, not decoration. These amounts come from
+              `simplifyDebts`, so in a group of three or more they are a settlement SUGGESTION
+              and can pair two people who never shared an expense. On a friend's page that
+              number invites a stronger reading than it can carry, so it says what it is. */}
+          <List
+            data={sharedGroups}
+            aria-label="Balances in shared groups"
+            keyExtractor={(shared) => shared.id}
+            empty={
+              <Card>
+                <Text variant="caption" tone="secondary">
+                  {`You and ${friend.displayName} are not in any groups together yet.`}
+                </Text>
+              </Card>
+            }
+            renderItem={(shared) => (
+              <SharedGroupRow
+                group={shared}
+                friendUid={friend.friendUid}
+                selfUid={user?.uid ?? ''}
+              />
+            )}
+          />
+          {sharedGroups.length > 0 && (
+            <Text variant="caption" tone="secondary">
+              Amounts are the simplified way to settle each group, so they may involve people other
+              than the two of you.
+            </Text>
+          )}
         </Stack>
 
         <Stack gap="sm">
