@@ -75,10 +75,22 @@ const MEMBERS = [
   { uid: 'u3', displayName: 'Ravi Kumar', photoURL: null, role: 'member' },
 ] as unknown as GroupMember[];
 
+/** A friendship's implicit 1:1 group (D2) — what "add an expense with a friend" writes to. */
+const IMPLICIT_GROUP = {
+  id: 'g-implicit',
+  name: 'Priya Sharma',
+  currency: 'USD',
+  isImplicit: true,
+  memberIds: ['u1', 'u2'],
+} as unknown as Group;
+
+const PAIR = MEMBERS.slice(0, 2);
+
 const routes: RouteObject[] = [
   { path: '/expense/new', element: <AddExpenseScreen /> },
   { path: '/groups/:gid', element: <p>Landed on the group</p> },
   { path: '/groups', element: <p>Landed on the group list</p> },
+  { path: '/friends/:uid', element: <p>Landed on the friend</p> },
 ];
 
 function visit(at: string = `${paths.AddExpense()}?gid=g1`): HTMLElement {
@@ -247,6 +259,37 @@ describe('<AddExpenseScreen> — the three-tap path', () => {
 
     expect(container.textContent).toContain('2 decimal places');
     expect(button(container, 'Save').disabled).toBe(true);
+  });
+});
+
+describe('<AddExpenseScreen> — where it lands afterwards', () => {
+  it('goes to the group for an ordinary group', async () => {
+    const container = visitLoaded();
+
+    fillValidExpense(container);
+    await pressAndSettle(button(container, 'Save'));
+
+    expect(container.textContent).toContain('Landed on the group');
+  });
+
+  it('goes to the FRIEND for a friend expense, not the implicit group', async () => {
+    // 🔴 The implicit group is not a place in this product. `groupRepo` filters implicit groups
+    // out of the Groups tab, so landing on `/groups/g-implicit` gave a screen you could see
+    // exactly once and never navigate back to — and presented a friendship as a group, which is
+    // the internal model leaking out. The friendship's own screen is where the expense lives.
+    const container = visit(`${paths.AddExpense()}?gid=g-implicit`);
+    act(() => {
+      groupFeed().next([IMPLICIT_GROUP]);
+    });
+    act(() => {
+      memberFeed().next(PAIR);
+    });
+
+    fillValidExpense(container);
+    await pressAndSettle(button(container, 'Save'));
+
+    expect(container.textContent).toContain('Landed on the friend');
+    expect(container.textContent).not.toContain('Landed on the group');
   });
 });
 
