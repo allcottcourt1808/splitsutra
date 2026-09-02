@@ -101,6 +101,22 @@ describe('the route table', () => {
     expect(rendersInsideShell(SAMPLE_URLS.JoinGroup)).toBe(false);
   });
 
+  it('still puts those two inside the phone column', () => {
+    // 🔴 The regression this pins. Opting out of the TAB BAR is not the same decision as
+    // opting out of the COLUMN, and for a while it was the same route: both screens
+    // rendered with no width constraint at all. On a phone that is invisible, because the
+    // column is full-bleed below 640px anyway. On a desktop viewport `/login` put its
+    // heading against the left edge of the window while FirebaseUI, which centres its own
+    // container, sat in the middle — the same screen obeying two ideas of where the page is.
+    expect(wrappedBy(SAMPLE_URLS.SignIn, ROUTE_IDS.plainShellSignIn)).toBe(true);
+    expect(wrappedBy(SAMPLE_URLS.JoinGroup, ROUTE_IDS.plainShellGuarded)).toBe(true);
+  });
+
+  it('does not put a tabbed screen in the plain shell', () => {
+    expect(wrappedBy(SAMPLE_URLS.GroupList, ROUTE_IDS.plainShellSignIn)).toBe(false);
+    expect(wrappedBy(SAMPLE_URLS.GroupList, ROUTE_IDS.plainShellGuarded)).toBe(false);
+  });
+
   it('renders every other screen inside the tab shell', () => {
     const outside = new Set<ScreenName>(['SignIn', 'JoinGroup']);
     for (const [screen, url] of Object.entries(SAMPLE_URLS)) {

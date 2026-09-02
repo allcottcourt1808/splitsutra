@@ -52,7 +52,7 @@ export function SignInScreen() {
 
   return (
     <Screen label="Sign in to SplitSutra">
-      <Stack gap="lg" justify="center" flex="1">
+      <Stack gap="lg" justify="center" flex="1" className={styles.signInColumn}>
         <Stack gap="xs">
           <Text as="h1" variant="display">
             SplitSutra

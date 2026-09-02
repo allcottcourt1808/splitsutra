@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#54 merged. One branch open: `test/firestore-integration`.
+## State: PRs #1–#55 merged. No branch open. **PROD IS DEPLOYED — <https://splitsutra.web.app>**
 
 **#48** (`fix/friend-lookup-validation`) is merged. It fixed two bugs reported off the live dev
 backend, both on Add Friend:
@@ -74,6 +74,63 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-02 — splitsutra-prod is live
+
+**<https://splitsutra.web.app>** — hosting, rules, indexes and all **17 functions** on
+`splitsutra-prod`. The project keeps its `-prod` id (seed guard rule 1); the clean URL is a
+named Hosting **site**, resolved through the `app` target in `.firebaserc`.
+
+| Piece                                       | State                                                          |
+| ------------------------------------------- | -------------------------------------------------------------- |
+| Hosting                                     | ✅ site `splitsutra`, 20 files, 6 requests to boot             |
+| Firestore rules + indexes                   | ✅ released                                                    |
+| 12 callables + 4 triggers + `auditBalances` | ✅ 17 live                                                     |
+| Artifact Registry cleanup                   | ✅ 30 days (phase-11 §2b)                                      |
+| Auth providers                              | 🔴 **none enabled — nobody can sign in**                       |
+| App Check                                   | 🔴 does not exist; Rules are the only boundary on a public URL |
+| SMS region policy + 50/day                  | 🔴 unset                                                       |
+| Budget alerts + kill switch                 | 🔴 unset                                                       |
+
+✅ **The invoker binding applied on its own, and that is the whole point of a fresh project.**
+An unauthenticated POST to `sendFriendRequest` and `recomputeGroupBalances` both answer
+**401 `{"error":{"message":"Sign in required.","status":"UNAUTHENTICATED"}}`** — the function's
+own `requireAuth`, so the request reached it. A 403 would have meant Cloud Run rejected it first,
+which is the `internal [0]` state dev spent an afternoon in. `invoker: 'public'` in
+`CALLABLE_OPTS` is written by firebase-tools **only on create**, and on prod everything was a
+create. Nothing needed granting by hand.
+
+🪤 **The four Firestore triggers failed on the first deploy and it was not a code fault.**
+`Permission denied while using the Eventarc Service Agent` on all four — the CLI says so itself:
+"Since this is your first time using 2nd gen functions, we need a little bit longer to finish
+setting everything up." The 12 callables and `auditBalances` created fine in the same run; only
+Eventarc-backed triggers race. **A plain retry a few minutes later created all four.** This is
+very likely the same race that left dev's invoker bindings unwritten. ⚠️ Between the two deploys
+prod had every callable but **no `onExpenseWritten`** — an expense would have written to the
+ledger and produced no balances at all. Check `functions:list` after a first-time deploy rather
+than trusting a "Deploy complete".
+
+🪤 **The functions deploy exits 1 on a warning.** Both runs ended
+`Error: Functions successfully deployed but could not set up cleanup policy` — a non-zero exit
+for something that is not a deploy failure. Fixed with
+`firebase functions:artifacts:setpolicy --days 30`, which was an open phase-11 §2b item anyway.
+
+**`auditBalances` is finally running**, with Cloud Scheduler enabled by the deploy. ⚠️ Not
+independently verified — `gcloud` is not installed on this machine, so the job itself was not
+inspected; `functions:list` reporting it as `[scheduled]` is the only evidence. The drift alert
+is still unwritten.
+
+**Prod env:** `apps/web/.env.production.local` (gitignored). `.env.production.local` and not
+`.env.production` because `.env.local` points at dev and is loaded in every mode — Vite documents
+mode files as outranking it, but the cost of being wrong is a production URL silently talking to
+the dev database. Verified by grepping the built bundle: only `splitsutra-prod` and
+`splitsutra-prod.firebaseapp.com`. ⚠️ That file is local-only, so **CI cannot reproduce a prod
+build**; those values are public identifiers and belong in repository variables when CI deploys.
+
+✅ **#52 confirmed on real Hosting for the first time.** `/` boots in **six requests** with zero
+traffic to `apis.google.com`, `gapi` or `/__/auth/iframe`, `SignInScreen-*.js` split out, and
+headers exactly as `firebase.json` specifies: `no-cache` on `/`, `/index.html` and `/sw.js`,
+`immutable` for a year on `/assets/**`. A deep link returns 200 and the guard redirects.
 
 ### 2026-09-01 — the integration suite was fine; the emulator never loaded the functions
 

@@ -46,7 +46,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 
 import { RedirectIfAuthed, RequireAuth } from './auth/AuthGuards';
 import { Screen } from './components/Layout';
-import { AppShell } from './navigation/AppShell';
+import { AppShell, PlainShell } from './navigation/AppShell';
 import { ROUTE_PATTERNS, paths, type ScreenName } from './navigation/paths';
 import { AccountScreen } from './screens/AccountScreen';
 import { ActivityScreen } from './screens/ActivityScreen';
@@ -187,9 +187,15 @@ const outsideShell = screenNames.filter((name) => OUTSIDE_SHELL.has(name) && nam
  * `path === undefined`. Before the guards existed there was exactly one pathless route and
  * that was enough to identify it; with three, a test asserting "renders inside the shell"
  * would pass for a screen wrapped only by a guard.
+ *
+ * `plainShell` is the fourth: the phone column WITHOUT the tab bar. "Outside the tab shell"
+ * and "outside the column" used to be the same route, which is exactly the conflation that
+ * left `/login` full-bleed on a desktop viewport.
  */
 export const ROUTE_IDS = {
   shell: 'app-shell',
+  plainShellSignIn: 'plain-shell-sign-in',
+  plainShellGuarded: 'plain-shell-guarded',
   requireAuth: 'require-auth',
   redirectIfAuthed: 'redirect-if-authed',
 } as const;
@@ -203,14 +209,24 @@ export const router = createBrowserRouter([
   {
     id: ROUTE_IDS.redirectIfAuthed,
     element: <RedirectIfAuthed />,
-    children: [routeFor('SignIn')],
+    // `<PlainShell>` and not a bare screen: opting out of the TAB BAR is not the same
+    // decision as opting out of the phone column, and rendering the screen directly here
+    // conflated them. See the note on `PhoneColumn` in AppShell.tsx.
+    children: [
+      { id: ROUTE_IDS.plainShellSignIn, element: <PlainShell />, children: [routeFor('SignIn')] },
+    ],
   },
 
   {
     id: ROUTE_IDS.requireAuth,
     element: <RequireAuth />,
     children: [
-      ...outsideShell.map(routeFor),
+      // Same reasoning as above — guarded, no tab bar, still the same column.
+      {
+        id: ROUTE_IDS.plainShellGuarded,
+        element: <PlainShell />,
+        children: outsideShell.map(routeFor),
+      },
       {
         id: ROUTE_IDS.shell,
         element: <AppShell />,
