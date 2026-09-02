@@ -117,6 +117,13 @@ describe('establishFriendship — the implicit group', () => {
   });
 });
 
+describe('ADR-13 — promotion by the first expense', () => {
+  it('starts hidden, with no expenses', async () => {
+    const group = await serverDoc(`groups/${implicitGid}`);
+    expect(group?.['isImplicit']).toBe(true);
+  });
+});
+
 describe('the friend balance projection', () => {
   it('projects the computed balance onto BOTH friend documents', async () => {
     // Alice pays 40.00 for something they split evenly.
@@ -143,6 +150,23 @@ describe('the friend balance projection', () => {
     // opposite views of the same debt.
     expect(projected[alice.uid]).toEqual({ [GROUP_CURRENCY]: 2000 });
     expect(projected[bob.uid]).toEqual({ [GROUP_CURRENCY]: -2000 });
+
+    // 🔴 ADR-13 and the trap it sets, in one assertion pair. The expense promoted the
+    // friendship to an ordinary group — and the projection, which used to be gated on
+    // `isImplicit`, still ran. Gating it on the flag meant it stopped at exactly the moment a
+    // pair started owing each other money, putting "Settled up" in the Friends list next to a
+    // real debt. If the first of these ever fails, promotion broke; if the second fails while
+    // the first passes, something re-keyed the projection back onto `isImplicit`.
+    const promoted = await waitFor(
+      'the first expense to promote the friendship',
+      () => serverDoc(`groups/${implicitGid}`),
+      (group) => group?.['isImplicit'] === false,
+    );
+    expect(promoted?.['isImplicit']).toBe(false);
+    // Nothing moved: same group, same id, same type, still the pair's friendship.
+    expect(promoted?.['type']).toBe('friend');
+    const friendDoc = await serverDoc(`users/${alice.uid}/friends/${bob.uid}`);
+    expect(friendDoc?.['implicitGroupId']).toBe(implicitGid);
 
     // 🔴 The projection agrees with the authoritative cache it was copied from. If these two
     // ever disagree, the member document is right and the projection is stale.

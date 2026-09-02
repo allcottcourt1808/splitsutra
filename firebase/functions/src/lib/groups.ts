@@ -185,3 +185,45 @@ export function markMemberLeftInTransaction(
     memberCount: remaining.length,
   });
 }
+
+/**
+ * ADR-13 — promote a friendship's group to an ordinary one the first time it holds an expense.
+ *
+ * ## Why a friendship starts hidden, and why it should not stay hidden
+ *
+ * D2 makes a friendship a group with `isImplicit: true`, filtered out of the Groups tab. That
+ * is right for a friendship with no money in it: fifty friends would otherwise mean fifty
+ * one-person cards, and the Groups tab would stop being useful.
+ *
+ * The cost only appears once money arrives. Every group feature then needs a second,
+ * friend-shaped entry point, because the group screens are unreachable — the expense list, the
+ * balance, settling up and a server-side balance projection were each built or fixed separately
+ * for exactly this reason, and comments, activity and editing would have been next. A hidden
+ * group is a group whose features have to be re-implemented one at a time.
+ *
+ * So the moment a friendship has an expense it becomes an ordinary group and inherits all of
+ * them. Nothing moves: the group keeps its id, so `friends/{fid}.implicitGroupId` still points
+ * at it, the ledger is untouched, and the friend screen keeps working.
+ *
+ * `type` stays `'friend'` — it is in `GROUP_TYPES` and the UI labels it "Friends", so the group
+ * says what it is rather than pretending to be a trip. Only `isImplicit` changes.
+ *
+ * ## 🔴 Diff-guarded, and it has to be
+ *
+ * Writes ONLY when `isImplicit` is actually true. `onExpenseWritten` calls this on every expense
+ * write, and an unconditional update would rewrite the group document on every expense in every
+ * friendship forever (Article XI). It also cannot loop: `onGroupCreated` triggers on document
+ * CREATE, so updating a group re-fires nothing.
+ *
+ * ⚠️ Promotion is one-way and there is no demotion. Deleting the last expense leaves an ordinary
+ * group behind rather than hiding it again — reappearing and disappearing from the Groups tab as
+ * a balance crosses zero would be worse than staying.
+ */
+export async function promoteFriendshipIfNeeded(gid: string): Promise<boolean> {
+  const ref = db.doc(`groups/${gid}`);
+  const snap = await ref.get();
+  if (snap.data()?.['isImplicit'] !== true) return false;
+
+  await ref.update({ isImplicit: false, lastActivityAt: FieldValue.serverTimestamp() });
+  return true;
+}
