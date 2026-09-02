@@ -186,6 +186,18 @@ export function FriendDetailScreen() {
           />
         </Stack>
 
+        {/* 🔴 The only route to settling up with a friend.
+            `SettleUp` lives at `/groups/:gid/settle` and was reachable ONLY from
+            GroupDetailScreen and GroupBalancesScreen — both group screens. A friendship's
+            implicit group is filtered out of the Groups tab, so there was no path to it at all:
+            you could run up a balance with a friend and had no way to clear it.
+
+            Shown only once there is something to settle. A "Settle up" button on a pair who owe
+            each other nothing is an invitation to record a payment that did not happen. */}
+        {balances.length > 0 && (
+          <Button to={paths.SettleUp({ gid: implicitGroupId })}>Settle up</Button>
+        )}
+
         <Stack gap="sm">
           <Text variant="caption" tone="secondary" weight="semibold">
             In shared groups

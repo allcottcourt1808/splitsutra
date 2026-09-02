@@ -53,6 +53,7 @@ import { ListRow } from '../components/ListRow';
 import { Text } from '../components/Text';
 import { ModalHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
+import { groupActionDestination } from '../navigation/groupDestination';
 
 const NOTE_MAX = 200;
 
@@ -177,7 +178,10 @@ export function SettleUpScreen() {
         date: parsedDay,
         note: note.trim().length === 0 ? null : note.trim(),
       });
-      await navigate(paths.GroupDetail({ gid: groupId }), { replace: true });
+      // 🔴 Not `GroupDetail`. Settling up with a FRIEND operates on the friendship's implicit
+      // group, whose screen is unreachable from the Groups tab — landing there after a payment
+      // strands you. See `groupActionDestination`.
+      await navigate(groupActionDestination(group, groupId, user?.uid ?? ''), { replace: true });
     } catch (cause: unknown) {
       setFailure(
         cause instanceof Error
@@ -191,7 +195,7 @@ export function SettleUpScreen() {
   const header = (
     <ModalHeader
       title="Settle up"
-      dismissTo={paths.GroupDetail({ gid: groupId })}
+      dismissTo={groupActionDestination(group, groupId, user?.uid ?? '')}
       action={
         <Button
           variant="ghost"

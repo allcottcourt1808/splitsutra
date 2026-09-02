@@ -27,6 +27,7 @@ import { Screen, Stack } from '../components/Layout';
 import { Text } from '../components/Text';
 import { ModalHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
+import { groupActionDestination } from '../navigation/groupDestination';
 import { ExpenseForm } from './expense/ExpenseForm';
 import { useComposerGroups, useComposerMembers } from './expense/composer';
 import {
@@ -40,32 +41,6 @@ import {
 function describeSaveError(cause: unknown): string {
   const message = cause instanceof Error ? cause.message : String(cause);
   return message.length > 0 ? message : 'Could not save that expense. Try again.';
-}
-
-/**
- * Where to land after a successful save.
- *
- * 🔴 A friend expense goes into the friendship's **implicit** group (D2), and `GroupDetail` for
- * an implicit group is a dead end: `groupRepo` filters implicit groups out of the Groups tab, so
- * the screen you land on is one you can see exactly once and can never navigate back to. It also
- * presents a friendship as a group, which is the internal model leaking into the product.
- *
- * The friendship's own screen is the durable home for that expense, and now lists it.
- *
- * Falls back to the group screen if the other member cannot be identified — a 1:1 group with no
- * second member should not exist, and losing the redirect is a better failure than a broken URL.
- */
-function destinationAfterSave(
-  group: { readonly isImplicit: boolean; readonly memberIds: readonly string[] } | null,
-  groupId: string,
-  selfUid: string,
-): string {
-  if (group?.isImplicit !== true) return paths.GroupDetail({ gid: groupId });
-
-  const friendUid = group.memberIds.find((memberId) => memberId !== selfUid);
-  return friendUid === undefined
-    ? paths.GroupDetail({ gid: groupId })
-    : paths.FriendDetail({ uid: friendUid });
 }
 
 export function AddExpenseScreen() {
@@ -121,7 +96,7 @@ export function AddExpenseScreen() {
     setSaveError(null);
     try {
       await createExpense(draft, selfUid, expenseId);
-      void navigate(destinationAfterSave(group, draft.groupId, selfUid), { replace: true });
+      void navigate(groupActionDestination(group, draft.groupId, selfUid), { replace: true });
     } catch (cause: unknown) {
       setSaveError(describeSaveError(cause));
     } finally {

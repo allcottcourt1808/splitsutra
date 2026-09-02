@@ -253,6 +253,35 @@ describe('<FriendDetailScreen>', () => {
     expect(text).toContain('30.00');
   });
 
+  it('offers a way to settle up when there is a balance', () => {
+    // 🔴 Before this, settling up with a friend was IMPOSSIBLE from the UI. `SettleUp` lives
+    // at /groups/:gid/settle and was linked only from the two group screens, and a
+    // friendship's implicit group is filtered out of the Groups tab — so you could run up a
+    // balance with a friend and have no route to clear it.
+    state.friend = friendWith({});
+    state.group = implicitGroup('USD');
+    state.me = myMember(2500);
+
+    const container = visit();
+
+    expect(
+      container.querySelector(`a[href="${paths.SettleUp({ gid: 'g-implicit' })}"]`),
+    ).not.toBeNull();
+  });
+
+  it('does not offer to settle up when the pair is square', () => {
+    // A settle-up button on a settled pair invites recording a payment that did not happen.
+    state.friend = friendWith({});
+    state.group = implicitGroup('USD');
+    state.me = myMember(0);
+
+    const container = visit();
+
+    expect(
+      container.querySelector(`a[href="${paths.SettleUp({ gid: 'g-implicit' })}"]`),
+    ).toBeNull();
+  });
+
   it('links each shared group to that group', () => {
     state.friend = friendWith({});
     state.group = implicitGroup();
