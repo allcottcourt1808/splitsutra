@@ -23,3 +23,26 @@
   flex: 0 0 auto;
   min-block-size: var(--splitsutra-space-xl);
 }
+
+/**
+ * The sign-in column.
+ *
+ * 🔴 This exists because two things on this screen had different ideas about where the page
+ * is. FirebaseUI centres its own `.firebaseui-container` and caps it at 360px; the heading
+ * and the reassurance line are ordinary screen content and filled whatever width they were
+ * given. On a phone those are the same thing, so it looked right for the entire life of the
+ * screen. On a 1400px window the heading sat at the far left with the buttons in the middle.
+ *
+ * Matching the widget rather than overriding it: `--splitsutra-size-form-max-width` IS 360px,
+ * the value FirebaseUI uses, so the frame agrees with the widget instead of fighting its
+ * stylesheet — which is the thing this file has always refused to do, and should keep
+ * refusing. If FirebaseUI's cap ever changes, change the token, not a `:global` override.
+ *
+ * `margin-inline: auto` and not `align-items: center` on the parent: the children should keep
+ * filling this column and stay left-aligned with each other. It is the COLUMN that centres.
+ */
+.signInColumn {
+  inline-size: 100%;
+  max-inline-size: var(--splitsutra-size-form-max-width);
+  margin-inline: auto;
+}

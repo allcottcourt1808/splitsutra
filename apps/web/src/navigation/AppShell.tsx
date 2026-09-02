@@ -25,19 +25,59 @@
  *   (checklists/phase-04-design-system.md §3, 🟡).
  */
 
+import type { ReactNode } from 'react';
 import { Outlet } from 'react-router';
 import styles from './navigation.module.css';
 import { TabBar } from './TabBar';
 
-export function AppShell() {
+/**
+ * The phone column, without deciding what goes in it.
+ *
+ * `.viewport` centres, `.column` caps the width at `--splitsutra-size-content-max-width`
+ * (640px) — docs/07 §Responsive: "full-bleed below 640px, a centred 640px column above it.
+ * The app is a phone app that happens to run in a browser."
+ *
+ * 🔴 Extracted because the column was welded to the tab bar, and the two are not the same
+ * decision. `<AppShell>` supplied both, so the screens that opt OUT of the tab bar —
+ * `SignIn` and `JoinGroup`, the `OUTSIDE_SHELL` set in routes.tsx — silently opted out of
+ * the column as well and rendered full-bleed. On a desktop viewport that was visible as
+ * misalignment rather than as a missing constraint: `/login`'s heading sat hard against the
+ * left edge of a 1600px window while FirebaseUI's own container, which centres itself, sat
+ * in the middle. Two elements on the same screen obeying two different ideas of where the
+ * page is. Nothing looked wrong on a phone, which is where it was always tested.
+ */
+function PhoneColumn({ children }: { children: ReactNode }) {
   return (
     <div className={styles.viewport}>
-      <div className={styles.column}>
-        <div className={styles.content}>
-          <Outlet />
-        </div>
-        <TabBar />
-      </div>
+      <div className={styles.column}>{children}</div>
     </div>
+  );
+}
+
+export function AppShell() {
+  return (
+    <PhoneColumn>
+      <div className={styles.content}>
+        <Outlet />
+      </div>
+      <TabBar />
+    </PhoneColumn>
+  );
+}
+
+/**
+ * The same column with no tab bar — for the guarded screens that are not a tab.
+ *
+ * A screen reached by deep link (`/invite/:token`) or before there is a session (`/login`)
+ * has nowhere for a tab bar to navigate to, but it is still the same app on the same
+ * viewport and belongs in the same column.
+ */
+export function PlainShell() {
+  return (
+    <PhoneColumn>
+      <div className={styles.content}>
+        <Outlet />
+      </div>
+    </PhoneColumn>
   );
 }

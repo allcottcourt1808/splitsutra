@@ -164,6 +164,13 @@ export interface ThemeTokens {
     readonly tabBar: number;
     /** docs/07 §Responsive — the phone column never grows past this. */
     readonly contentMaxWidth: number;
+    /**
+     * A single column of form controls. Narrower than `contentMaxWidth`, because a 640px-wide
+     * text input is harder to use rather than easier, and because FirebaseUI caps its own
+     * `.firebaseui-container` at exactly this width — so anything framing the widget has to
+     * agree with it or the two disagree visibly about where the page is.
+     */
+    readonly formMaxWidth: number;
     /** Below this width the layout is full-bleed. */
     readonly phoneBreakpoint: number;
   };
@@ -206,6 +213,7 @@ const size = {
   avatarLg: 64,
   tabBar: 56,
   contentMaxWidth: 640,
+  formMaxWidth: 360,
   phoneBreakpoint: 640,
 } as const;
 
