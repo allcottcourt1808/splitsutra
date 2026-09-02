@@ -49,39 +49,56 @@ const TYPE_GLYPH: Readonly<Record<GroupType, string>> = {
   couple: '💞',
 };
 
-/** A currency, and the total owed to / owed by the user across the groups using it. */
+/** A currency, and the user's net position across every group using it. */
 interface CurrencyLine {
   readonly currency: CurrencyCode;
-  readonly owedMinor: number;
-  readonly oweMinor: number;
+  readonly netMinor: number;
 }
 
 /**
- * The overall summary, grouped by currency.
+ * The overall summary: one net figure per currency.
  *
- * Amounts are added only *within* a currency. Owed and owing are kept apart rather than netted:
- * "you are owed ₹3,000 and you owe ₹500" is two true statements, while "₹2,500" hides the fact
- * that somebody is waiting to be paid.
+ * 🔴 **Netted across directions, and NEVER across currencies.** The second half is Article I and
+ * D6 and is not a preference — adding `USD` to `INR` produces a number that means nothing. One
+ * line per currency, always.
+ *
+ * The first half was the other way round until now, showing "You are owed $65" and "You owe
+ * $194.17" as separate lines. The reasoning was that netting hides the fact that somebody is
+ * waiting to be paid — which is true, and was the right call while this card was the only
+ * summary on the screen.
+ *
+ * It is not the only summary any more. Every group is listed directly beneath it with its own
+ * signed amount and its own counterparty, so "who is waiting to be paid" is answered in more
+ * detail one line further down than this card could ever manage. Repeating a coarser version of
+ * it above meant the top of the screen was two numbers that had to be combined mentally before
+ * they said anything.
+ *
+ * ⚠️ What is genuinely lost: at a glance you can no longer tell a settled-in-both-directions
+ * user (`+500` and `−500`) from a truly settled one — both now read as absent. The group rows
+ * below distinguish them, which is the whole basis for this change; if that ever stops being
+ * true, this decision has to be revisited with it.
  */
 function summarise(
   groups: readonly Group[],
   balanceByGroup: ReadonlyMap<string, MinorUnits>,
 ): readonly CurrencyLine[] {
-  const lines = new Map<CurrencyCode, { owedMinor: number; oweMinor: number }>();
+  const lines = new Map<CurrencyCode, number>();
 
   for (const group of groups) {
     const balance = balanceByGroup.get(group.id);
     if (balance === undefined || balance === 0) continue;
 
-    const line = lines.get(group.currency) ?? { owedMinor: 0, oweMinor: 0 };
-    if (balance > 0) line.owedMinor += balance;
-    else line.oweMinor += -balance;
-    lines.set(group.currency, line);
+    lines.set(group.currency, (lines.get(group.currency) ?? 0) + balance);
   }
 
-  return [...lines]
-    .map(([currency, line]) => ({ currency, ...line }))
-    .sort((a, b) => a.currency.localeCompare(b.currency));
+  return (
+    [...lines]
+      .map(([currency, netMinor]) => ({ currency, netMinor }))
+      // A currency whose groups cancel out exactly is dropped rather than shown as zero —
+      // Article I: settled is an ABSENT entry, not a `0` row.
+      .filter((line) => line.netMinor !== 0)
+      .sort((a, b) => a.currency.localeCompare(b.currency))
+  );
 }
 
 export function GroupsScreen() {
@@ -137,24 +154,13 @@ export function GroupsScreen() {
                 <Stack gap="xs" as="ul" aria-label="Overall balance by currency">
                   {lines.map((line) => (
                     <Stack as="li" key={line.currency} gap="xs">
-                      {line.owedMinor > 0 && (
-                        <Money
-                          minorUnits={line.owedMinor as MinorUnits}
-                          currency={line.currency}
-                          tone="positive"
-                          label="You are owed"
-                          size="large"
-                        />
-                      )}
-                      {line.oweMinor > 0 && (
-                        <Money
-                          minorUnits={-line.oweMinor as MinorUnits}
-                          currency={line.currency}
-                          tone="negative"
-                          label="You owe"
-                          size="large"
-                        />
-                      )}
+                      <Money
+                        minorUnits={line.netMinor as MinorUnits}
+                        currency={line.currency}
+                        tone="auto"
+                        label={line.netMinor > 0 ? 'You are owed' : 'You owe'}
+                        size="large"
+                      />
                     </Stack>
                   ))}
                 </Stack>
