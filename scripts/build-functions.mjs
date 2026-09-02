@@ -27,7 +27,7 @@
  * same reason (see CLAUDE.md, "Two resolvers").
  */
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 
@@ -118,31 +118,52 @@ const external = Object.keys(manifest.dependencies ?? {}).filter(
 
 console.log('build-functions: bundling core into %s (external: %s)', ENTRY, external.join(', '));
 
-const bundle = spawnSync(
-  process.execPath,
-  [
-    requireFromFunctions.resolve('esbuild/bin/esbuild'),
-    ENTRY,
-    '--bundle',
-    '--platform=node',
-    '--format=esm',
-    '--target=node24',
-    `--outfile=${BUNDLE}`,
+/**
+ * esbuild is driven through its JS API, NOT by spawning `node esbuild/bin/esbuild`.
+ *
+ * 🔴 That path is not the same kind of file on every platform. On Windows it is a JavaScript
+ * shim that re-execs the real `.exe`, so handing it to `node` works. On Linux it is the
+ * **native binary itself**, and `node` tries to parse an ELF header as JavaScript:
+ *
+ *     node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/bin/esbuild:1
+ *     ELF^B^A^A^@ ...
+ *     SyntaxError: Invalid or unexpected token
+ *
+ * This script only ever ran on Windows — it is the `firebase.json` predeploy hook, and every
+ * deploy so far has been by hand from this machine — so the assumption held for months and
+ * broke the first time CI ran it. The JS API has no bin file and no platform branch.
+ *
+ * Resolved from the functions package rather than the root: esbuild is ITS devDependency, and
+ * under pnpm a package is only reachable from the workspace project that declares it.
+ */
+const esbuildEntry = requireFromFunctions.resolve('esbuild');
+const esbuildModule = await import(pathToFileURL(esbuildEntry).href);
+// esbuild's entry is CJS. Node's named-export detection usually finds `build`, but the
+// interop shape is not something to bet a deploy on, so both are accepted.
+const esbuild = esbuildModule.build === undefined ? esbuildModule.default : esbuildModule;
+
+try {
+  await esbuild.build({
+    entryPoints: [ENTRY],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node24',
+    outfile: BUNDLE,
+    logLevel: 'info',
     // Explicit, because `@splitsutra/core` is no longer a declared dependency of the functions
     // package (see "//no-core-dependency" in its package.json), so pnpm creates no node_modules
     // symlink for esbuild to follow. This is the runtime half of the tsconfig `paths` mapping.
-    `--alias:@splitsutra/core=${CORE_ENTRY}`,
-    ...external.map((name) => `--external:${name}`),
-    // Node built-ins. `--platform=node` already externalises them, but a bare `node:` specifier
-    // reaching esbuild unresolved is the failure that would otherwise surface at cold start.
-    '--external:node:*',
-  ],
-  { stdio: 'inherit' },
-);
-
-if (bundle.status !== 0) {
+    alias: { '@splitsutra/core': CORE_ENTRY },
+    // `node:*` because `--platform=node` already externalises the built-ins, but a bare `node:`
+    // specifier reaching esbuild unresolved is the failure that would otherwise surface at cold
+    // start rather than here.
+    external: [...external, 'node:*'],
+  });
+} catch {
+  // esbuild has already printed the diagnostic at logLevel 'info'.
   console.error('build-functions: bundling failed — not deploying.');
-  process.exit(bundle.status ?? 1);
+  process.exit(1);
 }
 
 // Replace the entry point in place, so `main` in package.json keeps pointing at lib/index.js and

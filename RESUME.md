@@ -109,6 +109,16 @@ wrapper rebuilds it itself rather than trusting call order.
 shell, so the quotes come out wrong. The symptom is **not** an error — `cmd` just sits there, no
 emulator binds a port, and the run hangs. Pass the whole command line as a single string.
 
+🔴 **`scripts/build-functions.mjs` was Windows-only and nobody knew.** It bundled by spawning
+`node node_modules/esbuild/bin/esbuild`. That path is **not the same kind of file on every
+platform**: on Windows it is a JavaScript shim that re-execs the real `.exe`, so `node` runs it
+fine; on Linux it is the **native binary**, and node parses an ELF header as JavaScript —
+`SyntaxError: Invalid or unexpected token`. The script is the `firebase.json` predeploy hook and
+every deploy so far was by hand from this machine, so the assumption held for months and broke
+**the first time CI ran it**. Now driven through esbuild's **JS API**, which has no bin file and
+no platform branch. Same 94,568-byte output. ⚠️ Anything else that spawns `node <some>/bin/<x>`
+deserves the same look — `typescript/bin/tsc` is genuinely JS everywhere, so that one is fine.
+
 🪤 **Two commands silently ran from the wrong directory this session.** The Bash cwd resets
 between turns, and `pnpm verify` "passed" without running at all —
 `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND` in a log nobody read, while the harness reported exit 0
