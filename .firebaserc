@@ -26,13 +26,39 @@
     "",
     "The project-level Resource Location ID still reads [Not specified] in projects:list. That",
     "is the default location for Storage and Hosting, NOT the Firestore location — it is set",
-    "separately, when the first Storage bucket is created."
+    "separately, when the first Storage bucket is created.",
+    "",
+    "TARGETS. firebase.json carries one hosting block with 'target': 'app', and the map below",
+    "resolves that name per project. The reason is the public URL: a deploy with no target goes",
+    "to the project's DEFAULT site, whose id is the project id, so prod would be served from",
+    "splitsutra-prod.web.app. A named Hosting site is independent of the project id, so prod",
+    "serves from splitsutra.web.app with the project keeping the -prod suffix that",
+    "firebase/seed/src/guard.ts rule 1 depends on.",
+    "",
+    "🔴 The 'splitsutra' site does not exist until somebody runs:",
+    "    firebase hosting:sites:create splitsutra --project splitsutra-prod",
+    "Site ids are globally unique across ALL Firebase projects and first-come, so that command",
+    "either claims the name or fails; there is no reserving it in this file. Until it succeeds,",
+    "a hosting deploy to prod fails on an unresolvable target rather than going somewhere wrong.",
+    "",
+    "Dev maps to its own default site, so nothing about the dev deploy changes."
   ],
   "projects": {
     "default": "splitsutra-dev-eac96",
     "dev": "splitsutra-dev-eac96",
     "prod": "splitsutra-prod"
   },
-  "targets": {},
+  "targets": {
+    "splitsutra-dev-eac96": {
+      "hosting": {
+        "app": ["splitsutra-dev-eac96"]
+      }
+    },
+    "splitsutra-prod": {
+      "hosting": {
+        "app": ["splitsutra"]
+      }
+    }
+  },
   "etags": {}
 }
