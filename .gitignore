@@ -55,3 +55,17 @@ yarn-debug.log*
 !.vscode/settings.json
 .DS_Store
 Thumbs.db
+
+# ── Agent worktrees ──────────────────────────────────────────────────────────
+# `git worktree` checkouts created for parallel agent runs. Each is a full copy of
+# the repo plus its own node_modules, so `git add -A` from the root would otherwise
+# offer to stage thousands of files from a sibling branch.
+#
+# Deliberately NOT `.claude/` wholesale: launch.json and skills/ are ordinary project
+# config that may well be worth committing, and a blanket ignore is how they would
+# quietly stop being an option.
+#
+# ⚠️ Removing one of these on Windows fails with "Filename too long" — the node_modules
+# tree exceeds MAX_PATH. `git worktree prune` deregisters it; deleting the directory
+# needs a long-path-aware tool.
+.claude/worktrees/

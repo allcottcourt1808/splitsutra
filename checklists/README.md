@@ -22,7 +22,7 @@ being brought up file by file as each phase is re-read.
 | [00](phase-00-prerequisites.md)     | Prerequisites & tooling       | 1–2 h    | 🟨 Mostly — trademark/domain clearance never run              |
 | [01](phase-01-foundation.md)        | Repo, monorepo, core scaffold | 1 day    | ✅ Done                                                       |
 | [02](phase-02-firebase-setup.md)    | Firebase projects & emulators | 0.5 day  | 🟨 Mostly — 🔴 **SMS region policy + 50/day cap still unset** |
-| [02b](phase-02b-testing-setup.md)   | **Testing framework setup**   | 1 day    | 🟨 Partial — unit + rules real; **e2e and integration empty** |
+| [02b](phase-02b-testing-setup.md)   | **Testing framework setup**   | 1 day    | 🟨 Partial — unit, rules, integration real; **e2e empty**     |
 | [03](phase-03-auth.md)              | Auth (FirebaseUI) & profiles  | 1.5 days | ✅ Done                                                       |
 | [04](phase-04-design-system.md)     | Tokens, components, app shell | 2 days   | 🟨 Mostly — no Skeleton/Toast/ErrorBoundary/404/gallery       |
 | [05](phase-05-friends-groups.md)    | Friends, groups, invites      | 2.5 days | ✅ Done                                                       |
@@ -42,10 +42,12 @@ Worst first. Each is written up where it lives.
 1. 🔴 **SMS region policy and the 50/day phone quota are still unset, with Blaze live.**
    phase-02 §3. This is the only item on the list that can cost real money to an attacker's
    schedule rather than ours, and it is a console setting, not code.
-2. 🔴 **`e2e/` and `firebase/tests/integration/` do not exist.** `playwright.config.ts` points
-   at two directories that were never created, so `pnpm test:e2e`, `pnpm test:smoke` and
-   `pnpm test:integration` all pass by matching nothing. Every E2E item in phases 05–09 and the
-   `axe-core` sweep are blocked on this. phase-09 §11.
+2. 🟡 **`e2e/` still does not exist; `firebase/tests/integration/` now does.** 19 tests over
+   the balance pipeline and the invite round-trip, green, and `test:rules` + `test:integration`
+   are both un-commented in CI — they were passing by matching nothing, which is worse than
+   failing. `playwright.config.ts` still points at an `e2e/` that was never created, so
+   `pnpm test:e2e` and `pnpm test:smoke` remain vacuous, and every E2E item in phases 05–09
+   plus the `axe-core` sweep are still blocked. phase-09 §11, phase-02b §8.
 3. ✅ ~~**Main chunk is 418 KB gzipped against a 350 KB budget (NFR-2).**~~ **Fixed.** `/login`
    is now the one code-split route, which takes `firebaseui` + `firebase/compat` off the
    critical path: **419,269 B → 346,051 B gzipped.** `node scripts/bundle-budget.mjs` runs in
