@@ -39,7 +39,14 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
       how this file got reconciled once already.
       🔴 **Allow-list, never deny-list.** A deny-list permits every region nobody thought to
       name, which is exactly where premium-rate ranges live. An allow-list fails closed.
-      ⚠️ Still unset on `splitsutra-dev-eac96`.
+      **Set on `splitsutra-dev-eac96` too, 2026-09-02** — same allow-list, and it matters
+      there for the same reason: dev is Blaze, has phone auth on, and now has a public URL
+      of its own (<https://splitsutra-dev-eac96.web.app>). A non-production project is not
+      a non-billable one.
+      ⚠️ **Reported by the owner, not verified from here.** The public Identity Toolkit
+      endpoint returns only `projectId` and `authorizedDomains`; reading `smsRegionConfig`
+      needs an admin token. Anyone auditing this should re-read it in the console rather
+      than trusting this tick.
 - [ ] 🔴 **Phone auth quota limit: 50 SMS/day** to start
       🔴 **Not in the Firebase console.** Authentication → Settings has no SMS-volume field —
       its "Sign-up quota" is new _account creations per hour_, a different control that caps

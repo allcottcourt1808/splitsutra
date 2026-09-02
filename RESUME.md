@@ -99,8 +99,12 @@ where the app is actually used (`auditBalances` runs `Asia/Kolkata`), so US-only
 locked out its real users — recorded in phase-02 §3 rather than quietly satisfied. **Allow-list,
 never deny-list**: a deny-list permits every region nobody thought to name, which is exactly
 where premium-rate ranges live. This is the control that removes the toll-fraud attack surface
-regardless of volume, so it matters more than the cap. ⚠️ Still unset on
-`splitsutra-dev-eac96`.
+regardless of volume, so it matters more than the cap. **Set on `splitsutra-dev-eac96` as
+well** — dev is Blaze, has phone auth on, and now serves a public URL of its own, so a
+"non-production" project is not a non-billable one.
+⚠️ Both are **reported, not verified from here**: the public endpoint exposes only
+`projectId` and `authorizedDomains`, and `smsRegionConfig` needs an admin token this
+machine has no way to mint (no `gcloud`, and the Firebase CLI has no command for it).
 
 ### 2026-09-02 — three things the live app taught us that no local run could
 
