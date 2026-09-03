@@ -29,7 +29,9 @@ vi.mock('@splitsutra/core/hooks', () => ({
     loading: false,
     error: null,
   }),
-  useAuth: () => ({ user: { uid: 'u1', displayName: 'Me' } }),
+  // 🔴 `profile`, not `user`. The PROFILE display name is what the stored group name was
+  // built from; the Auth one comes from the identity provider and is a different string.
+  useAuth: () => ({ user: { uid: 'u1' }, profile: { displayName: 'Me' } }),
   useFriends: () => ({ friends: state.friends, loading: false, error: null }),
 }));
 

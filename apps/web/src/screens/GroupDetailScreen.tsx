@@ -84,7 +84,7 @@ export function GroupDetailScreen() {
   const { gid } = useParams();
   const groupId = gid ?? '';
 
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { group, loading, error, retry: retryGroup } = useGroup(groupId);
   const {
     activeMembers,
@@ -151,7 +151,7 @@ export function GroupDetailScreen() {
       ? 'Group'
       : groupLabel(group, {
           friendName: activeMembers.find((member) => member.uid !== user?.uid)?.displayName,
-          selfName: user?.displayName ?? '',
+          selfName: profile?.displayName ?? '',
         });
 
   const header = <ScreenHeader title={label} backTo={paths.GroupList()} />;

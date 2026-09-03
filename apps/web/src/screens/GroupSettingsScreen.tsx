@@ -39,7 +39,8 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
-import { groupLabel } from './group/groupLabel';
+import { groupLabel, isFriendship } from './group/groupLabel';
+import { useFriendshipNames } from './group/useFriendshipNames';
 
 const NAME_MAX = 60;
 
@@ -56,13 +57,13 @@ const SIMPLIFY = [
 ] as const;
 
 /**
- * Which segment to highlight for a group whose stored type the picker does not offer — the
- * implicit `friend` container, or the retired `couple`.
+ * Which segment to highlight for a group whose stored type the picker does not offer — now only
+ * the retired `couple`, since `friend` no longer reaches this control at all (see below).
  *
  * Falls back to `Other` rather than leaving the control unselected, because an unselected
  * segmented control reads as "nobody has set this yet" when the truth is "set to something we no
  * longer offer". Nothing is written until the user actually picks, so the stored value survives
- * until they choose to change it — the detail screen still names it correctly meanwhile.
+ * until they choose to change it.
  */
 function offerable(type: GroupType): CreatableGroupType {
   const offered: readonly GroupType[] = SELECTABLE_GROUP_TYPES;
@@ -87,7 +88,8 @@ export function GroupSettingsScreen() {
 
   const { group, loading, error } = useGroup(groupId);
   const { isAdmin, me } = useGroupMembers(groupId);
-  const { user } = useAuth();
+  const { profile } = useAuth();
+  const friendNames = useFriendshipNames();
 
   /** `null` means "not edited yet", which is distinguishable from a name typed empty. */
   const [draftName, setDraftName] = useState<string | null>(null);
@@ -152,11 +154,13 @@ export function GroupSettingsScreen() {
   // The Name field below deliberately shows the STORED name, not this label: it is the field
   // that edits that value, and a friendship renamed to something without an ampersand is then
   // shown verbatim to both members (see `groupLabel`).
+  const label = groupLabel(group, {
+    friendName: friendNames.get(groupId),
+    selfName: profile?.displayName ?? '',
+  });
+
   return (
-    <Screen
-      header={header}
-      label={`${groupLabel(group, { selfName: user?.displayName ?? '' })} settings`}
-    >
+    <Screen header={header} label={`${label} settings`}>
       <Stack gap="lg">
         <Stack gap="sm">
           <Input
@@ -188,30 +192,49 @@ export function GroupSettingsScreen() {
           </Button>
         </Stack>
 
-        <Stack gap="sm">
-          <Text weight="semibold">Type</Text>
-          <SegmentedControl
-            label="Group type"
-            options={TYPES}
-            value={offerable(group.type)}
-            onValueChange={(next) => {
-              void run(
-                'type',
-                async () => {
-                  await updateGroup(groupId, { type: next });
-                  return 'Type saved.';
-                },
-                'Could not change the type.',
-              );
-            }}
-          />
-        </Stack>
+        {/* 🔴 A friendship gets NO type control, and this is a correctness guard rather than
+            tidiness.
+
+            `type === 'friend'` is the durable marker that this group is a 1:1 friendship — it is
+            what `groupLabel` keys on to show the friend's name instead of the stored
+            `"<you> & <them>"`, and what the expense picker keys on to list it under People.
+            `friend` is not in `SELECTABLE_GROUP_TYPES`, so the control highlighted `Other` and
+            the first tap on any segment wrote a real type over it. One tap, permanent, and
+            unreachable in reverse because the picker cannot offer `friend` back.
+
+            Harmless while D2 kept these groups hidden — this screen was unreachable. ADR-13
+            promotion made it one tap from the Groups tab, and turned a cosmetic fallback into a
+            live hazard. Balances survive (`recomputeBalances` keys on
+            `friends/{fid}.implicitGroupId`, not on type), so the damage is display-only — and
+            permanent. */}
+        {!isFriendship(group) && (
+          <Stack gap="sm">
+            <Text weight="semibold">Type</Text>
+            <SegmentedControl
+              label="Group type"
+              options={TYPES}
+              value={offerable(group.type)}
+              onValueChange={(next) => {
+                void run(
+                  'type',
+                  async () => {
+                    await updateGroup(groupId, { type: next });
+                    return 'Type saved.';
+                  },
+                  'Could not change the type.',
+                );
+              }}
+            />
+          </Stack>
+        )}
 
         <Stack gap="sm">
           <Text weight="semibold">Simplify debts</Text>
           <Text variant="caption" tone="secondary">
+            {/* No "(AC-E3.4)". An acceptance-criteria id is a note to us, and it was on screen
+                for every user of this app until somebody read it back to us. */}
             Suggests the fewest payments that settle the group. Amounts owed do not change — only
-            who pays whom (AC-E3.4).
+            who pays whom.
           </Text>
           <SegmentedControl
             label="Simplify debts"
@@ -239,8 +262,7 @@ export function GroupSettingsScreen() {
               </Text>
             </Row>
             <Text variant="caption" tone="secondary">
-              {currency.name} was fixed when this group was created and cannot be changed — every
-              amount already recorded here means what it says in {group.currency}.
+              Fixed when this group was created. Every amount here is in {group.currency}.
             </Text>
           </Stack>
         </Card>

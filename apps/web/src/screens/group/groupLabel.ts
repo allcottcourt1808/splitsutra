@@ -99,6 +99,14 @@ export interface GroupLabelSources {
    * The fallback for lists, where per-group member documents are unreachable: `firestore.rules`
    * denies collection-group reads on `members` (T9), so a list has no way to ask for everyone
    * else's name in one query.
+   *
+   * 🔴 **The PROFILE name (`users/{uid}.displayName`), never `AuthUser.displayName`.** They are
+   * different strings and the difference is invisible until it is measured: the Auth name comes
+   * from the identity provider and is never rewritten, while the profile name is the editable
+   * one (AC-A2.1) that every screen renders — and it is the one `establishFriendship` used to
+   * build the stored group name. A real account here read `"1808 Allcott Ct"` from Google while
+   * its profile said `"Sandeep"`, so this whole branch matched nothing and silently fell through
+   * to the stored name. Pass `profile?.displayName`; `useAuth()` already returns it.
    */
   readonly selfName?: string | undefined;
 }
