@@ -53,11 +53,38 @@ Write a script using the raw SDK — no UI — and confirm each of these **fails
 
 ## 3. App Check
 
-- [ ] 🟡 Register the web app with reCAPTCHA Enterprise
-- [ ] 🟡 ⚠️ Run in **monitoring mode first** and confirm legitimate traffic passes.
-      Enforcing immediately will lock you out of your own app.
-- [ ] 🟡 Then enforce on Firestore and on Functions (`enforceAppCheck: true`)
-- [ ] 🟡 Add debug tokens for local development and CI
+**Client is shipped and silent.** `apps/web/src/platform/appCheck.ts` registers the web app and
+`startApp()` reports what it did. With `VITE_APPCHECK_SITE_KEY` unset it skips with a reason and
+the app runs unattested — which is the correct state until the console steps below are done.
+Upgraded 🟡 → 🔴: two public URLs on Blaze, and Rules are currently the only boundary.
+
+- [ ] 🔴 **Create a reCAPTCHA Enterprise key for App Check**, score-based, with
+      `splitsutra.web.app` + `splitsutra-prod.firebaseapp.com` (and the dev pair) as domains.
+      🔴 **A NEW key.** Not one of the "Key for Identity Platform reCAPTCHA integration" keys the
+      phone-auth work provisioned — each project already carries three or four under that single
+      name, which cost real time to untangle on 2026-09-02. Using one here fails as
+      `appCheck/recaptcha-error` with nothing naming the key.
+- [ ] 🔴 Firebase console → App Check → Apps → register the web app with that key
+- [ ] 🔴 Put the key in `apps/web/.env.local` (dev) and `.env.production.local` (prod) as
+      `VITE_APPCHECK_SITE_KEY`, then rebuild — it is inlined at build time, so a deployed bundle
+      built before the key existed stays unattested however the console is configured.
+- [ ] 🔴 **Debug token for local development.** reCAPTCHA cannot attest `localhost`, so a dev
+      machine gets no token at all without one. Set `VITE_APPCHECK_DEBUG_TOKEN=true`, read the
+      generated token out of the console log, register it under App Check → Apps → Manage debug
+      tokens.
+      🔴 A debug token is a **complete App Check bypass** against the real project. It is read
+      only under `import.meta.env.DEV`; a canary build with the variable set confirmed the value
+      appears nowhere in `dist/` (the site key does, as it must). One token per developer, and
+      revoke it in the console when that machine is done.
+- [ ] 🔴 ⚠️ **Monitoring mode first, for long enough to mean something.** App Check → Metrics
+      shows verified vs unverified per service. Enforcing before real traffic shows green locks
+      you out of your own app — and with `signInWithPopup`, phone auth and callables all in play,
+      "real traffic" is more paths than one session exercises.
+- [ ] 🔴 Then enforce, in this order, checking metrics between each: Authentication → Firestore →
+      Cloud Functions. Functions is the one that also needs a code change and a deploy:
+      `ENFORCE_APP_CHECK` in `firebase/functions/src/common/config.ts` — one constant, one deploy.
+- [ ] 🟡 Debug token for CI, once E2E exists — `e2e/` does not exist yet, so there is nothing to
+      attest.
 
 ## 4. Cost control (Blaze) 🔴
 
