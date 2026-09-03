@@ -222,6 +222,7 @@ export function FriendDetailScreen() {
                 group={shared}
                 friendUid={friend.friendUid}
                 selfUid={user?.uid ?? ''}
+                friendName={friend.displayName}
               />
             )}
           />

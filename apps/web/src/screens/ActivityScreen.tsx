@@ -15,7 +15,7 @@
  * `FlatList`'s `onEndReached`). Upgrading it later changes this file only.
  */
 
-import { useActivity } from '@splitsutra/core/hooks';
+import { useActivity, useAuth } from '@splitsutra/core/hooks';
 
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -25,9 +25,13 @@ import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
 import { ActivityRow } from './activity/ActivityRow';
+import { useFriendshipNames } from './group/useFriendshipNames';
 
 export function ActivityScreen() {
   const { entries, loading, error, hasMore, loadMore } = useActivity();
+  const { user } = useAuth();
+  // So a row from a promoted friendship reads "· Sandeep" rather than "· Sandeep & you".
+  const friendNames = useFriendshipNames();
 
   const header = <ScreenHeader title="Activity" />;
 
@@ -68,7 +72,14 @@ export function ActivityScreen() {
               action={<Button to={paths.AddExpense()}>Add an expense</Button>}
             />
           }
-          renderItem={(entry) => <ActivityRow entry={entry} now={now} />}
+          renderItem={(entry) => (
+            <ActivityRow
+              entry={entry}
+              now={now}
+              friendNames={friendNames}
+              selfName={user?.displayName ?? ''}
+            />
+          )}
         />
 
         {hasMore && (

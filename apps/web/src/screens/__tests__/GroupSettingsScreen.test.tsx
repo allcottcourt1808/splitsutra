@@ -30,6 +30,8 @@ const state = vi.hoisted(() => ({
 vi.mock('@splitsutra/core/hooks', () => ({
   useGroup: () => ({ group: state.group, loading: state.loading, error: state.error }),
   useGroupMembers: () => ({ me: state.me, isAdmin: state.isAdmin }),
+  // Only feeds the screen's accessible label, which names the group — see `groupLabel`.
+  useAuth: () => ({ user: { uid: 'u1', displayName: 'Me' } }),
 }));
 
 vi.mock('@splitsutra/core/repositories', () => ({

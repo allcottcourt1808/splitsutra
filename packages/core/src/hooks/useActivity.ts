@@ -21,7 +21,7 @@ import {
   watchGroupActivity,
 } from '../repositories/activityRepo.js';
 import type { Unsubscribe } from '../repositories/subscribe.js';
-import type { Activity, Group } from '../types/index.js';
+import type { Activity, Group, GroupType } from '../types/index.js';
 import { useAuth } from './useAuth.js';
 
 /**
@@ -33,6 +33,14 @@ import { useAuth } from './useAuth.js';
 export interface ActivityFeedEntry {
   readonly groupId: string;
   readonly groupName: string;
+  /**
+   * `'friend'` for a friendship (D2), before or after ADR-13 promotion.
+   *
+   * The row needs it because `groupName` is stored as `"<you> & <them>"` for a friendship, so
+   * it cannot be shown to either member as-is — see the web app's `groupLabel`. Carried here
+   * rather than derived from `isImplicit`, which promotion clears.
+   */
+  readonly groupType: GroupType;
   /** `true` for the hidden 1:1 friend group (D2), which has no group screen worth linking to. */
   readonly isImplicit: boolean;
   readonly activity: Activity;
@@ -96,6 +104,7 @@ function merge(
       entries.push({
         groupId: group.id,
         groupName: group.name,
+        groupType: group.type,
         isImplicit: group.isImplicit,
         activity,
       });

@@ -1,6 +1,6 @@
 # Resume here
 
-**Last updated:** 2026-08-31. Project: **SplitSutra**.
+**Last updated:** 2026-09-03. Project: **SplitSutra**.
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
@@ -76,6 +76,39 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-03 — a friendship's name cannot be stored
+
+"Rename the promoted friendship group to just the friend's name." The obvious implementation —
+have `promoteFriendshipIfNeeded` write the friend's name onto the group — **cannot work**. A
+group document holds ONE `name`, read by BOTH members. Storing "Sandeep" is right for Neethu and
+absurd for Sandeep, who opens the Groups tab and finds a card named after himself. The friend's
+name is a per-VIEWER fact, so it is resolved per viewer at render, in
+`apps/web/src/screens/group/groupLabel.ts`.
+
+🔴 **The `isImplicit` trap, for the second time.** ADR-13 promotion clears `isImplicit`, so the
+picker's existing name-shortening — gated on that flag — went quiet at exactly the moment the
+name became visible. Same shape as the balance-projection bug: the durable fact is `type ===
+'friend'`, which only `establishFriendship` writes and which no client can set (`friend` is not
+in `SELECTABLE_GROUP_TYPES`, and `updateGroup` takes a `CreatableGroupType`).
+
+Sources for the name, best first: the other member's document where a screen already subscribes
+to members (group detail); `friends/{fid}.displayName` via one `useFriends` listener (lists, where
+T9 denies collection-group reads on `members`); then the stored `"A & B"` with the viewer's own
+name stripped off either end. A stored name with no `" & "` was typed by a person and is shown
+verbatim to both members, so renaming a pair's group to "Goa 2026" still works.
+
+⚠️ **`friends/{fid}.displayName` is never refreshed**, whatever `friendSchema` said about D4.
+`onUserProfileWritten` fans out to `usernames/` and `groups/{gid}/members/{uid}` and never touches
+friend documents — so a friend who renames themselves keeps their old name in the Friends list
+forever. The schema comment now says so. The fix is small (the friendship is reciprocal, so
+`users/{uid}/friends/*` IS the reverse index) and is not in this change.
+
+**Proved the regression tests fail against the old code**: reverted the Groups list to
+`title={group.name}` and confirmed 2 of the 3 new assertions failed by name. `pnpm verify` green —
+852 tests across 58 files.
+
+Not verified in a browser: localhost has no session and signing in is the user's to do.
 
 ### 2026-09-02 (later) — phone auth, and six wrong guesses before the right one
 

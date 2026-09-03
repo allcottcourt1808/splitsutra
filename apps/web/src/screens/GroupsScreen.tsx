@@ -18,7 +18,7 @@
 
 import { useMemo } from 'react';
 
-import { useGroups, useMyGroupBalances } from '@splitsutra/core/hooks';
+import { useAuth, useGroups, useMyGroupBalances } from '@splitsutra/core/hooks';
 import type { CurrencyCode, Group, GroupType, MinorUnits } from '@splitsutra/core';
 
 import { Avatar } from '../components/Avatar';
@@ -31,6 +31,8 @@ import { Money } from '../components/Money';
 import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
+import { groupLabel, isFriendship } from './group/groupLabel';
+import { useFriendshipNames } from './group/useFriendshipNames';
 
 /**
  * One glyph per group type (phase-05 §4, 🟢 "Group photo/emoji per type").
@@ -43,8 +45,9 @@ const TYPE_GLYPH: Readonly<Record<GroupType, string>> = {
   home: '🏠',
   friends: '👥',
   other: '📁',
-  // Never rendered here: implicit friend groups are filtered out of the list (D2). Note this is
-  // `friend`, the hidden 1:1 container — not `friends` above, which is a group someone chose.
+  // A friendship, and it IS rendered here — it used to be filtered out (D2), until ADR-13 made
+  // it an ordinary group the moment it holds an expense. A person, not a folder. Note this is
+  // `friend`, the 1:1 container — not `friends` above, which is a group someone chose.
   friend: '👤',
   couple: '💞',
 };
@@ -103,9 +106,15 @@ function summarise(
 
 export function GroupsScreen() {
   const { groups, loading, error } = useGroups();
+  const { user } = useAuth();
 
   const groupIds = useMemo(() => groups.map((group) => group.id), [groups]);
   const { balanceByGroup } = useMyGroupBalances(groupIds);
+
+  // A promoted friendship (ADR-13) is a card on this screen, and its stored name is
+  // `"<you> & <them>"` — half of which is the reader's own name. See `groupLabel`.
+  const friendNames = useFriendshipNames();
+  const selfName = user?.displayName ?? '';
 
   const lines = useMemo(() => summarise(groups, balanceByGroup), [groups, balanceByGroup]);
 
@@ -190,13 +199,23 @@ export function GroupsScreen() {
           }
           renderItem={(group) => {
             const balance = balanceByGroup.get(group.id);
+            const label = groupLabel(group, {
+              friendName: friendNames.get(group.id),
+              selfName,
+            });
             return (
               <ListRow
-                title={group.name}
-                subtitle={`${TYPE_GLYPH[group.type]} ${String(group.memberCount)} ${
-                  group.memberCount === 1 ? 'member' : 'members'
-                }`}
-                leading={<Avatar name={group.name} photoURL={group.photoURL} />}
+                title={label}
+                // A friendship says "Friend", not "2 members" — the count is both of you, and
+                // it is the one line where the row could still read as a folder.
+                subtitle={
+                  isFriendship(group)
+                    ? `${TYPE_GLYPH[group.type]} Friend`
+                    : `${TYPE_GLYPH[group.type]} ${String(group.memberCount)} ${
+                        group.memberCount === 1 ? 'member' : 'members'
+                      }`
+                }
+                leading={<Avatar name={label} photoURL={group.photoURL} />}
                 to={paths.GroupDetail({ gid: group.id })}
                 trailing={
                   balance === undefined ? undefined : balance === 0 ? (

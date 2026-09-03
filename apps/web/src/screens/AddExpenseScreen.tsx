@@ -29,6 +29,7 @@ import { ModalHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
 import { groupActionDestination } from '../navigation/groupDestination';
 import { ExpenseForm } from './expense/ExpenseForm';
+import { useFriendshipNames } from './group/useFriendshipNames';
 import { useComposerGroups, useComposerMembers } from './expense/composer';
 import {
   deriveExpenseForm,
@@ -50,6 +51,9 @@ export function AddExpenseScreen() {
   const selfUid = user?.uid ?? '';
 
   const { groups, loading: groupsLoading, error: groupsError } = useComposerGroups();
+  // So the picker calls a friendship by the friend's name rather than by the stored
+  // `"<you> & <them>"` — see `groupLabel`.
+  const friendNames = useFriendshipNames();
 
   // `?gid=` wins, then whatever the form already holds, then the most recently active group.
   const [chosenGroupId, setChosenGroupId] = useState<string | null>(search.get('gid'));
@@ -163,6 +167,7 @@ export function AddExpenseScreen() {
       currency={currency}
       selfUid={selfUid}
       selfName={user?.displayName ?? ''}
+      friendNames={friendNames}
       saving={saving}
       saveError={saveError}
       onSave={() => {

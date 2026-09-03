@@ -39,14 +39,17 @@ import { ListRow } from '../../components/ListRow';
 import { Money } from '../../components/Money';
 import { Text } from '../../components/Text';
 import { paths } from '../../navigation/paths';
+import { groupLabel } from '../group/groupLabel';
 
 export interface SharedGroupRowProps {
   readonly group: Group;
   readonly friendUid: string;
   readonly selfUid: string;
+  /** This friend's display name — see the note on the title below. */
+  readonly friendName: string;
 }
 
-export function SharedGroupRow({ group, friendUid, selfUid }: SharedGroupRowProps) {
+export function SharedGroupRow({ group, friendUid, selfUid, friendName }: SharedGroupRowProps) {
   const { balances, loading, error } = useGroupBalances(group.id);
 
   /**
@@ -105,9 +108,13 @@ export function SharedGroupRow({ group, friendUid, selfUid }: SharedGroupRowProp
   // cmd-clickable and the destination is a deep link. It is safe to send someone there from
   // here because these are real groups by construction — `useGroups` has already excluded the
   // implicit ones, which have no group screen worth landing on.
+  // `groupLabel` is a no-op for an ordinary group, and every row here should be one — the
+  // pair's own friendship is filtered out by id upstream. It is applied anyway for the case
+  // where it cannot be: a half-written friendship whose `implicitGroupId` is missing has
+  // nothing to filter on, and the row would then show the raw `"<you> & <them>"`.
   return (
     <ListRow
-      title={group.name}
+      title={groupLabel(group, { friendName })}
       subtitle={group.currency}
       trailing={trailing}
       to={paths.GroupDetail({ gid: group.id })}
