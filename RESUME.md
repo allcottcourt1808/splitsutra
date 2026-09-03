@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#63 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
+## State: PRs #1–#64 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
 
 prod <https://splitsutra.web.app>, dev <https://splitsutra-dev-eac96.web.app>
 
@@ -76,6 +76,41 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-03 — three defects a green suite did not catch
+
+Found by WALKING the app after #60–#63, not by a test.
+
+🔴 **One tap in a friendship's settings destroyed the friendship.** `type === 'friend'` is the
+durable marker `groupLabel` and the expense picker key on. `friend` is not in
+`SELECTABLE_GROUP_TYPES`, so the segmented control highlighted `Other` and the first tap on any
+segment wrote a real type over the marker — permanent, and unreachable in reverse because the
+picker cannot offer `friend` back. Harmless while D2 kept these groups hidden and this screen
+unreachable; ADR-13 promotion put it one tap from the Groups tab. Balances survive
+(`recomputeBalances` keys on `friends/{fid}.implicitGroupId`), so the damage was display-only and
+irreversible. Control removed on a friendship (#64).
+
+🔴 **`selfName` read the AUTH display name, so the strip never fired.** Auth said
+"1808 Allcott Ct" (from Google) while the profile said "Sandeep". The profile name is the editable
+one every screen renders, and the one `establishFriendship` built the stored group name from.
+Invisible everywhere the friend-document path covered for it; visible on group settings, which had
+no such fallback. Every call site now passes `profile?.displayName`.
+
+**An acceptance-criteria id was rendered to users** — "only who pays whom (AC-E3.4)" — until it was
+read back to us. Removed; the currency note shortened to one line.
+
+⚠️ **The service worker made a correct deploy look broken, twice.** `registerType: 'prompt'` keeps
+a returning visitor on the old bundle until they accept the update. The Apple button read as
+"missing" on both dev and prod in a browser that had visited before, while `curl` proved the new
+chunk was served with `apple.com` in it. Before believing a deploy failed, check
+`performance.getEntriesByType('resource')` for which chunk actually loaded and
+`navigator.serviceWorker.getRegistrations()` for a waiting worker.
+
+**Both environments deployed and hash-verified** — prod `index-BkODPvaO.js`, dev `index-rMs08Nlm.js`.
+
+⚠️ **Prod now carries the Apple button, which throws `auth/operation-not-allowed`** until the
+provider is configured. Shipped on an explicit "deploy and publish"; it is the first thing a
+tester would hit.
 
 ### 2026-09-03 — App Check exists, in monitoring mode
 
