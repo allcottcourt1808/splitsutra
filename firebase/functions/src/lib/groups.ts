@@ -227,3 +227,51 @@ export async function promoteFriendshipIfNeeded(gid: string): Promise<boolean> {
   await ref.update({ isImplicit: false, lastActivityAt: FieldValue.serverTimestamp() });
   return true;
 }
+
+/**
+ * The membership half of a join, shared by every path that adds somebody to a group.
+ *
+ * Extracted from `redeemInvite`, which was the only join until `addFriendToGroup`. Two copies of
+ * "how a member is added" is how one of them quietly forgets the `existingMember` check and
+ * zeroes a live balance — the T2 attack, self-inflicted (see `newMemberDoc`).
+ *
+ * Deliberately does NOT write the activity entry. The membership write is identical for every
+ * caller; what the feed should say is not — somebody who redeemed a link joined, somebody added
+ * by a friend did nothing at all. Each caller writes its own entry, in this same transaction.
+ *
+ * @returns the member ids after the join, so the caller can report the new size.
+ */
+export function addMemberInTransaction(
+  tx: Transaction,
+  gid: string,
+  uid: string,
+  profile: ProfileSnapshot,
+  memberIds: readonly string[],
+  existingMember: { readonly exists: boolean },
+): readonly string[] {
+  const memberRef = db.doc(`groups/${gid}/members/${uid}`);
+
+  if (existingMember.exists) {
+    // Rejoining after leaving. Only `leftAt` is cleared: the member document survived the
+    // departure and still carries the balance history that historical expenses depend on.
+    // Re-`set()`ing it would zero a live balance.
+    tx.update(memberRef, {
+      leftAt: null,
+      displayName: profile.displayName,
+      photoURL: profile.photoURL,
+    });
+  } else {
+    tx.set(memberRef, newMemberDoc(uid, 'member', profile));
+  }
+
+  // memberCount is recomputed from the array rather than incremented — an increment drifts
+  // permanently the first time it runs twice, and `arrayUnion` is silently a no-op for an
+  // existing uid, which is exactly when the two would disagree.
+  const nextMemberIds = memberIds.includes(uid) ? [...memberIds] : [...memberIds, uid];
+  tx.update(db.doc(`groups/${gid}`), {
+    memberIds: nextMemberIds,
+    memberCount: nextMemberIds.length,
+  });
+
+  return nextMemberIds;
+}

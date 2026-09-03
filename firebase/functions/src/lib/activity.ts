@@ -139,6 +139,9 @@ export const summaries = {
   settlementDeleted: (actor: string): string => `${actor} deleted a payment record`,
   memberJoined: (actor: string): string => `${actor} joined the group`,
   memberLeft: (actor: string): string => `${actor} left the group`,
+  // Deliberately not "X joined": with `addFriendToGroup` the new member did nothing, and a
+  // feed that says they joined asks them to remember an action they never took.
+  memberAdded: (actor: string, target: string): string => `${actor} added ${target}`,
   memberRemoved: (actor: string, target: string): string => `${actor} removed ${target}`,
   groupCreated: (actor: string, name: string): string => `${actor} created "${name}"`,
   groupDeleted: (actor: string, name: string): string => `${actor} deleted "${name}"`,

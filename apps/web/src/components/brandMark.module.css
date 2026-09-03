@@ -1,0 +1,20 @@
+/**
+ * The mark's box.
+ *
+ * Tokens only (Article IX): the size is `avatarLg` — the same 64px the friend avatar uses, so
+ * the two read as one system rather than as two ideas about how big a round thing is — and the
+ * corner is `radius-lg`.
+ *
+ * The SVG carries its own solid background, so the radius clips it into a rounded tile with no
+ * extra wrapper. `display: block` because an inline image sits on the text baseline and leaves a
+ * few pixels of descender gap under it, which reads as broken centring in a flex column.
+ */
+.mark {
+  display: block;
+  inline-size: var(--splitsutra-size-avatar-lg);
+  block-size: var(--splitsutra-size-avatar-lg);
+  border-radius: var(--splitsutra-radius-lg);
+  /* The tile is the brand's own colour, so it must not be dimmed by a theme that assumes every
+     image is a photo. */
+  object-fit: cover;
+}

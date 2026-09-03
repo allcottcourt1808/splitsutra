@@ -51,6 +51,7 @@
  */
 
 /* ── Callables: client-invoked, auth-checked in each function's own preamble ─────────── */
+export { addFriendToGroup } from './callable/addFriendToGroup.js';
 export { cancelFriendRequest } from './callable/cancelFriendRequest.js';
 export { createInvite } from './callable/createInvite.js';
 export { deleteAccount } from './callable/deleteAccount.js';

@@ -49,6 +49,7 @@ import {
   recomputeGroupBalancesSchema,
   repairGroupMembershipSchema,
   redeemInviteSchema,
+  addFriendToGroupSchema,
   removeMemberSchema,
   // Type-only: referenced solely as `typeof SELECTABLE_GROUP_TYPES` to derive CreatableGroupType.
   type SELECTABLE_GROUP_TYPES,
@@ -61,6 +62,7 @@ import {
   type RecomputeGroupBalancesInput,
   type RepairGroupMembershipInput,
   type RedeemInviteInput,
+  type AddFriendToGroupInput,
   type RemoveMemberInput,
 } from '../types/index.js';
 import { CALLABLE, callFunction } from './callables.js';
@@ -413,6 +415,33 @@ export interface LeaveGroupResult {
 export async function leaveGroup(input: LeaveGroupInput): Promise<LeaveGroupResult> {
   const payload = leaveGroupSchema.parse(input);
   return callFunction<LeaveGroupInput, LeaveGroupResult>(CALLABLE.leaveGroup, payload);
+}
+
+export interface AddFriendToGroupResult {
+  readonly groupId: string;
+  readonly uid: string;
+  readonly displayName: string;
+  /** `true` when they were already in the group — a success, not an error. */
+  readonly alreadyMember: boolean;
+  readonly memberCount: number;
+}
+
+/**
+ * Add an existing friend straight into a group — no invite link, no acceptance step.
+ *
+ * 🔴 The Function refuses unless `uid` is already the caller's confirmed friend. That check is
+ * the reason auto-approval does not reopen the hole `friendRequests` closed, and it lives
+ * server-side because `users/{uid}/friends/{fid}` is `allow write: if false` and a client
+ * therefore cannot be trusted to have checked it.
+ */
+export async function addFriendToGroup(
+  input: AddFriendToGroupInput,
+): Promise<AddFriendToGroupResult> {
+  const payload = addFriendToGroupSchema.parse(input);
+  return callFunction<AddFriendToGroupInput, AddFriendToGroupResult>(
+    CALLABLE.addFriendToGroup,
+    payload,
+  );
 }
 
 export interface RemoveMemberResult {

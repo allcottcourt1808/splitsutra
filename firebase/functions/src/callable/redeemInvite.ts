@@ -6,7 +6,7 @@ import { MAX_GROUP_MEMBERS } from '../common/config.js';
 import { RedeemInviteSchema } from '../common/contracts.js';
 import { logInfo } from '../common/logging.js';
 import { summaries, writeActivityInTransaction } from '../lib/activity.js';
-import { newMemberDoc, profileSnapshot, readGroupInTransaction } from '../lib/groups.js';
+import { addMemberInTransaction, profileSnapshot, readGroupInTransaction } from '../lib/groups.js';
 
 /**
  * ============================================================================
@@ -125,30 +125,10 @@ export const redeemInvite = onCall(CALLABLE_OPTS, async (req) => {
     }
 
     // --- 6. writes -----------------------------------------------------------
-    if (existingMember.exists) {
-      // Rejoining after leaving. Only `leftAt` is cleared: the member document
-      // survived the departure and still carries the balance history that
-      // historical expenses depend on. Re-`set()`ing it would zero a live balance.
-      tx.update(memberRef, {
-        leftAt: null,
-        displayName: profile.displayName,
-        photoURL: profile.photoURL,
-      });
-    } else {
-      tx.set(memberRef, newMemberDoc(uid, 'member', profile));
-    }
-
-    // memberCount is recomputed from the array rather than incremented — an
-    // increment drifts permanently the first time it runs twice, and `arrayUnion`
-    // is silently a no-op for an existing uid, which is exactly when the two would
-    // disagree.
-    const nextMemberIds = group.memberIds.includes(uid)
-      ? group.memberIds
-      : [...group.memberIds, uid];
-    tx.update(db.doc(`groups/${groupId}`), {
-      memberIds: nextMemberIds,
-      memberCount: nextMemberIds.length,
-    });
+    // Shared with `addFriendToGroup`: the member document, `memberIds` and `memberCount` are
+    // written the same way by every path that adds somebody, so there is one place that knows
+    // not to re-`set()` a member document holding a live balance.
+    addMemberInTransaction(tx, groupId, uid, profile, group.memberIds, existingMember);
 
     // Appended, not overwritten, and the status is left alone — the link stays open for the
     // next person. Deduplicated by hand rather than with arrayUnion so the length below is

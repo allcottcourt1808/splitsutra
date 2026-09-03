@@ -46,3 +46,75 @@
   max-inline-size: var(--splitsutra-size-form-max-width);
   margin-inline: auto;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * The FirebaseUI widget, brought inside the design system
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 🔴 This file has always refused to fight FirebaseUI's stylesheet, and that stance still
+ * stands for anything cosmetic. These rules are not cosmetic — they are Article IX.
+ *
+ * FirebaseUI ships `.firebaseui-idp-button { min-height: 40px; max-width: 220px }`. Forty is
+ * below the 44×44 minimum touch target Article IX requires, on the one control every single
+ * user must hit before they can do anything at all, and 220px leaves the primary action of the
+ * screen floating in the middle of a column twice its width. Leaving those alone is not
+ * neutrality; it is shipping a known accessibility failure because the CSS came from a package.
+ *
+ * Scoped under `.signInColumn` so the selector is 0,2,0 against their 0,1,0 — it wins on
+ * specificity rather than on import order, which is not something a bundler guarantees.
+ *
+ * ⚠️ Everything INSIDE the widget past this point — the email form, the OTP boxes, its own
+ * inline validation — is still theirs. Do not creep. If a rule here is not defensible as a
+ * token or an article, it does not belong in this block.
+ */
+.signInColumn :global(.firebaseui-idp-button),
+.signInColumn :global(.firebaseui-tenant-button) {
+  min-height: var(--splitsutra-size-touch-target);
+  max-width: none;
+  border-radius: var(--splitsutra-radius-md);
+  box-shadow: none;
+  font-family: inherit;
+  font-size: var(--splitsutra-font-size-md);
+  font-weight: var(--splitsutra-font-weight-semibold);
+  display: flex;
+  align-items: center;
+}
+
+/* The widget centres its own container at 360px; the column already does that, and the extra
+   layer of centring fought the frame's spacing rhythm. */
+.signInColumn :global(.firebaseui-container) {
+  max-width: none;
+  box-shadow: none;
+  background: transparent;
+  font-family: inherit;
+}
+
+.signInColumn :global(.firebaseui-card-content),
+.signInColumn :global(.firebaseui-card-footer) {
+  padding: 0;
+}
+
+.signInColumn :global(.firebaseui-idp-list),
+.signInColumn :global(.firebaseui-tenant-list) {
+  margin: 0;
+}
+
+.signInColumn :global(.firebaseui-list-item) {
+  margin-block-end: var(--splitsutra-space-sm);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * The frame
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * A hairline above the reassurance line.
+ *
+ * A border rather than a `<hr>`: the line is decoration, and a separator element would be read
+ * out by a screen reader as content (NFR-5).
+ */
+.footerRule {
+  border-block-start: 1px solid var(--splitsutra-color-border);
+  padding-block-start: var(--splitsutra-space-lg);
+}

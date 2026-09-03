@@ -29,9 +29,13 @@ const state = vi.hoisted(() => ({
   leaveGroup: vi.fn(),
   removeMember: vi.fn(),
   share: vi.fn(),
+  copy: vi.fn(),
+  addFriendToGroup: vi.fn(),
+  friends: [] as unknown[],
 }));
 
 vi.mock('@splitsutra/core/hooks', () => ({
+  useFriends: () => ({ friends: state.friends, loading: false, error: null }),
   useGroup: () => ({ group: state.group, loading: false, error: null }),
   useGroupMembers: () => ({
     members: state.members,
@@ -44,13 +48,14 @@ vi.mock('@splitsutra/core/hooks', () => ({
 }));
 
 vi.mock('@splitsutra/core/repositories', () => ({
+  addFriendToGroup: (...args: unknown[]) => state.addFriendToGroup(...args) as Promise<unknown>,
   createInvite: (...args: unknown[]) => state.createInvite(...args) as Promise<unknown>,
   leaveGroup: (...args: unknown[]) => state.leaveGroup(...args) as Promise<unknown>,
   removeMember: (...args: unknown[]) => state.removeMember(...args) as Promise<unknown>,
 }));
 
 vi.mock('@splitsutra/core/platform', () => ({
-  getPlatformAdapter: () => ({ share: state.share }),
+  getPlatformAdapter: () => ({ share: state.share, copy: state.copy }),
 }));
 
 const TS = { seconds: 0, nanoseconds: 0 } as unknown as Group['createdAt'];
@@ -152,7 +157,27 @@ beforeEach(() => {
   state.leaveGroup = vi.fn().mockResolvedValue({ groupId: 'g1', left: true });
   state.removeMember = vi.fn().mockResolvedValue({ groupId: 'g1', uid: 'u2', removed: true });
   state.share = vi.fn().mockResolvedValue(undefined);
+  state.copy = vi.fn().mockResolvedValue(undefined);
+  state.addFriendToGroup = vi.fn().mockResolvedValue({
+    groupId: 'g1',
+    uid: 'u9',
+    displayName: 'Priya',
+    alreadyMember: false,
+    memberCount: 3,
+  });
+  state.friends = [];
 });
+
+/** A confirmed friend, as `useFriends` reports them. */
+function friend(uid: string, displayName: string) {
+  return {
+    friendUid: uid,
+    displayName,
+    photoURL: null,
+    implicitGroupId: `imp_${uid}`,
+    balanceMinor: {},
+  };
+}
 
 describe('<GroupMembersScreen>', () => {
   it('says it is loading before the first answer arrives', () => {
@@ -376,5 +401,131 @@ describe('<GroupMembersScreen>', () => {
     await press(container, 'Get the invite link');
 
     expect(container.textContent).toContain('not a member of this group');
+  });
+});
+
+describe('<GroupMembersScreen> — adding a friend directly', () => {
+  it('adds a friend through the callable, not through a member document write', async () => {
+    // Article III: `groups/{gid}/members` is `allow write: if false`, so there is no Firestore
+    // write for this test to observe — the callable IS the feature.
+    state.me = member('u1', 'You', { role: 'admin' });
+    state.members = [state.me];
+    state.activeMembers = [state.me];
+    state.friends = [friend('u9', 'Priya')];
+
+    const container = visit();
+    await press(container, 'Add Priya to this group');
+
+    expect(state.addFriendToGroup).toHaveBeenCalledWith({ groupId: 'g1', uid: 'u9' });
+    expect(container.textContent).toContain('Priya was added to the group');
+  });
+
+  it('leaves out friends who are already in the group', () => {
+    state.me = member('u1', 'You', { role: 'admin' });
+    const priya = member('u9', 'Priya');
+    state.members = [state.me, priya];
+    state.activeMembers = [state.me, priya];
+    state.friends = [friend('u9', 'Priya'), friend('u8', 'Ravi')];
+
+    const container = visit();
+
+    expect(container.textContent).toContain('Ravi');
+    expect(container.querySelector('button[aria-label="Add Priya to this group"]')).toBeNull();
+  });
+
+  it('hides the whole section when every friend is already in', () => {
+    state.me = member('u1', 'You', { role: 'admin' });
+    const priya = member('u9', 'Priya');
+    state.members = [state.me, priya];
+    state.activeMembers = [state.me, priya];
+    state.friends = [friend('u9', 'Priya')];
+
+    expect(visit().textContent).not.toContain('Add a friend');
+  });
+
+  it('reports the callable refusing — it names what to do instead', async () => {
+    // The Function refuses anyone who is not already a confirmed friend, and that message is
+    // actionable ("send a friend request, or share a link"). Showing it verbatim beats a
+    // generic failure.
+    state.me = member('u1', 'You', { role: 'admin' });
+    state.members = [state.me];
+    state.activeMembers = [state.me];
+    state.friends = [friend('u9', 'Priya')];
+    state.addFriendToGroup = vi
+      .fn()
+      .mockRejectedValue(new Error('You can only add people who are already your friends.'));
+
+    const container = visit();
+    await press(container, 'Add Priya to this group');
+
+    expect(container.textContent).toContain('already your friends');
+  });
+
+  it('treats an already-a-member answer as success, not as an error', async () => {
+    state.me = member('u1', 'You', { role: 'admin' });
+    state.members = [state.me];
+    state.activeMembers = [state.me];
+    state.friends = [friend('u9', 'Priya')];
+    state.addFriendToGroup = vi.fn().mockResolvedValue({
+      groupId: 'g1',
+      uid: 'u9',
+      displayName: 'Priya',
+      alreadyMember: true,
+      memberCount: 2,
+    });
+
+    const container = visit();
+    await press(container, 'Add Priya to this group');
+
+    expect(container.textContent).toContain('already in this group');
+  });
+});
+
+describe('<GroupMembersScreen> — copy and share the link', () => {
+  it('copies the link without opening a share sheet', async () => {
+    // 🔴 Two intents, not one with a fallback. Somebody who wants the string in their paste
+    // buffer must not have to open a modal share sheet and cancel out of it.
+    state.me = member('u1', 'You', { role: 'admin' });
+    state.members = [state.me];
+    state.activeMembers = [state.me];
+
+    const container = visit();
+    await press(container, 'Get the invite link');
+    state.share.mockClear();
+    await press(container, 'Copy the invite link to the clipboard');
+
+    expect(state.copy).toHaveBeenCalledWith(expect.stringContaining('/invite/deadbeef'));
+    expect(state.share).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Link copied');
+  });
+
+  it('says what to do by hand when the clipboard is unavailable', async () => {
+    // Genuinely reachable: `navigator.clipboard` is undefined on an insecure origin.
+    state.me = member('u1', 'You', { role: 'admin' });
+    state.members = [state.me];
+    state.activeMembers = [state.me];
+    state.copy = vi.fn().mockRejectedValue(new Error('The clipboard is not available.'));
+
+    const container = visit();
+    await press(container, 'Get the invite link');
+    await press(container, 'Copy the invite link to the clipboard');
+
+    expect(container.textContent).toContain('clipboard is not available');
+  });
+
+  it('shares the link on request, separately from copying', async () => {
+    state.me = member('u1', 'You', { role: 'admin' });
+    state.members = [state.me];
+    state.activeMembers = [state.me];
+
+    const container = visit();
+    await press(container, 'Get the invite link');
+    state.share.mockClear();
+    await press(container, 'Share the invite link');
+
+    expect(state.share).toHaveBeenCalledWith(
+      expect.objectContaining({ url: expect.stringContaining('/invite/deadbeef') }),
+    );
+    expect(state.copy).not.toHaveBeenCalled();
   });
 });

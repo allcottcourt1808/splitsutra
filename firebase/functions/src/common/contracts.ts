@@ -38,6 +38,7 @@
  *   RespondToFriendRequestSchema  { requestId: string; accept: boolean }
  *   CancelFriendRequestSchema     { requestId: string }
  *   UndoDeclineFriendRequestSchema { requestId: string }
+ *   AddFriendToGroupSchema        { groupId: string; uid: string }
  *   RemoveMemberSchema            { groupId: string; uid: string }
  *   LeaveGroupSchema              { groupId: string }
  *   DeleteGroupSchema             { groupId: string }
@@ -72,6 +73,7 @@ export {
   leaveGroupSchema as LeaveGroupSchema,
   recomputeGroupBalancesSchema as RecomputeGroupBalancesSchema,
   redeemInviteSchema as RedeemInviteSchema,
+  addFriendToGroupSchema as AddFriendToGroupSchema,
   removeMemberSchema as RemoveMemberSchema,
   repairGroupMembershipSchema as RepairGroupMembershipSchema,
   respondToFriendRequestSchema as RespondToFriendRequestSchema,

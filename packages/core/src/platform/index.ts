@@ -59,6 +59,19 @@ export interface PlatformAdapter {
   share(payload: SharePayload): Promise<void>;
 
   /**
+   * Put text on the system clipboard. Used for the invite link.
+   *
+   * A first-class capability rather than a private fallback inside {@link share}, because
+   * "share" and "copy" are two different intents: the share sheet is a modal detour, and
+   * somebody who just wants the string in their paste buffer should not have to cancel out of
+   * one to get it. Web: `navigator.clipboard`. RN: `Clipboard.setString`.
+   *
+   * Rejects when the clipboard is genuinely unavailable — an insecure origin, or a browser
+   * that withholds the API — so the caller can say so instead of silently doing nothing.
+   */
+  copy(text: string): Promise<void>;
+
+  /**
    * Open a URL outside the app — terms, privacy policy, "how simplification works".
    * Web: a new tab. RN: `Linking.openURL`.
    */
