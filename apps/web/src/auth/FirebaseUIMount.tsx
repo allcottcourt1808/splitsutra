@@ -116,14 +116,29 @@ export function FirebaseUIMount({ onError }: FirebaseUIMountProps) {
     ui.start(host, {
       signInFlow: 'popup',
       signInOptions: [
-        {
-          provider: firebase.auth.EmailAuthProvider.PROVIDER_ID,
-          // This is what makes it a sign-up page as well as a sign-in one: the widget asks for
-          // a name on account creation, which seeds `displayName` so the first
-          // `upsertUserProfile` has a real name rather than the email local-part — and that
-          // function never rewrites the name later, so the seed is the only chance.
-          requireDisplayName: true,
-        },
+        // 🔴 EMAIL/PASSWORD IS DELIBERATELY ABSENT, and must not be added back without also
+        //    changing the console. It is disabled as a provider on the project, so listing it
+        //    here would render a button that fails with `auth/operation-not-allowed`.
+        //
+        //    Why it went: FirebaseUI's email flow decides between sign-in and sign-up by asking
+        //    the server whether the account exists. Firebase's **email enumeration protection**
+        //    — on by default since 2023, and the same principle as T5, which is why
+        //    `usernames/` denies `list` and every failed friend lookup returns one identical
+        //    "not found" — makes the server refuse to answer. Verified against this project:
+        //    `accounts:createAuthUri` returns a byte-identical response for a known account and
+        //    for one that does not exist.
+        //
+        //    So the widget took the SIGN-UP branch every time, including for people who already
+        //    had an account, and its own handler for the resulting collision is
+        //    `if ("auth/email-already-in-use" == g.code) return` — it swallows the error and
+        //    shows nothing. A returning user filled in a name and a password and the button did
+        //    nothing at all.
+        //
+        //    The three ways out all cost something: a magic link is fiddly on mobile,
+        //    disabling enumeration protection undoes T5 at a different door, and hand-built
+        //    email screens are real work against a FirebaseUI-only rule. Google already
+        //    supplies an email address as the identity, so removing it costs nothing that
+        //    Google does not already provide.
         {
           provider: firebase.auth.PhoneAuthProvider.PROVIDER_ID,
           // ⚠️ SMS costs money per attempt and is the standard toll-fraud target; docs/18
