@@ -9,10 +9,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # WHY THIS IS A SCRIPT AND NOT A FIND-AND-REPLACE
 #
-# The project was called "settl" first, and that name overlapped its own domain
-# vocabulary: settle, settled, settlement, settlementId, settleUp. Settling up is
-# the product's core concept, so those words had to survive the rename untouched.
-# A naive s/settl/newname/ turned `Settlement` into `NewnameEment` and broke
+# A brand name can overlap the product's own domain vocabulary — settle, settled,
+# settlement, settlementId, settleUp are all core concepts here, and a brand that
+# is a prefix of them cannot be swapped with a plain substitution. That has already
+# happened on this repo: the replacement rewrote `Settlement` mid-word and broke
 # Firestore field names that documents were already keyed on — silently, and in a
 # way that passes review.
 #
@@ -23,11 +23,10 @@
 #
 # TWO THINGS THIS DELIBERATELY WILL NOT RENAME
 #
-#   * competitor literals (PROTECT below) — they are other companies
-#   * docs/21-name-clearance.md — it records which names were REJECTED and why.
-#     Renaming it turns the evidence for a rename into a claim about ourselves,
-#     and the record stops explaining why the project was ever renamed.
-#     This has already happened once. Leave it excluded.
+#   * anything listed in PROTECT below — other companies' names and domains.
+#     A sweep that rewrites one turns a reference to somebody else into a claim
+#     about ourselves. That has already happened once here. The list is empty
+#     today; add to it before any sweep that could reach such a literal.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -73,12 +72,12 @@ fi
 LOOK=""
 [[ -n "$GUARD" ]] && LOOK="(?!$GUARD)"
 
-PROTECT=( "settl.fyi" "settlapp.in" "settl.company" )
+PROTECT=()
 
 files=$(grep -rlIPi "$FROM$LOOK" . \
           --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
           --exclude-dir=coverage --exclude-dir=playwright-report \
-          --exclude="rename-brand.sh" --exclude="21-name-clearance.md" 2>/dev/null || true)
+          --exclude="rename-brand.sh" 2>/dev/null || true)
 
 if [[ -z "$files" ]]; then echo "No occurrences of '$FROM' found. Already renamed?"; exit 0; fi
 
@@ -94,7 +93,7 @@ if [[ "$GO" != "--go" ]]; then
   done
   echo
   echo "Total files: $(echo "$files" | wc -l)"
-  echo "Never touched: ${PROTECT[*]}, docs/21-name-clearance.md"
+  echo "Never touched: ${#PROTECT[@]} protected literal(s)"
   exit 0
 fi
 
@@ -116,11 +115,10 @@ echo "$files" | while read -r f; do
   done
 done
 
-echo "Done. Remaining occurrences (competitor references and the clearance doc only):"
+echo "Done. Remaining occurrences:"
 grep -rnIPi "$FROM$LOOK" . --exclude-dir=.git --exclude-dir=node_modules \
   --exclude="rename-brand.sh" 2>/dev/null || echo "  (none)"
 echo
 echo "STILL TO DO BY HAND:"
 echo "  1. Rename the checkout directory to '$NEW'."
-echo "  2. Re-read docs/19-qa-log.md Q16/R6 — it must still read as history."
-echo "  3. Reserve $NEW-dev / $NEW-prod in Phase 02. Project IDs are permanent."
+echo "  2. Reserve $NEW-dev / $NEW-prod in Phase 02. Project IDs are permanent."

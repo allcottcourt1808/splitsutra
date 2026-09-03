@@ -340,22 +340,6 @@ invocation; the threshold gets set from measurement, not from this guess (Articl
 Now threaded through every doc: `@splitsutra/core`, `@splitsutra/web`, `@splitsutra/functions`, repo
 `allcottcourt1808/splitsutra`, Firebase `splitsutra-dev` / `splitsutra-prod`, bundle `com.splitsutra.app`.
 
-**Why this one.** It keeps the "settle up" instinct — which is the action the product is
-named after — while fixing the three problems with the phrase _Settle It_:
-
-1. "Debt settlement" is a crowded, regulated-adjacent US trademark class; the dropped `e`
-   moves out of the direct collision path.
-2. One word, one token — clean in a bundle ID, package scope, and repo name.
-3. No pronoun to awkwardly carry through `com.settleit.app`.
-
-**Rejected:** _Evenly, Quits, Halfsies, Chip In_ (first round); _Dutch, Reckon, Parity_
-(second round). _Divvy_ and _Tabby_ were excluded upfront — both are existing fintech
-companies.
-
-⚠️ **Clearance is still outstanding** — see Phase 00. A deliberate misspelling improves the
-trademark position but does not guarantee it, and Firebase project IDs are globally unique
-and first-come.
-
 ### ✅ Q4 — Currency and region
 
 **Answer: USD default, US region, all currencies supported, one currency per group.**
@@ -436,7 +420,6 @@ structure that a 2–15 person group doesn't need.
 
 ## Still open
 
-- **Q3** — project name (shortlist below; blocks Phase 01)
 - **Q9** — also build a paid tier? _Recommendation: yes, plan for it_
 - **Q10** — web ads in v1? _Recommendation: no_
 - **Q11** — primary market? Now assumed **US** per Q4

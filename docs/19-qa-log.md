@@ -12,29 +12,28 @@ and the history.
 
 ## Register
 
-| #   | Question                                   | Answer                                                                      | Status      | Decided    |
-| --- | ------------------------------------------ | --------------------------------------------------------------------------- | ----------- | ---------- |
-| Q1  | How do Rules validate splits sum to total? | **Option A** — checksum field in rules + real sum verified in Function      | ✅          | 2026-08-24 |
-| Q2  | Group size / recompute limits?             | **50 members**, `RECOMPUTE_THRESHOLD = 1000` (provisional)                  | ✅          | 2026-08-24 |
-| Q3  | Project name?                              | **SplitSutra** — one word, ownable, keeps the "settle up" instinct          | ✅          | 2026-08-24 |
-| Q4  | Currency & region?                         | **USD**, `us-central1`, all ISO 4217, one per group                         | ✅          | 2026-08-24 |
-| Q5  | Phone auth supported?                      | **Yes**, confirmed. Test numbers in dev; SMS region allowlist               | ✅          | 2026-08-24 |
-| Q6  | Anyone can edit any expense?               | **No** — creator/admin only; anyone can open a thread                       | ✅          | 2026-08-24 |
-| Q7  | Keep the backlog?                          | **Yes** — maintained in [17-backlog.md](17-backlog.md)                      | ✅          | 2026-08-24 |
-| Q8  | Ad targeting approach?                     | **Aggregate spending category**, on-device, one enum                        | ✅          | 2026-08-24 |
-| Q9  | Also build a paid tier?                    | — _(rec: yes, plan for it)_                                                 | 🟡 **Open** | —          |
-| Q10 | Web ads in v1?                             | — _(rec: no)_                                                               | 🟡 **Open** | —          |
-| Q11 | Primary market?                            | **US** — implied by Q4                                                      | ✅          | 2026-08-24 |
-| Q12 | Ad category toggle default?                | — _(rec: off)_                                                              | 🟡 **Open** | —          |
-| Q13 | Billing exposure at start?                 | **Spark until Phase 11**, then Blaze with a kill switch                     | ✅          | 2026-08-24 |
-| Q14 | When do CI checks start blocking?          | **Advisory until v1.0**, enforced at the Phase 11 launch flip               | ✅          | 2026-08-24 |
-| Q15 | Which Node runtime?                        | **Node 24** — Active LTS. Node 20 is EOL, Node 22 is Maintenance-only       | ✅          | 2026-08-24 |
-| Q16 | Is the name **Settl** actually available?  | **No.** Three live expense-splitting apps use it; renamed to **SplitSutra** | ✅ Resolved | R6         |
-| Q17 | Keep FirebaseUI for auth?                  | **No** — dropped. Custom auth screens on the modular `firebase/auth` SDK    | ✅          | 2026-08-24 |
+| #   | Question                                   | Answer                                                                   | Status      | Decided    |
+| --- | ------------------------------------------ | ------------------------------------------------------------------------ | ----------- | ---------- |
+| Q1  | How do Rules validate splits sum to total? | **Option A** — checksum field in rules + real sum verified in Function   | ✅          | 2026-08-24 |
+| Q2  | Group size / recompute limits?             | **50 members**, `RECOMPUTE_THRESHOLD = 1000` (provisional)               | ✅          | 2026-08-24 |
+| Q3  | Project name?                              | **SplitSutra** — one word, ownable, keeps the "settle up" instinct       | ✅          | 2026-08-24 |
+| Q4  | Currency & region?                         | **USD**, `us-central1`, all ISO 4217, one per group                      | ✅          | 2026-08-24 |
+| Q5  | Phone auth supported?                      | **Yes**, confirmed. Test numbers in dev; SMS region allowlist            | ✅          | 2026-08-24 |
+| Q6  | Anyone can edit any expense?               | **No** — creator/admin only; anyone can open a thread                    | ✅          | 2026-08-24 |
+| Q7  | Keep the backlog?                          | **Yes** — maintained in [17-backlog.md](17-backlog.md)                   | ✅          | 2026-08-24 |
+| Q8  | Ad targeting approach?                     | **Aggregate spending category**, on-device, one enum                     | ✅          | 2026-08-24 |
+| Q9  | Also build a paid tier?                    | — _(rec: yes, plan for it)_                                              | 🟡 **Open** | —          |
+| Q10 | Web ads in v1?                             | — _(rec: no)_                                                            | 🟡 **Open** | —          |
+| Q11 | Primary market?                            | **US** — implied by Q4                                                   | ✅          | 2026-08-24 |
+| Q12 | Ad category toggle default?                | — _(rec: off)_                                                           | 🟡 **Open** | —          |
+| Q13 | Billing exposure at start?                 | **Spark until Phase 11**, then Blaze with a kill switch                  | ✅          | 2026-08-24 |
+| Q14 | When do CI checks start blocking?          | **Advisory until v1.0**, enforced at the Phase 11 launch flip            | ✅          | 2026-08-24 |
+| Q15 | Which Node runtime?                        | **Node 24** — Active LTS. Node 20 is EOL, Node 22 is Maintenance-only    | ✅          | 2026-08-24 |
+| Q17 | Keep FirebaseUI for auth?                  | **No** — dropped. Custom auth screens on the modular `firebase/auth` SDK | ✅          | 2026-08-24 |
 
-**Open: Q9, Q10, Q12** — all Phase 13 (ads/revenue), none blocking. **Q16 — the name — is now settled: the project is `SplitSutra`.** Reserving the Firebase project IDs remains the irreversible step, because those IDs are globally unique and permanent once claimed.
+**Open: Q9, Q10, Q12** — all Phase 13 (ads/revenue), none blocking.
 
-**Nothing blocks Phase 00 or Phase 01.** Q16 (the name) is settled, so Phase 02 is unblocked — but a clearance check on `SplitSutra` should precede reserving any project ID.
+**Nothing blocks Phase 00 or Phase 01.**
 
 ---
 
@@ -71,7 +70,8 @@ threshold; never persisted server-side; opt-in defaulting off.
 
 **Date:** 2026-08-24 · **Supersedes:** Q6 recommendation, `AC-D3.1`
 
-**Was:** any group member can edit any expense (matching Splitwise's permissive model).
+**Was:** any group member can edit any expense (matching the permissive model these apps
+usually ship).
 Recommended on the grounds that the group is socially trusted and the activity feed
 provides accountability.
 
@@ -171,48 +171,6 @@ papering over one.
 [../checklists/phase-00-prerequisites.md](../checklists/phase-00-prerequisites.md).
 
 ---
-
-### R6 — Name clearance for "Settl" failed _(resolved 2026-08-27 — renamed to SplitSutra)_
-
-**Date:** 2026-08-24 · **Contests:** Q3
-
-**Was:** Q3 concluded **Settl**, on the reasoning that dropping the `e` moved the name out
-of the crowded "debt settlement" trademark space.
-
-**Finding:** that reasoning does not survive contact with the market. The dropped-`e`
-spelling is itself crowded — and crowded specifically by _expense-splitting apps_, which is
-a direct category collision rather than a distant one:
-
-| Product                                        | Evidence                                        |
-| ---------------------------------------------- | ----------------------------------------------- |
-| **Settl: Split** — Settl Financial Corporation | live on the iOS App Store; `settl.company`      |
-| **Settl** — AI expense-splitting agent         | live on iOS + Android; `settl.fyi`              |
-| **Settl** — UPI expense splitter (India)       | `settlapp.in`, markets itself against Splitwise |
-
-**Why it matters now rather than later:** the name is load-bearing in places that get
-expensive to change — `@settl/*` package names, the **globally-unique and permanent**
-Firebase project IDs, the domain, and the app-store listing. Phase 00 already flagged this
-as _"ten minutes now beats renaming after publish."_ The ten minutes have now been spent
-and they returned a bad answer.
-
-**Recommendation:** rename before Phase 02 reserves any Firebase project ID. Runners-up
-recorded in [12-decisions.md](12-decisions.md) Q3 were **Dutch**, **Reckon**, **Parity**.
-
-**Outcome — renamed to `SplitSutra` on 2026-08-27.** The owner chose the name directly
-rather than running a second clearance round.
-
-The rename was executed across all five branches with `git filter-branch`, so no commit in
-this repository ever referred to the project as Settl. It was cheap precisely because it
-happened here: nothing was published, no Firebase project ID had been reserved, and the
-npm scope was private.
-
-⚠️ **`SplitSutra` has not itself been clearance-checked.** That check is still worth doing
-before Phase 02, because Firebase project IDs are globally unique and permanent — that step,
-not this rename, is the one that makes a name expensive to change.
-
-⚠️ The competitor names in the table above are deliberately still spelled **Settl**. They
-are other companies. An automated rename overwrote them once already; if it happens again,
-this record stops explaining why the project was renamed at all.
 
 ---
 

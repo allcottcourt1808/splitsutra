@@ -14,7 +14,7 @@ import { DomainError } from './errors.js';
  *
  * Finding the true minimum number of transactions is **NP-hard** (it reduces to
  * partitioning the balances into zero-sum subsets). The greedy
- * max-creditor / max-debtor pairing below is what Splitwise itself does, and it
+ * max-creditor / max-debtor pairing below is what the shipping products do, and it
  * is bounded by `n − 1` payments, which for groups of ≤ 15 is indistinguishable
  * from optimal in practice.
  *

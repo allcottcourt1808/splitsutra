@@ -32,7 +32,7 @@ import {
  *
  * ⚠️ What the friend gives up by being a friend: any friend can put them in a group with people
  * they do not know, which exposes their display name and photo to that group. That is the
- * residual risk of the product decision, it is what Splitwise does, and `leaveGroup` is the way
+ * residual risk of the product decision, it is what comparable apps do, and `leaveGroup` is the
  * out. It is written down here so nobody has to rediscover the trade by reading the diff.
  *
  * ## Membership is not re-implemented

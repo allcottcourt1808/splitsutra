@@ -915,9 +915,9 @@ If you add hooks in Phase 05+, follow the same shape: logic in a plain module, h
   `firebase/functions/src/lib/` — `identity.ts` included — out of the repo entirely. ESLint hit
   the same trap; `.prettierignore` hit the inverse by having no entry at all. All three are
   anchored to `firebase/functions/lib/` now. **A bare `lib/` is always wrong in this repo.**
-- **Renaming the brand sweeps too far.** It once rewrote the competitor table in `docs/19` into
-  a claim about ourselves. `docs/21-name-clearance.md` is excluded on purpose — it records
-  which names were _rejected_, so "Settl" must stay spelled that way there.
+- **Renaming the brand sweeps too far.** It once rewrote a competitor table in `docs/19` into
+  a claim about ourselves. Any sweep over the brand name needs a printed match list and a
+  sample diff before it writes anything — a blind regex over the tree is how that happened.
 - **Run the whole gate before pushing.** A push after only `pnpm depcruise` broke CI on four
   PRs at once.
 - **`pnpm install` on a partial branch** prunes lockfile importers for workspace packages that
@@ -962,22 +962,6 @@ Core now builds via `packages/core/tsconfig.build.json`, emitting `dist/`. **It 
 resolver, so the compiler producing it uses the Node resolver. `tsconfig.json` stays on
 `bundler`, so core is checked under **both** resolvers on every verify. `firebase/tsconfig.json`
 (the seed) is NodeNext for the same reason: `tsx` is real Node.
-
-## ⚠️ The name is decided — but one step is still outstanding
-
-**The owner chose to KEEP SplitSutra on 2026-08-27**, having seen the clearance result.
-Verdict was 🟡 CLEAR WITH CAVEATS. Do not reopen this; it is settled.
-
-No collision anywhere — App Store, Play, Product Hunt, npm, GitHub all clean, and
-`splitsutra.com`/`.app`/`.io`/`.in` are **all four available** (checked by RDAP with control
-queries). Accepted knowingly: `sutra` means "tomorrow" in Serbian/Croatian/Bosnian and Split
-is a Croatian city; a mild Kama Sutra overtone in English; and the name sits on doc 21's own
-exclusion list as `split*` plus a stock suffix.
-
-🔴 **Trademark is NOT cleared.** EUIPO and WIPO were unreachable and the USPTO evidence is
-Justia-indexed, not authoritative. Live `SUTRA` marks exist in **class 9** and **class 42**,
-both of which this project touches. Step 1 of doc 21's checklist needs a professional before
-money goes on a listing. Full detail in `docs/21-name-clearance.md` §Outcome.
 
 ## Firebase — nothing is set up, and that is fine
 

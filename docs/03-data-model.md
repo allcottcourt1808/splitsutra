@@ -8,7 +8,7 @@ is a materialized view maintained by Cloud Functions and rebuildable from scratc
 time. If a balance is ever wrong, we recompute rather than patch.
 
 **D2. A 1:1 friend expense is just a 2-person group.**
-Splitwise supports expenses between two friends with no group. Rather than a second code
+Expense splitters normally support expenses between two friends with no group. Rather than a second code
 path, those live in an implicit group with `type: 'friend'` and `isImplicit: true`, hidden
 from the group list. **One expense pipeline, one set of rules, one balance engine.** This
 is the single highest-leverage simplification in the model.
