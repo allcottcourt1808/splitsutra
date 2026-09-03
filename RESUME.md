@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#61 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
+## State: PRs #1–#63 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
 
 prod <https://splitsutra.web.app>, dev <https://splitsutra-dev-eac96.web.app>
 
@@ -76,6 +76,44 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-03 — App Check exists, in monitoring mode
+
+Was the biggest single gap: two public URLs on Blaze with Rules as the only boundary. Rules stop
+someone reading other people's data; they never claimed to stop someone pointing their own client
+at the project and creating accounts, driving SMS, or hammering callables.
+
+`apps/web/src/platform/appCheck.ts` registers the client so it **sends** tokens. Nothing rejects
+an unattested request yet — enforcement is per service in the console plus `ENFORCE_APP_CHECK` in
+`firebase/functions/src/common/config.ts`. Console steps in
+[checklists/phase-10](checklists/phase-10-hardening.md) §3.
+
+🔴 **The App Check key must be a NEW reCAPTCHA Enterprise key.** Not one of the "Key for Identity
+Platform reCAPTCHA integration" keys the phone-auth work provisioned — each project carries three
+or four under that single name, which cost real time on 2026-09-02, and using one here fails as
+`appCheck/recaptcha-error` with nothing naming the key.
+
+🔴 **Not another `initFirebase` argument, despite looking exactly like `popupRedirectResolver`.**
+A resolver is the same function with a different argument per platform. App Check is not: React
+Native attests through App Attest / Play Integrity in a different package with a different entry
+point, so a shared call in core would serve one platform while pulling reCAPTCHA's browser code
+into the mobile bundle's graph (Article II).
+
+**The debug-token guard was measured, not asserted.** A debug token is a complete App Check
+bypass against the real project. `import.meta.env.DEV` is claimed to eliminate it — so a
+production build was run with `VITE_APPCHECK_DEBUG_TOKEN=CANARY-TOKEN-9f3a`: the site key landed
+in `dist/assets/index-*.js` (it must, it is public) and the token appeared **nowhere in `dist/`**.
+The runtime half has a test that was proved to fail with the guard removed.
+
+⚠️ The deployed chunk still contains the _string_ `FIREBASE_APPCHECK_DEBUG_TOKEN` — that is the
+SDK's own `readTokenFromDebugGlobal`, reading a global nothing sets. Checked with context rather
+than a bare `grep -c`, which is the third time this session a substring nearly told the wrong
+story.
+
+**Deployed to dev only.** Prod is still on the #60 build, held back because #61 put the Apple
+button on `/login` and that button throws until the provider is configured. App Check loses
+nothing by waiting: it is inert without a site key, and the key is inlined at build time, so prod
+needs a rebuild after the console work regardless.
 
 ### 2026-09-03 — Sign in with Apple: code shipped, provider not enabled
 
