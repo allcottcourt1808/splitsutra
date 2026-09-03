@@ -151,6 +151,29 @@ export function FirebaseUIMount({ onError }: FirebaseUIMountProps) {
           // account is how one person's expenses end up in another person's group.
           customParameters: { prompt: 'select_account' },
         },
+        {
+          // 🔴 REQUIRES CONSOLE CONFIGURATION, and fails loudly without it. Apple is enabled
+          //    per project with a Services ID, Team ID, Key ID and a private key from an Apple
+          //    Developer Program account; until that exists this button ends in
+          //    `auth/operation-not-allowed`. See checklists/phase-02 §"Sign in with Apple".
+          //
+          //    That is a deliberate contrast with the email provider removed above, which
+          //    failed SILENTLY. This one surfaces through `describeAuthError` into the error
+          //    slot, so a missing configuration is visible rather than a dead button.
+          provider: 'apple.com',
+          // No `providerName`, `buttonColor` or `iconUrl`: firebaseui 6.1.0 already carries
+          // defaults for `apple.com` — "Apple", `#000000`, and its own hosted logo — so
+          // spelling them out here would be a second source of truth for Apple's brand rules.
+          //
+          // ⚠️ That logo is fetched from `www.gstatic.com`. There is no CSP on hosting today,
+          //    so it loads; adding one has to allow that origin or the button loses its mark.
+          //
+          // `email` and `name` are the default scopes when "One account per email address" is
+          // on, which it is. Named anyway, because switching that setting to multiple accounts
+          // silently stops Firebase requesting ANY scope — and then Apple returns no name at
+          // all, which `deriveDisplayName` can only answer with "New user".
+          scopes: ['email', 'name'],
+        },
       ],
       // accountchooser.com was shut down; leaving this on shows a broken interstitial.
       credentialHelper: firebaseui.auth.CredentialHelper.NONE,

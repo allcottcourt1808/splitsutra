@@ -72,18 +72,40 @@ export function maskPhoneNumber(phoneNumber: string): string {
 }
 
 /**
+ * Apple's anonymised relay domain, used when somebody chooses "Hide My Email".
+ *
+ * 🔴 The local part of one of these is an opaque token like `k8s2mn4qpz`. It is not a name, it
+ * is not chosen, and it is not even stable across apps — but it IS an identifier Apple issued
+ * for this user. Seeding it as a display name would put it in every group member document and
+ * every friend document (D4), where it is both meaningless to read and a relay address handed
+ * to people the user never gave it to.
+ *
+ * Apple only supplies a real name on the FIRST sign-in ever, so the nameless case here is
+ * ordinary rather than exotic: anyone who signed in once before Firebase was involved, or whose
+ * first attempt failed after Apple had already recorded the grant, arrives with nothing.
+ */
+const APPLE_PRIVATE_RELAY_DOMAIN = 'privaterelay.appleid.com';
+
+/**
  * The display name to seed a new profile with (phase-03 §3).
  *
  * Order: the provider's name, then the email local-part, then the masked phone number. A
  * phone-only sign-up has no name and no email, and `+919876543210` as a display name is both
  * ugly and a privacy leak into every group member list — hence the mask.
+ *
+ * An Apple relay address is skipped for the same reason the phone number is masked: see
+ * {@link APPLE_PRIVATE_RELAY_DOMAIN}. Such a user falls through to "New user" and is prompted
+ * to set a real one, which is the honest outcome — there was never a name to derive.
  */
 export function deriveDisplayName(user: AuthUser): string {
   const provided = user.displayName?.trim() ?? '';
   if (provided.length > 0) return provided.slice(0, DISPLAY_NAME_MAX);
 
-  const localPart = user.email?.split('@')[0]?.trim() ?? '';
-  if (localPart.length > 0) return localPart.slice(0, DISPLAY_NAME_MAX);
+  const email = user.email ?? '';
+  if (!email.toLowerCase().endsWith(`@${APPLE_PRIVATE_RELAY_DOMAIN}`)) {
+    const localPart = email.split('@')[0]?.trim() ?? '';
+    if (localPart.length > 0) return localPart.slice(0, DISPLAY_NAME_MAX);
+  }
 
   if (user.phoneNumber !== null) return maskPhoneNumber(user.phoneNumber);
 
