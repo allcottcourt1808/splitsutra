@@ -11,6 +11,8 @@
  * 2. `setPlatformAdapter(webAdapter)` — core throws if anything reaches for the adapter before
  *    it is set (Article II), and step 3 reaches for it.
  * 3. `initFirebase(...)` — needs the adapter, because auth persistence comes from it.
+ * 4. `initAppCheck(...)` — needs the `FirebaseApp` from step 3, and must run before the first
+ *    request: a token is attached only to traffic that starts after it.
  *
  * ## Why a missing config returns a result instead of throwing
  *
@@ -72,11 +74,12 @@ import { initFirebase } from '@splitsutra/core/firebase';
 
 import { webAdapter } from './webAdapter';
 import { EMULATOR, emulatorsEnabled, readFirebaseConfig } from './firebaseEnv';
+import { initAppCheck, type AppCheckResult } from './appCheck';
 import { installTokenCssVars } from '../styles/tokensCss';
 
 /** What {@link startApp} decided. */
 export type StartupResult =
-  | { readonly ok: true; readonly emulators: boolean }
+  | { readonly ok: true; readonly emulators: boolean; readonly appCheck: AppCheckResult }
   | { readonly ok: false; readonly error: Error };
 
 /**
@@ -91,14 +94,35 @@ export function startApp(): StartupResult {
   try {
     const emulators = emulatorsEnabled();
 
-    initFirebase({
+    const { app } = initFirebase({
       config: readFirebaseConfig(),
       useEmulators: emulators,
       emulators: EMULATOR,
       /* 🔴 `popupRedirectResolver` is deliberately NOT passed here. See below. */
     });
 
-    return { ok: true, emulators };
+    /* ── App Check ──────────────────────────────────────────────────────────────────────
+     * 🔴 Immediately after `initFirebase` and before anything can issue a request: a token is
+     *    only attached to Firestore, Auth and callable traffic that starts AFTER this runs.
+     *
+     * Deliberately NOT inside `initFirebase` — App Check is the one piece of setup where the
+     * React Native port needs a different SDK entry point rather than a different argument.
+     * `appCheck.ts` carries that reasoning in full.
+     *
+     * It never throws: an unset key or a blocked reCAPTCHA script returns a skip with a reason,
+     * because nothing enforces App Check yet and taking the app down for it would be absurd.
+     * That calculus changes when enforcement is on. */
+    const appCheck = initAppCheck(app, emulators);
+
+    // Said out loud, because a silently-unattested build is the failure this whole file keeps
+    // guarding against: it looks identical to a working one right up until enforcement is
+    // switched on, and then every request fails at once. `emulators` is excluded — that skip is
+    // expected and would be noise on every local load.
+    if (appCheck.status === 'skipped' && !emulators) {
+      console.warn(`[splitsutra] App Check is not active: ${appCheck.reason}`);
+    }
+
+    return { ok: true, emulators, appCheck };
   } catch (cause: unknown) {
     return { ok: false, error: cause instanceof Error ? cause : new Error(String(cause)) };
   }
