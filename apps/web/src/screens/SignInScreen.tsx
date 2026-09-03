@@ -35,6 +35,7 @@
 
 import { useCallback, useState } from 'react';
 
+import { BrandMark } from '../components/BrandMark';
 import { Screen, Stack } from '../components/Layout';
 import { Text } from '../components/Text';
 import styles from '../auth/auth.module.css';
@@ -52,12 +53,23 @@ export function SignInScreen() {
 
   return (
     <Screen label="Sign in to SplitSutra">
-      <Stack gap="lg" justify="center" flex="1" className={styles.signInColumn}>
-        <Stack gap="xs">
-          <Text as="h1" variant="display">
-            SplitSutra
-          </Text>
-          <Text tone="secondary">Split expenses with the people you actually live with.</Text>
+      <Stack gap="xl" justify="center" flex="1" className={styles.signInColumn}>
+        {/* The brand block. `align="center"` here and nowhere else on the screen: a sign-in
+            page has no content to scan, so a centred mark reads as arrival rather than as a
+            list that lost its left edge. Everything below it stays left-aligned with the
+            widget, which is what the column exists to guarantee. */}
+        <Stack gap="md" align="center">
+          {/* No `label`: the wordmark is the next element, and naming the image too would
+              make a screen reader say "SplitSutra" twice. */}
+          <BrandMark />
+          <Stack gap="xs" align="center">
+            <Text as="h1" variant="display">
+              SplitSutra
+            </Text>
+            <Text tone="secondary" align="center">
+              Split expenses. Settle up. Stay friends.
+            </Text>
+          </Stack>
         </Stack>
 
         <FirebaseUIMount onError={fail} />
@@ -72,9 +84,11 @@ export function SignInScreen() {
           )}
         </Stack>
 
-        <Text variant="caption" tone="secondary" align="center">
-          Your expenses stay between you and the people you share them with.
-        </Text>
+        <Stack className={styles.footerRule}>
+          <Text variant="caption" tone="secondary" align="center">
+            Your expenses stay between you and the people you share them with.
+          </Text>
+        </Stack>
       </Stack>
     </Screen>
   );

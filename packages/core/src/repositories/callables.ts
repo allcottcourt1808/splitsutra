@@ -45,6 +45,7 @@ import { getFunctionsClient } from '../firebase/index.js';
  * contract — they change together or the call 404s at runtime with `functions/not-found`.
  */
 export const CALLABLE = {
+  addFriendToGroup: 'addFriendToGroup',
   cancelFriendRequest: 'cancelFriendRequest',
   createInvite: 'createInvite',
   deleteAccount: 'deleteAccount',

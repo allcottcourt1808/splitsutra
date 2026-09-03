@@ -202,6 +202,20 @@ export const undoDeclineFriendRequestSchema = z.object({
 });
 export type UndoDeclineFriendRequestInput = z.infer<typeof undoDeclineFriendRequestSchema>;
 
+/**
+ * `addFriendToGroup` — add an existing friend straight into a group, no link, no acceptance.
+ *
+ * 🔴 The consent argument lives in the Function, not here: it refuses unless `uid` is already
+ * the caller's confirmed friend. That is what makes auto-approval safe — the friend-request flow
+ * exists so a stranger cannot put themselves in a group with you, and a confirmed friend is
+ * somebody you have already agreed to share expenses with. A schema cannot check that.
+ */
+export const addFriendToGroupSchema = z.object({
+  groupId: documentIdSchema,
+  uid: uidSchema,
+});
+export type AddFriendToGroupInput = z.infer<typeof addFriendToGroupSchema>;
+
 /** `removeMember` — admin-only; the Function enforces that, not this schema. */
 export const removeMemberSchema = z.object({
   groupId: documentIdSchema,

@@ -28,6 +28,8 @@ import {
   createProfile,
   createTestEnv,
   expenseDoc,
+  groupDoc,
+  rejectionCode,
   serverBalances,
   serverDoc,
   settlementDoc,
@@ -121,6 +123,94 @@ describe('ADR-13 — promotion by the first expense', () => {
   it('starts hidden, with no expenses', async () => {
     const group = await serverDoc(`groups/${implicitGid}`);
     expect(group?.['isImplicit']).toBe(true);
+  });
+});
+
+describe('addFriendToGroup — no link, no acceptance', () => {
+  it('🔴 REFUSES somebody who is not already a friend', async () => {
+    // The whole security argument for skipping the acceptance step. `friendRequests` exists so
+    // that "anyone who knew your email could put themselves in a shared group with you and you
+    // had no way to refuse" stops being true; auto-approval is only safe while this refusal
+    // holds. If this test ever goes green by accident, that hole is open again.
+    const gid = 'grp_add_stranger';
+    await setDoc(doc(alice.db, `groups/${gid}`), groupDoc(alice));
+    await waitFor(
+      'onGroupCreated to seed the creator',
+      () => serverDoc(`groups/${gid}/members/${alice.uid}`),
+      (member) => member !== null,
+    );
+
+    const carol = await signIn('friends-carol@example.com', 'Carol Example');
+    await createProfile(carol);
+    try {
+      expect(
+        await rejectionCode(alice.call('addFriendToGroup', { groupId: gid, uid: carol.uid })),
+      ).toBe('functions/permission-denied');
+      expect(await serverDoc(`groups/${gid}/members/${carol.uid}`)).toBeNull();
+    } finally {
+      await carol.dispose();
+    }
+  });
+
+  it('adds a confirmed friend straight in, with no acceptance step', async () => {
+    const gid = 'grp_add_friend';
+    await setDoc(doc(alice.db, `groups/${gid}`), groupDoc(alice));
+    await waitFor(
+      'onGroupCreated to seed the creator',
+      () => serverDoc(`groups/${gid}/members/${alice.uid}`),
+      (member) => member !== null,
+    );
+
+    const result = await alice.call<{ alreadyMember: boolean; memberCount: number }>(
+      'addFriendToGroup',
+      { groupId: gid, uid: bob.uid },
+    );
+    expect(result.alreadyMember).toBe(false);
+    expect(result.memberCount).toBe(2);
+
+    // Bob is a real member, written by the Function — `members` is `allow write: if false`.
+    const member = await serverDoc(`groups/${gid}/members/${bob.uid}`);
+    expect(member?.['leftAt']).toBeNull();
+    expect(member?.['balanceMinor']).toBe(0);
+
+    const group = await serverDoc(`groups/${gid}`);
+    expect(group?.['memberIds']).toEqual(expect.arrayContaining([alice.uid, bob.uid]));
+    expect(group?.['memberCount']).toBe(2);
+  });
+
+  it('is idempotent — adding twice is success, not a second member', async () => {
+    const gid = 'grp_add_twice';
+    await setDoc(doc(alice.db, `groups/${gid}`), groupDoc(alice));
+    await waitFor(
+      'onGroupCreated to seed the creator',
+      () => serverDoc(`groups/${gid}/members/${alice.uid}`),
+      (member) => member !== null,
+    );
+
+    await alice.call('addFriendToGroup', { groupId: gid, uid: bob.uid });
+    const again = await alice.call<{ alreadyMember: boolean }>('addFriendToGroup', {
+      groupId: gid,
+      uid: bob.uid,
+    });
+
+    expect(again.alreadyMember).toBe(true);
+    const group = await serverDoc(`groups/${gid}`);
+    expect(group?.['memberCount']).toBe(2);
+  });
+
+  it('refuses a caller who is not in the group themselves', async () => {
+    const gid = 'grp_add_outsider';
+    await setDoc(doc(alice.db, `groups/${gid}`), groupDoc(alice));
+    await waitFor(
+      'onGroupCreated to seed the creator',
+      () => serverDoc(`groups/${gid}/members/${alice.uid}`),
+      (member) => member !== null,
+    );
+
+    // Bob is Alice's friend but not in this group, so he cannot add her to it.
+    expect(
+      await rejectionCode(bob.call('addFriendToGroup', { groupId: gid, uid: alice.uid })),
+    ).toBe('functions/permission-denied');
   });
 });
 

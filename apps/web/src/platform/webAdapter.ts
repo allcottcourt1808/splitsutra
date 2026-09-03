@@ -71,6 +71,18 @@ export const webAdapter: PlatformAdapter = {
     return browserLocalPersistence;
   },
 
+  /**
+   * The same clipboard helper `share` falls back to, exposed as its own intent.
+   *
+   * 🔴 `navigator.clipboard` is undefined on an insecure origin — plain `http` on anything
+   * but localhost — so this genuinely can be unavailable in the field rather than only in old
+   * browsers. It rejects there rather than resolving, so the button can report it.
+   */
+  async copy(text: string): Promise<void> {
+    if (await copyToClipboard(text)) return;
+    throw new Error('The clipboard is not available in this browser.');
+  },
+
   async share(payload: SharePayload): Promise<void> {
     if (await shareViaWebShare(payload)) return;
     if (await copyToClipboard(payload.url)) return;
