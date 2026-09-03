@@ -233,6 +233,42 @@ question in shared-expense apps.
 both platforms and keeps them visually identical for free.
 **Cost:** Slower initial styling than Tailwind. Accepted for the portability guarantee.
 
+### ADR-13 — A friendship is promoted to an ordinary group by its first expense
+
+**Decision:** `onExpenseWritten` clears `isImplicit` on a friendship's group the first time that
+group holds an expense (`promoteFriendshipIfNeeded`, `lib/groups.ts`). The group keeps its id,
+its ledger and its `type: 'friend'`; only the flag changes, so
+`users/{uid}/friends/{fid}.implicitGroupId` still points at it and nothing moves. Amends **D2**,
+which made the 1:1 group permanently hidden.
+
+**Why:** D2 is right for a friendship with no money in it — fifty friends would otherwise be
+fifty one-person cards and the Groups tab would stop being useful. The cost only appears once
+money arrives, and then it is paid once per feature. A hidden group is unreachable, so every
+group capability needs a second, friend-shaped entry point: the expense list, the balance, a
+server-side balance projection and settling up were each built or repaired separately for
+exactly this reason, and comments, activity and editing were next. Promotion buys all of them at
+once, and it is self-selecting — the friendships that get promoted are precisely the ones with
+something to show.
+
+**Cost:** the Groups tab gains an entry per friendship-with-money, which is the clutter D2 was
+avoiding. Judged acceptable because it is now clutter that earns its place: a pair with a live
+balance is exactly what belongs in a list of groups. Some group features are also now reachable
+on a pair where they read oddly — an invite link on "you and Sandeep" would let a third person
+in, and that is a real edge to close later, not a reason to stay hidden.
+
+🔴 **The trap this decision sets, already sprung once in review.** The friend-balance projection
+(`recomputeBalances` → `users/{uid}/friends/{fid}.balanceMinor`, the only thing the Friends LIST
+can read) was gated on `isImplicit`. Promotion clears that flag, so the projection would have
+stopped at the exact moment a pair started owing each other money — reintroducing the bug it was
+written to fix, with the list saying "Settled up" to somebody who was owed. It is now keyed on
+`friends/{fid}.implicitGroupId === gid`, which is true before and after promotion. **Anything
+else that keys off `isImplicit` needs the same review**: the flag now means "this friendship has
+no money yet", not "this is a friendship".
+
+⚠️ **One-way, deliberately.** There is no demotion when the last expense is deleted. A group that
+appeared and disappeared from the Groups tab as a balance crossed zero would be worse than one
+that stays.
+
 ### ADR-12 — Debt simplification is on by default for a new group
 
 **Decision:** `createGroup` writes `simplifyDebts: true`, so the suggested-payment view is

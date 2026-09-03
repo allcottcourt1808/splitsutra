@@ -29,6 +29,10 @@ const state = vi.hoisted(() => ({
   group: null as Group | null,
   me: null as GroupMember | null,
   groupIdSeen: null as string | null,
+  /** Every group the signed-in user is in, as `useGroups` would report them. */
+  myGroups: [] as Group[],
+  /** groupId -> member balances, for the shared-group rows. */
+  balancesByGroup: {} as Record<string, { uid: string; balanceMinor: number }[]>,
 }));
 
 vi.mock('@splitsutra/core/hooks', () => ({
@@ -43,6 +47,14 @@ vi.mock('@splitsutra/core/hooks', () => ({
     activeMembers: state.me === null ? [] : [state.me],
     me: state.me,
     isAdmin: false,
+    loading: false,
+    error: null,
+    retry: () => undefined,
+  }),
+  useGroups: () => ({ groups: state.myGroups, loading: false, error: null }),
+  // Consumed by <SharedGroupRow>, one call per shared group.
+  useGroupBalances: (groupId: string) => ({
+    balances: state.balancesByGroup[groupId] ?? [],
     loading: false,
     error: null,
     retry: () => undefined,
@@ -115,7 +127,23 @@ beforeEach(() => {
   state.group = null;
   state.me = null;
   state.groupIdSeen = null;
+  state.myGroups = [];
+  state.balancesByGroup = {};
 });
+
+/** A real (non-implicit) group both people are in. */
+function sharedGroup(id: string, name: string, currency = 'USD'): Group {
+  return {
+    id,
+    name,
+    type: 'trip',
+    isImplicit: false,
+    currency,
+    memberIds: ['u1', 'u2', 'u3'],
+    memberCount: 3,
+    deletedAt: null,
+  } as unknown as Group;
+}
 
 describe('<FriendDetailScreen>', () => {
   it('says it is loading before the first answer arrives', () => {
@@ -205,6 +233,125 @@ describe('<FriendDetailScreen>', () => {
     expect(rows(container)).toHaveLength(0);
     expect(text).toContain('Settled up');
     expect(text).not.toContain('0.00');
+  });
+
+  it('lists a shared group and says which way the debt runs', () => {
+    state.friend = friendWith({});
+    state.group = implicitGroup();
+    state.myGroups = [sharedGroup('g-goa', 'Goa Trip')];
+    // Three-way: Bob (u2) owes, and the simplified plan settles him against the reader.
+    state.balancesByGroup['g-goa'] = [
+      { uid: 'u1', balanceMinor: 3000 },
+      { uid: 'u2', balanceMinor: -3000 },
+      { uid: 'u3', balanceMinor: 0 },
+    ];
+
+    const text = visit().textContent ?? '';
+
+    expect(text).toContain('Goa Trip');
+    expect(text).toContain('owes you');
+    expect(text).toContain('30.00');
+  });
+
+  it('offers a way to settle up when there is a balance', () => {
+    // 🔴 Before this, settling up with a friend was IMPOSSIBLE from the UI. `SettleUp` lives
+    // at /groups/:gid/settle and was linked only from the two group screens, and a
+    // friendship's implicit group is filtered out of the Groups tab — so you could run up a
+    // balance with a friend and have no route to clear it.
+    state.friend = friendWith({});
+    state.group = implicitGroup('USD');
+    state.me = myMember(2500);
+
+    const container = visit();
+
+    expect(
+      container.querySelector(`a[href="${paths.SettleUp({ gid: 'g-implicit' })}"]`),
+    ).not.toBeNull();
+  });
+
+  it('does not offer to settle up when the pair is square', () => {
+    // A settle-up button on a settled pair invites recording a payment that did not happen.
+    state.friend = friendWith({});
+    state.group = implicitGroup('USD');
+    state.me = myMember(0);
+
+    const container = visit();
+
+    expect(
+      container.querySelector(`a[href="${paths.SettleUp({ gid: 'g-implicit' })}"]`),
+    ).toBeNull();
+  });
+
+  it('links each shared group to that group', () => {
+    state.friend = friendWith({});
+    state.group = implicitGroup();
+    state.myGroups = [sharedGroup('g-goa', 'Goa Trip')];
+    state.balancesByGroup['g-goa'] = [
+      { uid: 'u1', balanceMinor: 3000 },
+      { uid: 'u2', balanceMinor: -3000 },
+      { uid: 'u3', balanceMinor: 0 },
+    ];
+
+    const container = visit();
+
+    // A real anchor, not an onPress: cmd-click and "copy link" have to work, and the
+    // destination is a deep link somebody may paste.
+    const link = container.querySelector(`a[href="${paths.GroupDetail({ gid: 'g-goa' })}"]`);
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toContain('Goa Trip');
+  });
+
+  it('says "you owe" when the debt runs the other way', () => {
+    state.friend = friendWith({});
+    state.group = implicitGroup();
+    state.myGroups = [sharedGroup('g-goa', 'Goa Trip')];
+    state.balancesByGroup['g-goa'] = [
+      { uid: 'u1', balanceMinor: -1500 },
+      { uid: 'u2', balanceMinor: 1500 },
+      { uid: 'u3', balanceMinor: 0 },
+    ];
+
+    const text = visit().textContent ?? '';
+
+    expect(text).toContain('you owe');
+    expect(text).toContain('15.00');
+  });
+
+  it('🔴 never shows the friendship itself as a shared group', () => {
+    // The implicit group is already the "Balance" section above. Listing it here too would
+    // show the same money twice under two different headings — and `useGroups` filtering
+    // implicit groups is the only thing stopping that, so it is worth pinning.
+    state.friend = friendWith({});
+    state.group = implicitGroup();
+    state.myGroups = [
+      { ...implicitGroup(), memberIds: ['u1', 'u2'] } as Group,
+      sharedGroup('g-goa', 'Goa Trip'),
+    ];
+    state.balancesByGroup['g-implicit'] = [
+      { uid: 'u1', balanceMinor: 9900 },
+      { uid: 'u2', balanceMinor: -9900 },
+    ];
+    state.balancesByGroup['g-goa'] = [
+      { uid: 'u1', balanceMinor: 0 },
+      { uid: 'u2', balanceMinor: 0 },
+      { uid: 'u3', balanceMinor: 0 },
+    ];
+
+    const text = visit().textContent ?? '';
+
+    expect(text).toContain('Goa Trip');
+    expect(text).not.toContain('99.00');
+  });
+
+  it('leaves out a group the friend is not in', () => {
+    state.friend = friendWith({});
+    state.group = implicitGroup();
+    state.myGroups = [{ ...sharedGroup('g-solo', 'Work lunch'), memberIds: ['u1', 'u3'] } as Group];
+
+    const text = visit().textContent ?? '';
+
+    expect(text).not.toContain('Work lunch');
+    expect(text).toContain('not in any groups together');
   });
 
   it('does not claim the expense list is empty before the group has loaded', () => {

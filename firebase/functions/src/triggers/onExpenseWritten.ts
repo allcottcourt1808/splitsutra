@@ -3,10 +3,10 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { recomputeBalances } from '../common/balances.js';
 import { MAX_INSTANCES, REGION } from '../common/config.js';
 import { applyIntegrityResult, checkExpense, loadMemberSets } from '../common/integrity.js';
-import { logError, logWarn, withLogging } from '../common/logging.js';
+import { logError, logInfo, logWarn, withLogging } from '../common/logging.js';
 import { activityIdFromEvent, summaries, writeActivity } from '../lib/activity.js';
 import { isIntegrityEcho } from '../lib/diff.js';
-import { memberName, readGroup } from '../lib/groups.js';
+import { memberName, promoteFriendshipIfNeeded, readGroup } from '../lib/groups.js';
 
 /**
  * ============================================================================
@@ -91,6 +91,18 @@ export const onExpenseWritten = onDocumentWritten(
         ...ctx,
         docId: eid,
       });
+
+      // ---- PROMOTION (ADR-13) --------------------------------------------------
+      // A friendship with money in it becomes an ordinary group, so it inherits every group
+      // feature instead of needing a friend-shaped copy of each one. Diff-guarded inside:
+      // it writes only when the group is still implicit, so this is a single read on every
+      // subsequent expense and no write at all.
+      //
+      // Before the balances on purpose. Both are idempotent, but a reader who sees the new
+      // expense should not find a group that is still hidden.
+      if (await promoteFriendshipIfNeeded(gid)) {
+        logInfo(ctx, 'friendship promoted to a group by its first expense (ADR-13)');
+      }
 
       // ---- BALANCES ------------------------------------------------------------
       // Runs even on an integrity echo: flipping the quarantine flag changes which

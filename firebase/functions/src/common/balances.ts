@@ -67,21 +67,27 @@ export async function recomputeBalances(gid: string): Promise<void> {
     // checks it. Do not add a second *computation* here — recompute and project, always.
     const memberIds = membersSnap.docs.map((d) => d.id);
     const groupCurrency = groupSnap.data()?.['currency'];
-    const projectToFriends =
-      groupSnap.data()?.['isImplicit'] === true &&
-      typeof groupCurrency === 'string' &&
-      // An implicit group is 1:1 by construction. Anything else is not a friendship, and
-      // guessing which two of three people it projects onto is not this function's job.
-      memberIds.length === 2;
+    // 🔴 Keyed on the FRIEND DOCUMENTS, deliberately not on `isImplicit`.
+    //
+    // A friendship's group is promoted to an ordinary visible group the moment it gets its
+    // first expense (ADR-13), which clears `isImplicit`. Gating on that flag meant the
+    // projection stopped at exactly the point the pair started owing each other money — the
+    // Friends list would have gone back to saying "Settled up", which is the bug the
+    // projection was written to fix in the first place.
+    //
+    // The durable fact is "these two people's friendship points at this group", and that is
+    // what `friends/{fid}.implicitGroupId` records, before and after promotion.
+    const isPair = typeof groupCurrency === 'string' && memberIds.length === 2;
 
-    const friendTargets = projectToFriends
+    const friendTargets = isPair
       ? memberIds.map((uid, index) => ({
           uid,
           ref: db.doc(`users/${uid}/friends/${String(memberIds[1 - index])}`),
         }))
       : [];
-    // Only documents that already exist are updated. `set({merge:true})` would conjure a
-    // half-built friend document out of a balance write if the pair were ever mid-repair.
+    // Only documents that already exist AND name this group are updated. `set({merge:true})`
+    // would conjure a half-built friend document out of a balance write, and a two-person
+    // group that is not a friendship must not touch either party's friend records at all.
     const friendSnaps = await Promise.all(friendTargets.map((target) => tx.get(target.ref)));
 
     // Q2 / docs/18 R5 — the one operation whose cost scales with group size.
@@ -128,7 +134,12 @@ export async function recomputeBalances(gid: string): Promise<void> {
     }
 
     friendTargets.forEach((target, index) => {
-      if (friendSnaps[index]?.exists !== true) return;
+      const snap = friendSnaps[index];
+      if (snap?.exists !== true) return;
+      // The friendship must actually name THIS group. Two people can share an ordinary group
+      // as well as a friendship; projecting the ordinary group's balance onto their friend
+      // documents would overwrite the 1:1 figure with an unrelated one.
+      if (snap.data()?.['implicitGroupId'] !== gid) return;
       tx.update(target.ref, {
         // 🔴 Sparse, exactly as `establishFriendship` seeds it: a settled pair is an EMPTY
         //    map, never `{ USD: 0 }`. Core's `balanceByCurrencySchema` is a sparse record and
@@ -171,7 +182,9 @@ export interface BalanceDrift {
 export async function hasFriendProjectionDrift(gid: string): Promise<boolean> {
   const groupSnap = await db.doc(`groups/${gid}`).get();
   const currency = groupSnap.data()?.['currency'];
-  if (groupSnap.data()?.['isImplicit'] !== true || typeof currency !== 'string') return false;
+  // Not gated on `isImplicit` — see the note in `recomputeBalances`. A friendship stops being
+  // implicit the moment it is promoted (ADR-13) and its projection must keep working.
+  if (typeof currency !== 'string') return false;
 
   const membersSnap = await db.collection(`groups/${gid}/members`).get();
   if (membersSnap.size !== 2) return false;
@@ -189,6 +202,9 @@ export async function hasFriendProjectionDrift(gid: string): Promise<boolean> {
     // A friendship with no friend document is a different problem — `repairGroupMembership`
     // territory — and not something a balance recompute can mend, so it is not drift here.
     if (!friendSnap.exists) continue;
+    // Two people can share an ordinary group as well as a friendship. Only the group their
+    // friendship actually names is projected, so only that one can be stale.
+    if (friendSnap.data()?.['implicitGroupId'] !== gid) return false;
 
     const amount = stored.get(uid) ?? 0;
     const expected = amount === 0 ? {} : { [currency]: amount };

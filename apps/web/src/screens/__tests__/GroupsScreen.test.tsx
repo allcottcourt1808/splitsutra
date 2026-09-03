@@ -160,9 +160,9 @@ describe('<GroupsScreen>', () => {
     expect(row?.textContent).not.toContain('0.00');
   });
 
-  it('summarises one line per currency and never a summed or netted total (D6)', () => {
-    // 🔴 Article I / D6. A single figure would read 1500 netted, or 3500 added blind — and
-    // both would be inventing an exchange rate the app does not have.
+  it('🔴 never nets ACROSS currencies, however it nets within one', () => {
+    // Article I / D6, and the half of this rule that is not negotiable. A single figure over
+    // USD and EUR would be inventing an exchange rate the app does not have.
     state.groups = [
       group('g1', 'Goa Trip', { currency: 'USD' as CurrencyCode }),
       group('g2', 'Berlin', { currency: 'EUR' as CurrencyCode }),
@@ -173,15 +173,18 @@ describe('<GroupsScreen>', () => {
     const text = container.textContent ?? '';
 
     expect(summaryLines(container)).toHaveLength(2);
-    expect(text).toContain('You are owed');
-    expect(text).toContain('You owe');
     expect(text).toContain('25.00');
     expect(text).toContain('10.00');
     expect(text).not.toContain('15.00');
     expect(text).not.toContain('35.00');
   });
 
-  it('adds within one currency but keeps owed and owing apart', () => {
+  it('nets owed against owing within one currency', () => {
+    // Changed deliberately: this used to assert the opposite. The two directions were kept
+    // apart so the card could not hide that somebody is waiting to be paid — right while this
+    // was the only summary on the screen. Every group is now listed beneath it with its own
+    // signed amount and counterparty, which answers that question far better, so the card is a
+    // summary again instead of two numbers to combine by hand.
     state.groups = [
       group('g1', 'Goa Trip', { currency: 'USD' as CurrencyCode }),
       group('g2', 'Flat', { currency: 'USD' as CurrencyCode }),
@@ -194,11 +197,36 @@ describe('<GroupsScreen>', () => {
 
     expect(summaryLines(container)).toHaveLength(1);
     expect(line?.textContent).toContain('You are owed');
-    expect(line?.textContent).toContain('35.00');
+    expect(line?.textContent).toContain('30.00');
+    expect(line?.textContent).not.toContain('35.00');
+  });
+
+  it('shows a net DEBT with the right direction', () => {
+    state.groups = [
+      group('g1', 'Goa Trip', { currency: 'USD' as CurrencyCode }),
+      group('g2', 'Flat', { currency: 'USD' as CurrencyCode }),
+    ];
+    state.balanceByGroup = balances({ g1: 6500, g2: -19417 });
+
+    const [line] = summaryLines(visit());
+
     expect(line?.textContent).toContain('You owe');
-    expect(line?.textContent).toContain('5.00');
-    // Netting the two would print 30.00 and hide that somebody is waiting to be paid.
-    expect(line?.textContent).not.toContain('30.00');
+    expect(line?.textContent).toContain('129.17');
+  });
+
+  it('drops a currency whose groups cancel out exactly, rather than showing zero', () => {
+    // Article I — settled is an ABSENT entry, never a `0` row.
+    state.groups = [
+      group('g1', 'Goa Trip', { currency: 'USD' as CurrencyCode }),
+      group('g2', 'Flat', { currency: 'USD' as CurrencyCode }),
+    ];
+    state.balanceByGroup = balances({ g1: 2500, g2: -2500 });
+
+    const container = visit();
+
+    expect(summaryLines(container)).toHaveLength(0);
+    expect(container.textContent).toContain('You are all settled up');
+    expect(container.textContent).not.toContain('0.00');
   });
 
   it('reads a group with a zero balance as settled rather than as a zero line', () => {
