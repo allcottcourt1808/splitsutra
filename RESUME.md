@@ -4,7 +4,9 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#56 merged. No branch open. **PROD IS DEPLOYED — <https://splitsutra.web.app>**
+## State: PRs #1–#59 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
+
+prod <https://splitsutra.web.app>, dev <https://splitsutra-dev-eac96.web.app>
 
 **#48** (`fix/friend-lookup-validation`) is merged. It fixed two bugs reported off the live dev
 backend, both on Add Friend:
@@ -74,6 +76,61 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-02 (later) — phone auth, and six wrong guesses before the right one
+
+`auth/invalid-app-credential` on phone sign-in. **Working now on both projects**, real SMS
+delivered, account created. The chain took six attempts to isolate; it is written out in full
+because every wrong turn looked reasonable.
+
+**What it was:** the project had **no reCAPTCHA Enterprise key**, while the Firebase JS SDK v12
+was already sending Enterprise credentials. Fix: Authentication → Settings → reCAPTCHA → Phone →
+**AUDIT**. That provisions `recaptchaKey` and the server starts accepting the token it was
+already being sent. `useSmsTollFraudProtection` came on with it — requests are now scored and
+blocked above 0.5, which is real mitigation the SMS cap does not yet provide.
+
+🔴 **`localhost` CANNOT do phone auth. It is documented, not a misconfiguration:** "Note that
+localhost is not allowed as a hosted domain for the purposes of phone auth." Adding localhost to
+the reCAPTCHA key's domain list — which is what I proposed — would never have worked. Real-SMS
+testing needs a hosted domain; local development needs **fictional test numbers**
+(`+1 650-555-3434` → `654321`), which skip SMS, quota and throttling. Still unconfigured;
+phase-02 §3.
+
+🪤 **The decisive diagnostic, when the SDK error is generic.** `accounts:sendVerificationCode`
+returns a specific reason the SDK swallows. Two things got it out:
+
+1. `curl` the endpoint with a deliberately invalid token. The error TYPE discriminates:
+   `CAPTCHA_CHECK_FAILED` means the key and the API are fine and the request reached the
+   captcha stage — which cleared API-key restrictions, a disabled Identity Toolkit, and a
+   disabled provider in one call.
+2. Patch `window.fetch` in the page to record request field SHAPES (lengths, not values) and
+   the response body. That is what produced `captchaResponse: "NO_RECAPTCHA"` alongside
+   `recaptchaVersion: RECAPTCHA_ENTERPRISE` — the client declaring Enterprise to a project that
+   had none.
+
+⚠️ **Two things I asserted before measuring, both wrong.** "FirebaseUI 6.1.0 is too old to mint
+Enterprise tokens, so do not enable enforcement" — it mints a 2,340-character one, and enabling
+AUDIT was the fix. "Add localhost to the key" — unsupported by design. Both were inferences from
+the library's age rather than from a trace, and both sent the owner to the wrong console page.
+
+⚠️ **The reCAPTCHA key list has three or four entries per project**, all named "Key for Identity
+Platform reCAPTCHA integration" (web, Android, iOS). Only the one `recaptchaConfig` reports is
+used — dev `6LfUDKYt…`, prod `6LfVDKYt…`. A domain added to the wrong one changes nothing.
+"Incomplete" status just means no assessments yet.
+
+🔴 **A string in a bundle still proves nothing, and it nearly caught me twice in one day.**
+`EmailAuthProvider` appears **3 times** in the deployed `SignInScreen` chunk after the provider
+was removed — because firebaseui bundles every provider regardless of config. The local build
+has exactly 3 too. Same shape as the auth-iframe grep in #52. **Compare hashes, not substrings:**
+`sha256(local chunk) === sha256(fetched chunk)` is what actually proves a deploy is current.
+
+**Also shipped (#59):** `addFriendToGroup` — a friend goes straight into a group, no link, no
+acceptance. Safe only because it refuses anyone who is not already a confirmed friend, which is
+the difference between "a friend adds you" and the stranger attack `friendRequests` exists to
+stop. Copy/Share on the invite link (`copy` is a new PlatformAdapter capability). Login redesign
+with the real app mark. **Email/password removed entirely** — FirebaseUI's email flow is
+unusable under email enumeration protection: it takes the sign-up branch every time and swallows
+`auth/email-already-in-use` with `return`, so a returning user's button silently does nothing.
 
 ### 2026-09-02 — sign-in works on prod; two quotas that are not the same thing
 

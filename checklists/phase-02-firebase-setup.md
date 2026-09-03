@@ -48,12 +48,23 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
       needs an admin token. Anyone auditing this should re-read it in the console rather
       than trusting this tick.
 - [ ] 🔴 **Phone auth quota limit: 50 SMS/day** to start
+      ✅ **Partial mitigation now in place on BOTH projects, 2026-09-02:** enabling reCAPTCHA
+      for the Phone provider (AUDIT) also turned on `useSmsTollFraudProtection`, which scores
+      every request and refuses to send above a 0.5 risk threshold. That is a real defence
+      against pumping and it is not the same as a ceiling — a run of legitimate-looking requests
+      is still uncapped. Both are wanted.
       🔴 **Not in the Firebase console.** Authentication → Settings has no SMS-volume field —
       its "Sign-up quota" is new _account creations per hour_, a different control that caps
       no SMS at all. The daily cap is a GCP quota: Google Cloud → IAM & Admin → Quotas,
       service **Identity Toolkit API**. Mistaking the two leaves SMS spend uncapped while
       looking done.
-- [ ] 🟡 **Add phone test numbers in the dev project** (e.g. `+1 5555555555` → `123456`).
+- [ ] 🔴 **Add phone test numbers in the dev project** (e.g. `+1 650-555-3434` → `654321`).
+      🔴 **Upgraded from 🟡: this is now the ONLY way to exercise phone auth locally.**
+      `localhost` cannot do phone auth at all — Firebase documents it, it is not a
+      misconfiguration to fix: "localhost is not allowed as a hosted domain for the purposes of
+      phone auth". Real-SMS testing has to happen on a hosted domain
+      (<https://splitsutra-dev-eac96.web.app> works). Fictional numbers also skip SMS cost,
+      quota and throttling, and `appVerificationDisabledForTesting` makes them automatable.
       Use these for **all** development; real SMS costs money and is only needed for final
       device testing in Phase 11.
 - [ ] 🟢 Customise the verification and password-reset email templates
