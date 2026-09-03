@@ -118,3 +118,76 @@
   border-block-start: 1px solid var(--splitsutra-color-border);
   padding-block-start: var(--splitsutra-space-lg);
 }
+
+/**
+ * 🔴 FirebaseUI's stylesheet assumes a LIGHT background, and this app has a dark theme.
+ *
+ * `.firebaseui-title`, `.firebaseui-text` and `.firebaseui-label` all hard-code
+ * `color: rgba(0,0,0,.87)` / `.54`. On the dark theme that is black text on a near-black
+ * surface: the "Enter your phone number" heading is effectively invisible and the field label
+ * is worse. That is the `color-contrast` failure Lighthouse reported against this widget, and
+ * it is NFR-4/5 rather than a preference — nobody can use a form they cannot read.
+ *
+ * `.firebaseui-button` is `height: 36px`, under the 44×44 Article IX requires, on CANCEL and
+ * VERIFY.
+ *
+ * So these rules exist for the same reason as the block above: an article or a token justifies
+ * every one of them. The widget's BEHAVIOUR is still entirely FirebaseUI's — this changes what
+ * colour its text is, not what it does.
+ *
+ * ⚠️ The reCAPTCHA box stays white. It is a cross-origin iframe rendered by Google, its
+ * contents are not ours to style, and pretending otherwise by drawing a dark frame round it
+ * would look more broken than leaving it alone.
+ */
+.signInColumn :global(.firebaseui-title),
+.signInColumn :global(.firebaseui-subtitle),
+.signInColumn :global(.firebaseui-text) {
+  color: var(--splitsutra-color-text);
+  font-family: inherit;
+}
+
+.signInColumn :global(.firebaseui-label),
+.signInColumn :global(.firebaseui-country-selector),
+.signInColumn :global(.firebaseui-tos) {
+  color: var(--splitsutra-color-text-secondary);
+  font-family: inherit;
+}
+
+/* The text field. FirebaseUI draws a Material underline in a hard-coded grey; on a dark
+   surface the field reads as absent until it is focused. */
+.signInColumn :global(.firebaseui-input),
+.signInColumn :global(.firebaseui-input-invalid) {
+  color: var(--splitsutra-color-text);
+  background-color: transparent;
+  font-family: inherit;
+  border-block-end: 1px solid var(--splitsutra-color-border-strong);
+}
+
+.signInColumn :global(.firebaseui-input::placeholder) {
+  color: var(--splitsutra-color-text-secondary);
+}
+
+/* CANCEL / VERIFY / NEXT. 36px is under the touch-target minimum, and Material blue is not a
+   colour this app uses anywhere else. */
+.signInColumn :global(.firebaseui-button) {
+  min-height: var(--splitsutra-size-touch-target);
+  border-radius: var(--splitsutra-radius-md);
+  font-family: inherit;
+  font-weight: var(--splitsutra-font-weight-semibold);
+}
+
+.signInColumn :global(.firebaseui-id-submit),
+.signInColumn :global(.firebaseui-button.mdl-button--colored) {
+  background-color: var(--splitsutra-color-primary);
+  color: var(--splitsutra-color-on-primary);
+}
+
+.signInColumn :global(.firebaseui-id-secondary-link) {
+  color: var(--splitsutra-color-primary-text);
+}
+
+/* The error text the widget renders at the field. Its own red is tuned for white. */
+.signInColumn :global(.firebaseui-error) {
+  color: var(--splitsutra-color-danger-text);
+  font-family: inherit;
+}
