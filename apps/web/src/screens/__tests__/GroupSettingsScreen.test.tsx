@@ -31,7 +31,8 @@ vi.mock('@splitsutra/core/hooks', () => ({
   useGroup: () => ({ group: state.group, loading: state.loading, error: state.error }),
   useGroupMembers: () => ({ me: state.me, isAdmin: state.isAdmin }),
   // Only feeds the screen's accessible label, which names the group — see `groupLabel`.
-  useAuth: () => ({ user: { uid: 'u1', displayName: 'Me' } }),
+  useAuth: () => ({ user: { uid: 'u1' }, profile: { displayName: 'Me' } }),
+  useFriends: () => ({ friends: [], loading: false, error: null }),
 }));
 
 vi.mock('@splitsutra/core/repositories', () => ({
@@ -199,12 +200,37 @@ describe('<GroupSettingsScreen>', () => {
     }
   });
 
+  it('🔴 offers no type control on a friendship, because one tap would destroy it', () => {
+    // `type === 'friend'` is the durable marker that this is a 1:1 — `groupLabel` keys on it to
+    // show the friend's name, and the expense picker keys on it to list the group under People.
+    // `friend` is not in SELECTABLE_GROUP_TYPES, so the control highlighted `Other` and the
+    // first tap wrote a real type over the marker. Permanent, and unreachable in reverse.
+    //
+    // Unreachable while D2 kept these groups hidden. ADR-13 put this screen one tap from the
+    // Groups tab.
+    state.group = group({ type: 'friend' as GroupType, name: 'Me & Priya', memberCount: 2 });
+
+    const container = visit();
+
+    expect(() => button(container, 'Home')).toThrow();
+    expect(() => button(container, 'Trip')).toThrow();
+    // Everything else on the screen still works — this is a removed control, not a locked page.
+    expect(button(container, 'Save name')).toBeDefined();
+    expect(button(container, 'Rebuild balances')).toBeDefined();
+  });
+
+  it('still offers the type control on an ordinary group', () => {
+    expect(button(visit(), 'Home')).toBeDefined();
+  });
+
   it('🔴 states the currency and offers no control that could change it (AC-C1.1)', () => {
     const container = visit();
     const text = container.textContent ?? '';
 
     expect(text).toContain('INR');
-    expect(text).toContain('cannot be changed');
+    // The copy was shortened; what must survive is that it says the currency is settled and
+    // offers nothing that could change it. The absent control is the load-bearing half.
+    expect(text).toContain('Fixed when this group was created');
     expect(() => field(container, 'Currency')).toThrow();
   });
 

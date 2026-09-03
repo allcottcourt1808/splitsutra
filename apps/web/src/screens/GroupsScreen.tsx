@@ -106,7 +106,7 @@ function summarise(
 
 export function GroupsScreen() {
   const { groups, loading, error } = useGroups();
-  const { user } = useAuth();
+  const { profile } = useAuth();
 
   const groupIds = useMemo(() => groups.map((group) => group.id), [groups]);
   const { balanceByGroup } = useMyGroupBalances(groupIds);
@@ -114,7 +114,7 @@ export function GroupsScreen() {
   // A promoted friendship (ADR-13) is a card on this screen, and its stored name is
   // `"<you> & <them>"` — half of which is the reader's own name. See `groupLabel`.
   const friendNames = useFriendshipNames();
-  const selfName = user?.displayName ?? '';
+  const selfName = profile?.displayName ?? '';
 
   const lines = useMemo(() => summarise(groups, balanceByGroup), [groups, balanceByGroup]);
 

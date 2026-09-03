@@ -29,7 +29,7 @@ import { useFriendshipNames } from './group/useFriendshipNames';
 
 export function ActivityScreen() {
   const { entries, loading, error, hasMore, loadMore } = useActivity();
-  const { user } = useAuth();
+  const { profile } = useAuth();
   // So a row from a promoted friendship reads "· Sandeep" rather than "· Sandeep & you".
   const friendNames = useFriendshipNames();
 
@@ -77,7 +77,7 @@ export function ActivityScreen() {
               entry={entry}
               now={now}
               friendNames={friendNames}
-              selfName={user?.displayName ?? ''}
+              selfName={profile?.displayName ?? ''}
             />
           )}
         />

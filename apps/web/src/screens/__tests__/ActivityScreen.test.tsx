@@ -35,7 +35,7 @@ vi.mock('@splitsutra/core/hooks', () => ({
   }),
   // Only to label a promoted friendship by the friend's name — see `groupLabel`. No friends
   // here, so every row falls back to the stored group name, which is what these tests assert.
-  useAuth: () => ({ user: { uid: 'u1', displayName: 'Me' } }),
+  useAuth: () => ({ user: { uid: 'u1' }, profile: { displayName: 'Me' } }),
   useFriends: () => ({ friends: [], loading: false, error: null }),
 }));
 

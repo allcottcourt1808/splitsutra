@@ -47,7 +47,7 @@ function describeSaveError(cause: unknown): string {
 export function AddExpenseScreen() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const selfUid = user?.uid ?? '';
 
   const { groups, loading: groupsLoading, error: groupsError } = useComposerGroups();
@@ -166,7 +166,7 @@ export function AddExpenseScreen() {
       members={members}
       currency={currency}
       selfUid={selfUid}
-      selfName={user?.displayName ?? ''}
+      selfName={profile?.displayName ?? ''}
       friendNames={friendNames}
       saving={saving}
       saveError={saveError}
