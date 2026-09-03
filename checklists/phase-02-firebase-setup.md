@@ -67,8 +67,13 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
       quota and throttling, and `appVerificationDisabledForTesting` makes them automatable.
       Use these for **all** development; real SMS costs money and is only needed for final
       device testing in Phase 11.
-- [ ] 🔴 **Enable Apple** — the code is shipped and the button is on `/login`; until this is
-      done it ends in `auth/operation-not-allowed`, which the error slot states in words.
+- [ ] 🔴 **Enable Apple** — the code is shipped and tested, and the button is **hidden** behind
+      `APPLE_ENABLED` in `apps/web/src/auth/FirebaseUIMount.tsx`. Flip that to `true` and deploy
+      once the console work below is done; it is one line and one deploy.
+      It was briefly live on prod (2026-09-03) and pulled straight back: without configuration
+      it ends in `auth/operation-not-allowed`, and as the third button on the sign-in screen it
+      is the first thing a new tester taps. Honest error, useless to somebody who was invited to
+      try the app.
       🔴 **Costs money and cannot be worked around: Sign In with Apple can only be configured
       by a member of the [Apple Developer Program](https://developer.apple.com/programs/)**
       ($99/year). Nothing in Firebase substitutes for it.

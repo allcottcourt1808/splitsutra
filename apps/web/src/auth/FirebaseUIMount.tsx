@@ -46,6 +46,25 @@ import 'firebaseui/dist/firebaseui.css';
 import { EMULATOR, emulatorsEnabled, readFirebaseConfig } from '../platform/firebaseEnv';
 
 /**
+ * 🔴 **Sign in with Apple: built and working, deliberately not shown.**
+ *
+ * Flip to `true` — one line, one deploy — the moment the provider is configured in the Firebase
+ * console. Steps are in `checklists/phase-02` §3, and the blocker is an Apple Developer Program
+ * membership ($99/year) rather than anything in this repo.
+ *
+ * Why it is a flag rather than a deleted block: without console configuration the button ends in
+ * `auth/operation-not-allowed`, and it is the THIRD button on the sign-in screen — the first
+ * thing a new tester taps. `describeAuthError` renders that honestly ("That sign-in method is not
+ * switched on for this project yet"), which is right for us and useless to somebody who was
+ * invited to try the app. A visible control that cannot work is worse than an absent one.
+ *
+ * ⚠️ This is a build-time constant, not an env var, precisely so the two projects cannot drift:
+ *    a provider enabled on dev but not prod would put the same broken button in front of real
+ *    users. Turn it on for both, or neither.
+ */
+const APPLE_ENABLED = false;
+
+/**
  * The compat `Auth` the widget needs, wrapping the app core already initialised.
  *
  * Memoised because `firebase.auth()` is cheap but `useEmulator()` is not idempotent — calling
@@ -151,29 +170,21 @@ export function FirebaseUIMount({ onError }: FirebaseUIMountProps) {
           // account is how one person's expenses end up in another person's group.
           customParameters: { prompt: 'select_account' },
         },
-        {
-          // 🔴 REQUIRES CONSOLE CONFIGURATION, and fails loudly without it. Apple is enabled
-          //    per project with a Services ID, Team ID, Key ID and a private key from an Apple
-          //    Developer Program account; until that exists this button ends in
-          //    `auth/operation-not-allowed`. See checklists/phase-02 §"Sign in with Apple".
-          //
-          //    That is a deliberate contrast with the email provider removed above, which
-          //    failed SILENTLY. This one surfaces through `describeAuthError` into the error
-          //    slot, so a missing configuration is visible rather than a dead button.
-          provider: 'apple.com',
-          // No `providerName`, `buttonColor` or `iconUrl`: firebaseui 6.1.0 already carries
-          // defaults for `apple.com` — "Apple", `#000000`, and its own hosted logo — so
-          // spelling them out here would be a second source of truth for Apple's brand rules.
-          //
-          // ⚠️ That logo is fetched from `www.gstatic.com`. There is no CSP on hosting today,
-          //    so it loads; adding one has to allow that origin or the button loses its mark.
-          //
-          // `email` and `name` are the default scopes when "One account per email address" is
-          // on, which it is. Named anyway, because switching that setting to multiple accounts
-          // silently stops Firebase requesting ANY scope — and then Apple returns no name at
-          // all, which `deriveDisplayName` can only answer with "New user".
-          scopes: ['email', 'name'],
-        },
+        // 🔴 Apple — BUILT, TESTED, AND HIDDEN. Flip `APPLE_ENABLED` above to ship it.
+        //
+        // No `providerName`, `buttonColor` or `iconUrl`: firebaseui 6.1.0 already carries
+        // defaults for `apple.com` — "Apple", `#000000`, and its own hosted logo — so spelling
+        // them out here would be a second source of truth for Apple's brand rules. Verified
+        // rendering correctly on the dev deploy before it was hidden.
+        //
+        // ⚠️ That logo is fetched from `www.gstatic.com`. There is no CSP on hosting today, so
+        //    it loads; adding one has to allow that origin or the button loses its mark.
+        //
+        // `email` and `name` are the default scopes when "One account per email address" is on,
+        // which it is. Named anyway, because switching that setting to multiple accounts
+        // silently stops Firebase requesting ANY scope — and then Apple returns no name at all,
+        // which `deriveDisplayName` can only answer with "New user".
+        ...(APPLE_ENABLED ? [{ provider: 'apple.com', scopes: ['email', 'name'] }] : []),
       ],
       // accountchooser.com was shut down; leaving this on shows a broken interstitial.
       credentialHelper: firebaseui.auth.CredentialHelper.NONE,
