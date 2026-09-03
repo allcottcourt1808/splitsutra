@@ -181,7 +181,7 @@ before there's demand is speculative work.
 ### 🔵 Paid "Pro" tier _(Q9 — open)_
 
 No ads, receipts, export, charts, unlimited groups.
-**Worth noting: Splitwise itself is freemium, not ad-funded.** That's a strong signal about
+**Worth noting: the category leader is freemium, not ad-funded.** That's a strong signal about
 what actually monetises in this category — see
 [14-monetization-ads.md](14-monetization-ads.md) §7.
 

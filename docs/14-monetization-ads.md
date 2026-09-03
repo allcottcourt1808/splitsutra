@@ -338,7 +338,7 @@ thousands of DAU.
 
 ### The alternative worth considering
 
-**Splitwise itself is freemium**, not ad-funded — that's a strong signal about what
+**The category leader is freemium**, not ad-funded — that's a strong signal about what
 actually monetises in this category. A "Pro" tier could offer: unlimited groups, receipt
 scanning, expense export, charts, currency conversion, no ads.
 

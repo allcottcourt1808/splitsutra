@@ -34,7 +34,7 @@ Covers **Epic E**. Reference: [../docs/04-split-engine.md](../docs/04-split-engi
 - [ ] 🔴 Property test: determinism
 - [ ] 🔴 Unit: single debtor / single creditor; already-settled group returns `[]`
 - [ ] 🟢 Document in code that this is a **heuristic, not the optimum** — the true minimum
-      is NP-hard and Splitwise itself uses a heuristic. Do not let a future reader "fix" it.
+      is NP-hard and every shipping product uses a heuristic. Do not let a future reader "fix" it.
 
 ## 2. Balance display
 

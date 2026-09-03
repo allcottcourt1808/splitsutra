@@ -14,7 +14,7 @@ Every layout decision must satisfy the mobile-portability contract in
 
 ## Navigation model
 
-Five destinations, bottom tab bar — mirrors Splitwise and maps 1:1 onto React Navigation's
+Five destinations, bottom tab bar — mirrors the category convention and maps 1:1 onto React Navigation's
 `createBottomTabNavigator` later.
 
 ```

@@ -63,39 +63,6 @@ Verified on this machine: only **Git 2.55.0** is installed. Everything else is m
 - [x] ✅ **Billing: stay on free Spark until Phase 11** — Phases 00–10 cost $0
 - [ ] 🟢 Q9, Q10, Q12 are Phase 13 (ads) — **not blocking**
 
-## Name clearance 🟡 _Ten minutes now beats renaming after publish_
-
-> 🔴 **RESULT for the original codename: clearance FAILED.** Searched 2026-08-24. **Settl**
-> was already in live use by at least three expense-splitting apps: _Settl: Split_ (Settl
-> Financial Corporation, iOS), _Settl_ (AI splitter, `settl.fyi`, iOS + Android), and _Settl_
-> (UPI splitter, `settlapp.in`) — a direct collision in the identical product category.
->
-> ✅ **Resolved 2026-08-27: the project was renamed to `SplitSutra`.** Recorded as **Q16 / R6**
-> in [../docs/19-qa-log.md](../docs/19-qa-log.md).
->
-> ⚠️ `SplitSutra` has **not** been clearance-checked itself. Run the sweep in
-> [../docs/21-name-clearance.md](../docs/21-name-clearance.md) before Phase 02 reserves a
-> Firebase project ID — that is the permanent, globally-unique step, and the point after
-> which a rename stops being cheap.
-
-`SplitSutra` is chosen. Still to verify before Phase 02:
-
-- [ ] 🟡 **USPTO search** — [tmsearch.uspto.gov](https://tmsearch.uspto.gov), classes 9
-      (software) and 36 (financial services). Search "splitsutra", "settle", "settled".
-- [ ] 🟡 **App Store + Google Play** search for "SplitSutra" and "Settle"
-- [ ] 🟡 **Domain** — `splitsutra.app` and `splitsutra.com`. `.app` is likely gettable and a fine
-      primary for this product.
-- [ ] 🔴 ⚠️ **Reserve the Firebase project IDs early** — globally unique, first-come. If
-      `splitsutra-dev` is taken, fall back to `splitsutra-app-dev` and update
-      [phase-02-firebase-setup.md](phase-02-firebase-setup.md).
-- [ ] 🟢 If clearance fails, the runners-up were **Dutch**, **Reckon**, **Parity** —
-      recorded in [../docs/12-decisions.md](../docs/12-decisions.md) Q3
-
-> The dropped `e` moves out of the crowded "debt settlement" trademark space, which
-> improves the position but does not guarantee it.
-
----
-
 ## VS Code workspace — checked in at `.vscode/`
 
 Committed deliberately: these are project settings, not personal preferences, and every

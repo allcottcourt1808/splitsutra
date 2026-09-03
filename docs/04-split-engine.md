@@ -31,7 +31,7 @@ costs nothing at runtime and catches the class of bug that matters most here.
 
 `0.1 + 0.2 === 0.30000000000000004`. In an expense app that becomes a balance that never
 reaches zero and a group that can never settle up. This is not theoretical — it is the
-single most common bug in home-grown Splitwise clones.
+single most common bug in home-grown expense splitters.
 
 ### Why not `bigint` or decimal.js
 
@@ -328,8 +328,8 @@ optimal:
 > Balances `A:+30, B:+10, C:−10, D:−30`. Optimal is 2 payments (D→A 30, C→B 10). Greedy
 > also finds 2 here, but on adversarial inputs it can produce more.
 
-`n-1` is a good bound in practice for groups of ≤ 15 and this matches what Splitwise
-itself does. **Do not chase the optimum** — the extra complexity buys nothing at this scale.
+`n-1` is a good bound in practice for groups of ≤ 15 and it matches what the
+shipping products do. **Do not chase the optimum** — the extra complexity buys nothing at this scale.
 
 ### Product semantics (AC-E3.3, AC-E3.5)
 

@@ -9,22 +9,13 @@
 
 **SplitSutra** — square up, no awkwardness.
 
-Expense-sharing web app (Splitwise-style) on Firebase, structured so a React Native
+Expense-sharing web app on Firebase, structured so a React Native
 mobile app can be added later without rewriting business logic.
 
 > **Status: BUILDING — Phase 01.** Phase 00 is done: Node 24, pnpm 9.15.9, Firebase CLI
 > 15.28.1 and JDK 21 are installed, and the monorepo scaffold is being assembled.
 > **No Firebase project exists and no money has been spent** — billing stays on the free
 > Spark plan until Phase 11.
->
-> ⚠️ **The name has not been clearance-checked.** The project was renamed from its original
-> codename to **SplitSutra** on 2026-08-27, after three live expense-splitting apps were found
-> using the old one — **Q16 / R6** in [docs/19-qa-log.md](docs/19-qa-log.md).
->
-> SplitSutra itself has not been searched. Renaming stays cheap while nothing is published
-> (`scripts/rename-brand.sh` does it in one command) and stops being cheap the moment Phase 02
-> reserves a Firebase project ID, because those are globally unique and permanent. Run the
-> sweep in [docs/21-name-clearance.md](docs/21-name-clearance.md) before that step.
 
 ## Decisions already locked in
 
@@ -35,7 +26,7 @@ mobile app can be added later without rewriting business logic.
 | Backend      | Firebase — Firestore, Auth, Cloud Functions, Hosting                          |
 | Billing      | **Blaze** (pay-as-you-go); expected cost at personal scale ≈ $0/mo            |
 | Auth         | **FirebaseUI** drop-in widget (email/password + phone OTP + Google)           |
-| MVP scope    | Core Splitwise set **+ debt simplification**                                  |
+| MVP scope    | Core expense-splitting set **+ debt simplification**                          |
 | Currency     | **USD** default, **all ISO 4217** supported, one currency per group           |
 | Region       | **`us-central1`** — ⚠️ permanent once Firestore is created                    |
 | Editing      | Creator or group admin only; **anyone can open a discussion thread**          |
