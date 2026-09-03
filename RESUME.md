@@ -4,7 +4,7 @@
 Repo: <https://github.com/allcottcourt1808/splitsutra> (public).
 Checkout: `C:\Users\neeth\coding\splitsutra`.
 
-## State: PRs #1–#59 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
+## State: PRs #1–#61 merged. No branch open. **BOTH ENVIRONMENTS DEPLOYED** —
 
 prod <https://splitsutra.web.app>, dev <https://splitsutra-dev-eac96.web.app>
 
@@ -76,6 +76,33 @@ Admin SDK bypassing Rules. Only callables get the binding. See the 2026-08-31 se
 
 Gate on #32: typecheck (both resolvers) · lint · depcruise (262 modules, 922 deps) ·
 format:check · **650 tests across 42 files**.
+
+### 2026-09-03 — Sign in with Apple: code shipped, provider not enabled
+
+The button is on `/login` and **will fail with `auth/operation-not-allowed` until somebody
+configures the provider**. That is deliberate and is the opposite of how the email provider
+failed: this error reaches `describeAuthError` and lands in the error slot in words, rather than
+being swallowed the way FirebaseUI swallowed `auth/email-already-in-use`.
+
+🔴 **The blocker is money, not code.** Sign In with Apple can only be configured by an **Apple
+Developer Program** member ($99/year). Steps are in
+[checklists/phase-02](checklists/phase-02-firebase-setup.md) §3, including the one that is easy to
+get wrong: the Return URL is `https://<project>.firebaseapp.com/__/auth/handler`, **not**
+`web.app` — hosting serves from `splitsutra.web.app` but `authDomain` is the `firebaseapp.com`
+subdomain, and that is the origin Apple redirects to.
+
+firebaseui 6.1.0 already carries Apple's name, colour and logo, so the config is
+`{ provider: 'apple.com', scopes: ['email', 'name'] }` and nothing else. ⚠️ Its logo is fetched
+from `www.gstatic.com`; there is no CSP on hosting today, but adding one has to allow that origin.
+
+⚠️ **Apple gives a name on the first sign-in only, and never a photo URL.** A user who hides their
+email arrives as `<opaque token>@privaterelay.appleid.com`. `deriveDisplayName` now refuses to
+seed that as a display name — it is not a name, and it is a relay ADDRESS that would be
+denormalised onto every group member and friend document (D4). Such a user gets "New user" and is
+asked to set one. That function had **no tests at all** before this; it has seven now.
+
+**Prod was NOT redeployed with the Apple button** — dev only. Shipping a button that throws to
+real users is worse than shipping nothing, so prod waits for the console.
 
 ### 2026-09-03 — a friendship's name cannot be stored
 

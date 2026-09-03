@@ -67,6 +67,29 @@ Reference: [../docs/08-firebase-setup.md](../docs/08-firebase-setup.md)
       quota and throttling, and `appVerificationDisabledForTesting` makes them automatable.
       Use these for **all** development; real SMS costs money and is only needed for final
       device testing in Phase 11.
+- [ ] 🔴 **Enable Apple** — the code is shipped and the button is on `/login`; until this is
+      done it ends in `auth/operation-not-allowed`, which the error slot states in words.
+      🔴 **Costs money and cannot be worked around: Sign In with Apple can only be configured
+      by a member of the [Apple Developer Program](https://developer.apple.com/programs/)**
+      ($99/year). Nothing in Firebase substitutes for it.
+      On <https://developer.apple.com/account/resources>, per project: 1. Configure Sign In with Apple for the web and register the Return URL
+      `https://splitsutra-prod.firebaseapp.com/__/auth/handler` — and the dev one,
+      `https://splitsutra-dev-eac96.firebaseapp.com/__/auth/handler`. Note the **Services
+      ID**.
+      ⚠️ `firebaseapp.com`, **not** `web.app`. Hosting serves the app from `splitsutra.web.app`
+      but `authDomain` in the Firebase config is the `firebaseapp.com` subdomain, and that is
+      the origin Apple redirects back to. Registering the wrong one fails at the last step of
+      a flow that looked like it was working. 2. Create a **Sign In with Apple private key**; note the key and the **Key ID**. 3. Only if Firebase Auth ever sends email: configure the private email relay service for
+      `noreply@<project>.firebaseapp.com`. Not needed today — email/password is off.
+      Then Firebase console → Authentication → Sign-in method → Apple, with the Services ID,
+      Team ID, Key ID and private key.
+      ⚠️ **Apple gives a display name on the FIRST sign-in only, and never a photo URL.** A
+      user who hides their email arrives as `<token>@privaterelay.appleid.com`, whose local
+      part is an opaque identifier — `deriveDisplayName` deliberately refuses to seed it as a
+      name and falls through to "New user" (`packages/core/src/repositories/userRepo.ts`).
+      🟢 Not needed for the web app: Apple's account-deletion requirement (App Store guideline
+      5.1.1(v), and `revokeAccessToken`) applies to App Store submissions. It becomes real when
+      the React Native app ships, and `deleteAccount` is where it will have to go.
 - [ ] 🟢 Customise the verification and password-reset email templates
 
 ## 4. Billing — ⚠️ deliberately NOT yet 🔴

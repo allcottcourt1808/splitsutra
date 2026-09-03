@@ -84,7 +84,7 @@ vi.mock('../../utils/crypto.js', async (importOriginal) => {
   };
 });
 
-const { upsertUserProfile } = await import('../userRepo.js');
+const { upsertUserProfile, deriveDisplayName, maskPhoneNumber } = await import('../userRepo.js');
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
  * Fixtures
@@ -227,5 +227,81 @@ describe('upsertUserProfile — the usernames self-heal', () => {
       { path: `users/${UID}`, data: { email: EMAIL, updatedAt: 'SERVER_TIMESTAMP' } },
     ]);
     expect(seam.readKeys).toEqual([]);
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── *
+ * deriveDisplayName
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The name a new profile is seeded with — which is the name every OTHER member of every group
+ * sees, because it is denormalised onto member and friend documents (D4). Nothing here had a
+ * test before Apple sign-in made the nameless case ordinary rather than theoretical.
+ */
+describe('deriveDisplayName', () => {
+  function user(over: Partial<AuthUser>): AuthUser {
+    return {
+      uid: UID,
+      displayName: null,
+      email: null,
+      phoneNumber: null,
+      photoURL: null,
+      emailVerified: false,
+      isAnonymous: false,
+      ...over,
+    } as AuthUser;
+  }
+
+  it('prefers the name the provider gave, trimmed', () => {
+    expect(deriveDisplayName(user({ displayName: '  Priya Nair  ' }))).toBe('Priya Nair');
+  });
+
+  it('falls back to the email local part', () => {
+    expect(deriveDisplayName(user({ email: 'priya.nair@example.com' }))).toBe('priya.nair');
+  });
+
+  it("🔴 never seeds an Apple relay address as somebody's name", () => {
+    // "Hide My Email" gives an opaque token, not a name — and it is a relay ADDRESS, which
+    // would then be handed to everyone in every group they join.
+    expect(deriveDisplayName(user({ email: 'k8s2mn4qpz@privaterelay.appleid.com' }))).toBe(
+      'New user',
+    );
+    // Case-insensitively: the domain arrives however Apple sends it.
+    expect(deriveDisplayName(user({ email: 'K8S2MN4QPZ@PrivateRelay.AppleID.com' }))).toBe(
+      'New user',
+    );
+    // A real name still wins over the relay address — Apple supplies one on the first sign-in.
+    expect(
+      deriveDisplayName(user({ displayName: 'Priya', email: 'k8s@privaterelay.appleid.com' })),
+    ).toBe('Priya');
+    // And a phone on the same account is still better than nothing.
+    expect(
+      deriveDisplayName(
+        user({ email: 'k8s@privaterelay.appleid.com', phoneNumber: '+919876543210' }),
+      ),
+    ).toBe('•••• 3210');
+  });
+
+  it('does not mistake a lookalike domain for the relay', () => {
+    // The check is an exact domain suffix, not a substring: this is a real address.
+    expect(deriveDisplayName(user({ email: 'me@notprivaterelay.appleid.com.example.org' }))).toBe(
+      'me',
+    );
+  });
+
+  it('masks a phone number rather than showing it', () => {
+    expect(deriveDisplayName(user({ phoneNumber: '+919876543210' }))).toBe('•••• 3210');
+    expect(maskPhoneNumber('+1 (224) 200-4407')).toBe('•••• 4407');
+    // Nothing to mask is not an empty display name — `displayNameSchema` rejects those.
+    expect(maskPhoneNumber('++')).toBe('New user');
+  });
+
+  it('truncates to the 50 the schema allows rather than failing validation', () => {
+    expect(deriveDisplayName(user({ displayName: 'x'.repeat(80) }))).toHaveLength(50);
+  });
+
+  it('has something to say when the provider gave nothing at all', () => {
+    expect(deriveDisplayName(user({}))).toBe('New user');
   });
 });
