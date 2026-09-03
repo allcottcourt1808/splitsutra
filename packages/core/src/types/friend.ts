@@ -19,7 +19,14 @@ import {
 export const friendSchema = z.object({
   /** Equals the document ID. */
   friendUid: uidSchema,
-  /** Denormalized snapshot, refreshed by the profile fan-out Function (D4). */
+  /**
+   * Denormalized snapshot, taken when the friendship was established.
+   *
+   * ⚠️ NOT refreshed, whatever D4 implies: `onUserProfileWritten` fans out to `usernames/` and
+   * to `groups/{gid}/members/{uid}`, and never touches friend documents — so a friend who
+   * renames themselves keeps their old name here. Prefer a member document wherever one is
+   * already subscribed (see the web app's `groupLabel`).
+   */
   displayName: displayNameSchema,
   photoURL: photoUrlSchema,
   /** The hidden two-person group that carries 1:1 expenses (D2). */

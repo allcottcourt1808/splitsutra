@@ -14,6 +14,7 @@ import { Avatar } from '../../components/Avatar';
 import { ListRow } from '../../components/ListRow';
 import { Money } from '../../components/Money';
 import { paths } from '../../navigation/paths';
+import { groupLabel } from '../group/groupLabel';
 
 /**
  * Where tapping the row goes.
@@ -45,13 +46,22 @@ export interface ActivityRowProps {
    * what "2h ago" means.
    */
   now: number;
+  /** `implicitGroupId → the friend's name`, and the viewer's own name — see `groupLabel`. */
+  friendNames?: ReadonlyMap<string, string> | undefined;
+  selfName?: string | undefined;
 }
 
-export function ActivityRow({ entry, now }: ActivityRowProps) {
-  const { activity, groupName, isImplicit } = entry;
+export function ActivityRow({ entry, now, friendNames, selfName }: ActivityRowProps) {
+  const { activity, groupId, groupName, groupType, isImplicit } = entry;
 
   const when = formatRelativeTime(activity.createdAt.toDate(), now);
-  const subtitle = isImplicit ? when : `${when} · ${groupName}`;
+  // A promoted friendship (ADR-13) reaches this feed with a real destination and a stored name
+  // of `"<you> & <them>"`. Naming the group is the point of the line — naming the reader is not.
+  const label = groupLabel(
+    { name: groupName, type: groupType },
+    { friendName: friendNames?.get(groupId), selfName },
+  );
+  const subtitle = isImplicit ? when : `${when} · ${label}`;
 
   return (
     <ListRow

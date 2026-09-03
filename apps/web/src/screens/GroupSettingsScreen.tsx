@@ -21,7 +21,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router';
 
-import { useGroup, useGroupMembers } from '@splitsutra/core/hooks';
+import { useAuth, useGroup, useGroupMembers } from '@splitsutra/core/hooks';
 import {
   deleteGroup,
   leaveGroup,
@@ -39,6 +39,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
+import { groupLabel } from './group/groupLabel';
 
 const NAME_MAX = 60;
 
@@ -86,6 +87,7 @@ export function GroupSettingsScreen() {
 
   const { group, loading, error } = useGroup(groupId);
   const { isAdmin, me } = useGroupMembers(groupId);
+  const { user } = useAuth();
 
   /** `null` means "not edited yet", which is distinguishable from a name typed empty. */
   const [draftName, setDraftName] = useState<string | null>(null);
@@ -147,8 +149,14 @@ export function GroupSettingsScreen() {
 
   const currency = CURRENCIES[group.currency];
 
+  // The Name field below deliberately shows the STORED name, not this label: it is the field
+  // that edits that value, and a friendship renamed to something without an ampersand is then
+  // shown verbatim to both members (see `groupLabel`).
   return (
-    <Screen header={header} label={`${group.name} settings`}>
+    <Screen
+      header={header}
+      label={`${groupLabel(group, { selfName: user?.displayName ?? '' })} settings`}
+    >
       <Stack gap="lg">
         <Stack gap="sm">
           <Input

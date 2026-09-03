@@ -50,6 +50,7 @@ import { Text } from '../components/Text';
 import { ScreenHeader } from '../navigation/ScreenHeader';
 import { paths } from '../navigation/paths';
 import { ExpenseLedger } from './group/ExpenseLedger';
+import { groupLabel } from './group/groupLabel';
 
 /**
  * Keyed by `GroupType`, so it covers the retired `couple` too — a group created before that type
@@ -135,7 +136,25 @@ export function GroupDetailScreen() {
     };
   }, [error, groupId, retryGroup, retryMembers]);
 
-  const header = <ScreenHeader title={group?.name ?? 'Group'} backTo={paths.GroupList()} />;
+  /**
+   * A promoted friendship (ADR-13) is titled with the other person, not with the stored
+   * `"<you> & <them>"` — see `groupLabel`.
+   *
+   * The member documents are the FRESHEST source of that name: `onUserProfileWritten` rewrites
+   * them on a rename, and neither `groups/{gid}.name` nor `friends/{fid}.displayName` is
+   * touched by it. This screen already subscribes to them, so it costs nothing to prefer them
+   * here, and `groupLabel` falls back to stripping the viewer's own name when they have not
+   * arrived yet.
+   */
+  const label =
+    group === null
+      ? 'Group'
+      : groupLabel(group, {
+          friendName: activeMembers.find((member) => member.uid !== user?.uid)?.displayName,
+          selfName: user?.displayName ?? '',
+        });
+
+  const header = <ScreenHeader title={label} backTo={paths.GroupList()} />;
 
   if (loading) {
     return (
@@ -179,10 +198,10 @@ export function GroupDetailScreen() {
 
   return (
     <Screen
-      label={group.name}
+      label={label}
       header={
         <ScreenHeader
-          title={group.name}
+          title={label}
           backTo={paths.GroupList()}
           trailing={
             <Button variant="ghost" to={paths.GroupSettings({ gid: group.id })}>

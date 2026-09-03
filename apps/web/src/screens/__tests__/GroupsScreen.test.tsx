@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   loading: false,
   error: null as Error | null,
   balanceByGroup: new Map<string, number>(),
+  friends: [] as unknown[],
 }));
 
 vi.mock('@splitsutra/core/hooks', () => ({
@@ -28,6 +29,8 @@ vi.mock('@splitsutra/core/hooks', () => ({
     loading: false,
     error: null,
   }),
+  useAuth: () => ({ user: { uid: 'u1', displayName: 'Me' } }),
+  useFriends: () => ({ friends: state.friends, loading: false, error: null }),
 }));
 
 const TS = { seconds: 0, nanoseconds: 0 } as unknown as Group['createdAt'];
@@ -80,7 +83,16 @@ beforeEach(() => {
   state.loading = false;
   state.error = null;
   state.balanceByGroup = new Map();
+  state.friends = [];
 });
+
+/**
+ * A friendship AFTER ADR-13 promotion: `isImplicit` is false, so `useGroups` hands it to this
+ * screen like any other group, and its stored name is still `"<you> & <them>"`.
+ */
+function promotedFriendship(id: string, storedName: string): Group {
+  return { ...group(id, storedName, { type: 'friend', memberCount: 2 }), memberIds: ['u1', 'u2'] };
+}
 
 describe('<GroupsScreen>', () => {
   it('says it is loading before the first answer arrives', () => {
@@ -108,6 +120,37 @@ describe('<GroupsScreen>', () => {
     expect(container.querySelector(`a[href="${paths.CreateGroup()}"]`)).not.toBeNull();
     expect(container.querySelector(`a[href="${paths.AddFriend()}"]`)).not.toBeNull();
     expect(container.querySelector('[aria-label="Overall balance"]')).toBeNull();
+  });
+
+  it('🔴 calls a promoted friendship by the friend, not by "you & them"', () => {
+    // The whole point. Before ADR-13 a friendship never reached this list, so its stored name
+    // was cosmetic; promotion put it on a card, and half of that card was the reader's own
+    // name. A rule keyed on `isImplicit` would go quiet here — promotion clears it.
+    state.groups = [promotedFriendship('f1', 'Me & Priya')];
+
+    const rendered = rows(visit());
+
+    expect(rendered[0]?.textContent).toContain('Priya');
+    expect(rendered[0]?.textContent).not.toContain('Me &');
+    // And it reads as a person: "2 members" is both of you, which tells the reader nothing.
+    expect(rendered[0]?.textContent).toContain('Friend');
+    expect(rendered[0]?.textContent).not.toContain('2 members');
+  });
+
+  it('prefers the friend document over the stored name, so a rename is not stuck', () => {
+    state.groups = [promotedFriendship('f1', 'Me & Priya')];
+    state.friends = [{ friendUid: 'u2', displayName: 'Priya Nair', implicitGroupId: 'f1' }];
+
+    expect(rows(visit())[0]?.textContent).toContain('Priya Nair');
+  });
+
+  it('leaves an ordinary group named exactly as it is stored', () => {
+    state.groups = [group('g1', 'Me & the lads')];
+
+    const rendered = rows(visit());
+
+    expect(rendered[0]?.textContent).toContain('Me & the lads');
+    expect(rendered[0]?.textContent).toContain('3 members');
   });
 
   it('keeps the lastActivityAt order it was handed rather than re-sorting', () => {

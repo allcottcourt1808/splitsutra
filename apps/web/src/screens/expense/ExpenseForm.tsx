@@ -84,6 +84,8 @@ export interface ExpenseFormProps {
    * missing name is a cosmetic loss on one row, never a reason to fail to render the picker.
    */
   readonly selfName?: string | undefined;
+  /** Passed straight through to {@link GroupPicker} — see `useFriendshipNames`. */
+  readonly friendNames?: ReadonlyMap<string, string> | undefined;
   readonly saving: boolean;
   readonly saveError: string | null;
   readonly onSave: () => void;
@@ -106,6 +108,7 @@ export function ExpenseForm({
   currency,
   selfUid,
   selfName = '',
+  friendNames,
   saving,
   saveError,
   onSave,
@@ -255,6 +258,7 @@ export function ExpenseForm({
             groups={groups}
             selectedId={state.groupId}
             selfName={selfName}
+            friendNames={friendNames}
             onSelect={(groupId) => {
               patch({ groupId });
             }}

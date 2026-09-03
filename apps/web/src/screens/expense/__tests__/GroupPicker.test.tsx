@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import type { Group } from '@splitsutra/core';
 
 import { render } from '../../../__tests__/helpers/render';
-import { GroupPicker, displayName } from '../GroupPicker';
+import { GroupPicker } from '../GroupPicker';
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── *
  * Fixtures
@@ -166,23 +166,5 @@ describe('GroupPicker', () => {
   });
 });
 
-describe('displayName', () => {
-  it('drops the viewer from a 1:1 label, at either end', () => {
-    expect(displayName(person('f1', 'Me & Priya'), 'Me')).toBe('Priya');
-    expect(displayName(person('f1', 'Priya & Me'), 'Me')).toBe('Priya');
-  });
-
-  it('leaves a real group alone even when the name contains yours', () => {
-    expect(displayName(group({ id: 'g1', name: 'Me & the lads' }), 'Me')).toBe('Me & the lads');
-  });
-
-  it('🔴 falls back to the stored name rather than guessing', () => {
-    // The three ways the cheap `split(' & ')` version would have been wrong.
-    // A name containing an ampersand of its own:
-    expect(displayName(person('f1', 'Ben & Jerry & Me'), 'Me')).toBe('Ben & Jerry');
-    // `implicitGroupName` truncates the join at 60 chars, so the viewer's name can be cut:
-    expect(displayName(person('f1', 'Priya & M'), 'Me')).toBe('Priya & M');
-    // No name to match against:
-    expect(displayName(person('f1', 'Priya & Me'), '')).toBe('Priya & Me');
-  });
-});
+/* The naming rule itself now lives in `screens/group/groupLabel.ts`, and is tested there — it
+   stopped being picker-local when ADR-13 promotion put the same name in the Groups tab. */

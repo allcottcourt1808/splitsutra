@@ -40,6 +40,8 @@ const seam = vi.hoisted(() => ({
 
 vi.mock('@splitsutra/core/hooks', () => ({
   useAuth: () => ({ user: { uid: 'u1' } }),
+  // Feeds the picker's friendship labels. Empty, so a 1:1 falls back to stripping `selfName`.
+  useFriends: () => ({ friends: [], loading: false, error: null }),
 }));
 
 vi.mock('@splitsutra/core/repositories', () => ({
